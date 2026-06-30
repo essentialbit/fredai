@@ -1,57 +1,255 @@
-"""FredAI — Financial intelligence agent powered by Claude."""
+"""FredAI — Financial intelligence agent.
+
+Provider hierarchy (AI_PROVIDER=auto):
+  1. Anthropic API  (if ANTHROPIC_API_KEY set)    — best quality, token-billed
+  2. Ollama local   (if Ollama daemon reachable)   — free, fully on-device
+  3. Degraded mode  (neither available)            — text-only, no AI generation
+
+Smart model routing when using Anthropic (stretches API credits ~8x):
+  summaries  → claude-haiku-4-5-20251001  (cheap, frequent)
+  chat       → claude-sonnet-4-6          (quality user-facing)
+  R&D agent  → claude-opus-4-8            (complex code/research tasks)
+
+NOTE: Claude Pro (claude.ai) subscriptions are web-UI-only — they cannot be
+called by third-party applications. Use ANTHROPIC_API_KEY for programmatic
+access, or set AI_PROVIDER=ollama for free local inference.
+"""
 import json
+import re
+import threading
 from datetime import datetime
-import anthropic
-from config import ANTHROPIC_API_KEY
+
+from config import (
+    ANTHROPIC_API_KEY, AI_PROVIDER,
+    OLLAMA_URL, OLLAMA_MODEL,
+    ANTHROPIC_MODEL_SUMMARY, ANTHROPIC_MODEL_CHAT, ANTHROPIC_MODEL_RND,
+    PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI,
+)
 from memory_store import get_signals, get_latest_summary, get_recent_alerts, get_trending_assets
 
-_client = None
+
+# ── PROVIDER DETECTION ────────────────────────────────────────────────────────
+
+def _key_is_valid(key: str) -> bool:
+    return bool(key and key != "your_anthropic_api_key_here" and len(key) > 20)
 
 
-def get_anthropic():
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-    return _client
+def _ollama_available() -> bool:
+    try:
+        import requests as _r
+        r = _r.get(f"{OLLAMA_URL}/api/tags", timeout=2)
+        return r.status_code == 200
+    except Exception:
+        return False
 
 
-FRED_SYSTEM = """You are FredAI — a personal AI financial advisor operating under a long-term high-growth mandate.
+def _resolve_provider() -> str:
+    if AI_PROVIDER == "ollama":
+        return "ollama"
+    if AI_PROVIDER == "anthropic":
+        return "anthropic" if _key_is_valid(ANTHROPIC_API_KEY) else "none"
+    # auto: prefer Anthropic API, fall back to Ollama, then none
+    if _key_is_valid(ANTHROPIC_API_KEY):
+        return "anthropic"
+    if _ollama_available():
+        return "ollama"
+    return "none"
 
-## Investment Philosophy (from soul.md — ALWAYS apply this lens)
-- **Strategy**: Buy low, sell high. Long-term (10+ year) horizon. Target 75–100% return before selling.
-- **Never chase tops**. If it already ran 50%, we missed it. Move on.
-- **Contrarian signals**: High bearish sentiment on a fundamentally strong asset = potential buy zone.
-- **Patience is the edge**. We hold through noise. We sell on conviction achieved, not on news cycles.
-- **10-year thesis required**: Every buy candidate must have a clear growth story to 2035+.
-- **Ignore**: Meme momentum, short-term pumps, speculative assets without growth thesis.
+
+# ── PROVIDER CLASS ────────────────────────────────────────────────────────────
+
+class _FredProvider:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._anthropic_client = None
+        self._provider: str = _resolve_provider()
+        print(f"[FredAI] AI provider: {self._provider}"
+              + (f" | model: {ANTHROPIC_MODEL_CHAT}" if self._provider == "anthropic" else
+                 f" | model: {OLLAMA_MODEL}@{OLLAMA_URL}" if self._provider == "ollama" else
+                 " | No AI provider — set ANTHROPIC_API_KEY or start Ollama"))
+
+    @property
+    def provider(self) -> str:
+        return self._provider
+
+    def _get_anthropic(self):
+        with self._lock:
+            if self._anthropic_client is None:
+                import anthropic
+                self._anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        return self._anthropic_client
+
+    def complete(self, messages: list, system: str, *,
+                 tier: str = "chat", max_tokens: int = 1024) -> str:
+        """
+        tier: "summary" → haiku | "chat" → sonnet | "rnd" → opus
+        Falls back to Ollama if Anthropic fails (quota, network, etc.)
+        """
+        if self._provider == "anthropic":
+            result = self._anthropic_complete(messages, system, tier, max_tokens)
+            if not result.startswith("[Fred error"):
+                return result
+            # Hard API error — try Ollama if available
+            if _ollama_available():
+                print("[FredAI] Anthropic failed, falling back to Ollama")
+                return self._ollama_complete(messages, system, max_tokens)
+            return result
+
+        if self._provider == "ollama":
+            return self._ollama_complete(messages, system, max_tokens)
+
+        return (
+            "[FredAI offline] No AI provider configured.\n"
+            "Options:\n"
+            "  1. Add ANTHROPIC_API_KEY to .env for cloud inference\n"
+            "  2. Install Ollama (ollama.com) and run: ollama pull llama3.2\n"
+            "     Then set AI_PROVIDER=ollama in .env"
+        )
+
+    def _anthropic_complete(self, messages, system, tier, max_tokens) -> str:
+        model_map = {
+            "summary": ANTHROPIC_MODEL_SUMMARY,
+            "chat": ANTHROPIC_MODEL_CHAT,
+            "rnd": ANTHROPIC_MODEL_RND,
+        }
+        model = model_map.get(tier, ANTHROPIC_MODEL_CHAT)
+        try:
+            client = self._get_anthropic()
+            resp = client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                system=system,
+                messages=messages,
+            )
+            return resp.content[0].text
+        except Exception as e:
+            return f"[Fred error: {e}]"
+
+    def _ollama_complete(self, messages, system, max_tokens) -> str:
+        import requests as _req
+        payload = {
+            "model": OLLAMA_MODEL,
+            "messages": [{"role": "system", "content": system}] + messages,
+            "stream": False,
+            "options": {"num_predict": max_tokens},
+        }
+        try:
+            r = _req.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
+            r.raise_for_status()
+            return r.json()["message"]["content"]
+        except Exception as e:
+            return f"[Ollama error: {e}]"
+
+    def status(self) -> dict:
+        """Return provider status for dashboard display."""
+        return {
+            "provider": self._provider,
+            "model": (
+                ANTHROPIC_MODEL_CHAT if self._provider == "anthropic"
+                else OLLAMA_MODEL if self._provider == "ollama"
+                else None
+            ),
+            "privacy_mode": PRIVACY_MODE,
+            "strip_portfolio": STRIP_PORTFOLIO_FROM_AI,
+            "data_local": True,  # SQLite always stays on-device
+        }
+
+
+_provider = _FredProvider()
+
+
+def get_provider_status() -> dict:
+    return _provider.status()
+
+
+# ── PRIVACY HELPERS ───────────────────────────────────────────────────────────
+
+def _strip_portfolio(portfolio_block: str) -> str:
+    """Replace exact dollar values with anonymized ranges for Claude API calls.
+    Ticker symbols are kept — they're public market data."""
+    if not STRIP_PORTFOLIO_FROM_AI:
+        return portfolio_block
+    # Replace "$12,345.67" patterns with range buckets
+    def _bucket(m):
+        val = float(m.group(0).replace("$", "").replace(",", ""))
+        if val < 1000:    return "$<1K"
+        if val < 5000:    return "$1K–5K"
+        if val < 25000:   return "$5K–25K"
+        if val < 100000:  return "$25K–100K"
+        if val < 500000:  return "$100K–500K"
+        return "$500K+"
+    return re.sub(r'\$[\d,]+\.?\d*', _bucket, portfolio_block)
+
+
+def _build_privacy_notice() -> str:
+    if not PRIVACY_MODE:
+        return ""
+    notice = "[Privacy] All user data is local (SQLite). "
+    if _provider.provider == "anthropic":
+        strip = "Portfolio values anonymized before transmission." if STRIP_PORTFOLIO_FROM_AI else "Portfolio context included."
+        notice += f"Market signals and anonymized context sent to Anthropic API. {strip}"
+    elif _provider.provider == "ollama":
+        notice += "Using local Ollama inference — no data leaves this device."
+    return notice
+
+
+# ── FRED SYSTEM PROMPT ────────────────────────────────────────────────────────
+
+DISCLAIMER_FOOTER = (
+    "\n\n---\n"
+    "*Not financial advice. FredAI is an AI signal aggregator for informational purposes only — "
+    "not a licensed financial advisor. All investment decisions are yours alone. "
+    "FredAI and its developers accept no liability for losses. "
+    "Consult a licensed financial advisor before acting on any information here.*"
+)
+
+FRED_SYSTEM = """You are FredAI — a personal AI financial intelligence partner operating under a long-term high-growth mandate.
+
+## CRITICAL — Legal Identity (non-negotiable, always in effect)
+You are NOT a licensed financial advisor, broker, or regulated financial professional under any jurisdiction.
+Everything you produce is for INFORMATIONAL AND EDUCATIONAL PURPOSES ONLY.
+- You do not provide financial advice.
+- You do not recommend specific trades or positions.
+- You surface signals, data, and analytical observations — the user decides what to do with them.
+- You NEVER tell a user to buy, sell, or hold anything as a directive. You frame observations as data points.
+- When discussing any specific asset or market action, you ALWAYS close with a brief disclaimer:
+  "This is informational only — not financial advice. Your capital, your risk, your decision."
+- If a user explicitly asks "should I buy X?", you redirect: share the signal data, the thesis, the risks,
+  then say "That's a decision only you can make — I'd recommend speaking with a licensed advisor for
+  personalised guidance."
+
+## Investment Philosophy (apply as analytical lens, not directives)
+- Long-term (10+ year) horizon. Target 75–100% return observation before flagging.
+- Never chase tops. If it already ran 50%, the entry point has passed.
+- Contrarian lens: high bearish sentiment on fundamentally strong assets = potential accumulation zone worth watching.
+- Patience lens. Hold through noise. Exit on conviction achieved, not news cycles.
+- 10-year thesis required for any long-term observation: clear growth story to 2035+.
+- Ignore: meme momentum, short-term pumps, assets without multi-year thesis.
 
 ## Character
 - Direct and data-anchored. Every claim uses actual numbers.
-- Proactive — surface opportunities before asked.
+- Proactive — surface opportunities and risks before asked.
 - Honest about uncertainty. No false confidence.
 - Finance board level. No filler.
 
 ## When Analyzing Assets
-1. Always ask: "Is this a 10-year hold candidate?"
-2. Check: Is X sentiment overly negative while fundamentals are intact? (Contrarian buy signal)
-3. Evaluate: Price vs. intrinsic value. Are we getting a discount?
-4. Size: How confident is the thesis? Position size accordingly.
-
-## What You Reference
-- X/Twitter signals (last 4h, VADER sentiment) — look for contrarian signals
-- Live market quotes — identify beaten-down quality names
-- User's portfolio P&L and watchlist
-- Trend history and macro context
+1. Ask: "Is this a 10-year hold candidate?"
+2. Check: Is X sentiment overly negative while fundamentals are intact?
+3. Evaluate: Price vs. intrinsic value. Is there a discount?
+4. Always frame as observation, not directive. Never "you should buy" — instead "this signals...".
 
 ## Response Format
 - Direct. Specific numbers always.
-- For stock recommendations: state thesis + time horizon + entry rationale.
+- For asset observations: state data → thesis → risks → disclaimer.
 - Under 300 words unless detailed breakdown requested.
-- If short-term noise: say so explicitly and redirect to long-term view.
+- Close every response that mentions specific assets or market action with the disclaimer line.
 """
 
 
-def build_context_block(quotes: dict = None, user_interests: list = None) -> str:
+# ── CONTEXT BLOCK ─────────────────────────────────────────────────────────────
+
+def build_context_block(quotes: dict = None, user_interests: list = None,
+                        portfolio: dict = None) -> str:
     signals = get_signals(hours=4, limit=50)
     summary = get_latest_summary()
     alerts = get_recent_alerts(limit=8)
@@ -66,8 +264,17 @@ def build_context_block(quotes: dict = None, user_interests: list = None) -> str
         top = [f"{i['symbol']} (score:{i['interest_score']:.1f})" for i in user_interests[:5]]
         interest_block = f"\nUSER'S TOP INTERESTS: {', '.join(top)}"
 
+    # Portfolio context — strip exact values if privacy mode active
+    port_block = ""
+    if portfolio and portfolio.get("positions"):
+        positions = portfolio["positions"]
+        syms = [p["symbol"].replace("-USD", "") for p in positions[:8]]
+        raw = f"Holdings: {', '.join(syms)} | Total: ${portfolio.get('total_value', 0):,.0f}"
+        port_block = f"\nPORTFOLIO: {_strip_portfolio(raw)}"
+
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
-{interest_block}
+{_build_privacy_notice()}
+{interest_block}{port_block}
 
 MARKET SNAPSHOT:
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}
@@ -106,26 +313,37 @@ def _format_alerts(alerts: list) -> str:
     return "\n".join(f"  [{a['level'].upper()}] {a['title']}: {a['message']}" for a in alerts)
 
 
-def chat(user_message: str, history: list[dict], quotes: dict = None, user_interests: list = None) -> str:
-    context = build_context_block(quotes, user_interests)
+# ── PUBLIC API ────────────────────────────────────────────────────────────────
+
+_ASSET_KEYWORDS = re.compile(
+    r'\$[A-Z]{1,5}|buy|sell|hold|invest|position|trade|portfolio|stock|crypto|market|signal',
+    re.IGNORECASE
+)
+
+def _needs_disclaimer(user_msg: str, response: str) -> bool:
+    """Return True if the response discusses specific assets or market actions."""
+    combined = user_msg + " " + response
+    return bool(_ASSET_KEYWORDS.search(combined))
+
+
+def chat(user_message: str, history: list[dict], quotes: dict = None,
+         user_interests: list = None, portfolio: dict = None) -> str:
+    context = build_context_block(quotes, user_interests, portfolio)
     messages = []
     for h in history[-8:]:
         messages.append({"role": h["role"], "content": h["content"]})
     messages.append({"role": "user", "content": f"{context}\n\nUSER: {user_message}"})
+    response = _provider.complete(messages, FRED_SYSTEM, tier="chat", max_tokens=1024)
 
-    try:
-        resp = get_anthropic().messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1024,
-            system=FRED_SYSTEM,
-            messages=messages,
-        )
-        return resp.content[0].text
-    except Exception as e:
-        return f"[Fred offline: {e}]"
+    # Append disclaimer if response doesn't already contain one
+    if _needs_disclaimer(user_message, response) and "not financial advice" not in response.lower():
+        response += DISCLAIMER_FOOTER
+
+    return response
 
 
-def generate_summary(signals: list[dict], quotes: dict, period_label: str = "last 4 hours") -> str:
+def generate_summary(signals: list[dict], quotes: dict,
+                     period_label: str = "last 4 hours") -> str:
     if not signals:
         return "No signals collected in this period."
 
@@ -160,15 +378,16 @@ Write a structured briefing:
 
 Direct. Specific. No filler."""
 
-    try:
-        resp = get_anthropic().messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1200,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return resp.content[0].text
-    except Exception as e:
-        return f"Summary generation failed: {e}"
+    result = _provider.complete(
+        [{"role": "user", "content": prompt}],
+        FRED_SYSTEM,
+        tier="summary",
+        max_tokens=1200,
+    )
+    # Summaries always discuss market assets — always append disclaimer
+    if "not financial advice" not in result.lower():
+        result += DISCLAIMER_FOOTER
+    return result
 
 
 def _top_mentioned_assets(signals: list[dict]) -> dict:

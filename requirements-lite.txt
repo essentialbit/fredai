@@ -1,0 +1,12 @@
+# Minimal dependencies for low-memory devices (Raspberry Pi Zero, 512MB RAM)
+# Used when RAM < 1GB is detected — skips heavy ML/data science libs
+flask==3.0.3
+flask-socketio==5.3.6
+python-dotenv==1.0.1
+requests==2.32.3
+werkzeug==3.0.3
+psutil>=5.9.0
+vaderSentiment==3.3.2
+apscheduler==3.10.4
+anthropic==0.34.2
+yfinance==0.2.40

@@ -8,5 +8,5 @@ werkzeug==3.0.3
 psutil>=5.9.0
 vaderSentiment==3.3.2
 apscheduler==3.10.4
-anthropic==0.34.2
+anthropic>=0.113.0
 yfinance==0.2.40

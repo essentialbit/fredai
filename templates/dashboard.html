@@ -222,6 +222,13 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Inter',
 .thinking::after{content:'●●●';animation:th 1.2s infinite}
 @keyframes th{0%,100%{opacity:1}50%{opacity:.25}}
 
+/* ── MACRO STRIP ── */
+#macro-strip{display:flex;align-items:center;gap:0;background:var(--bg1);border-bottom:1px solid var(--border);padding:0 14px;height:28px;overflow-x:auto;white-space:nowrap;flex-shrink:0}
+.macro-item{display:inline-flex;align-items:center;gap:6px;padding:0 14px;border-right:1px solid var(--border);font-size:10px;font-family:var(--mono)}
+.macro-label{color:var(--t3)}
+.macro-val{color:var(--t1);font-weight:600}
+.macro-chg.up{color:var(--green)} .macro-chg.dn{color:var(--red)} .macro-chg.flat{color:var(--t3)}
+
 /* ── MISC ── */
 .pos{color:var(--green)} .neg{color:var(--red)}
 .divider{height:1px;background:var(--border)}
@@ -278,6 +285,9 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:'Inter',
       <div class="ws-dot off" id="ws-dot"></div>
     </div>
   </div>
+
+  <!-- MACRO STRIP -->
+  <div id="macro-strip"><span style="color:var(--t3);font-size:9px;letter-spacing:1px;margin-right:8px">MACRO</span><span id="macro-items">Loading...</span></div>
 
   <!-- NAV TABS -->
   <div id="nav-tabs">
@@ -467,6 +477,7 @@ socket.on('market_update', d => {
   if (d.sector) renderHeatmap(d.sector);
   if (d.stats) updateKPIs(d.stats, d.risk_level);
   if (d.trending) { trendData = d.trending; if (activeTab === 'trending') renderTrending(d.trending); }
+  if (d.macro) renderMacroStrip(d.macro);
 });
 socket.on('new_signal', s => { allSignals.unshift(s); renderSigs(); g('sig-badge').textContent = allSignals.length; });
 socket.on('summary_update', d => {
@@ -489,6 +500,7 @@ async function loadInitData() {
   if (r.status === 401) return;
   const d = await r.json();
   quotesCache = d.quotes || {};
+  if (d.macro) renderMacroStrip(d.macro);
   updateIdxBar(quotesCache);
   updatePortfolioUI(d.portfolio || {});
   wlData = d.watchlist || [];
@@ -969,6 +981,24 @@ function appendThinking() {
 
 function removeThinking() { document.querySelectorAll('.thinking-node').forEach(n=>n.remove()); }
 function toggleDrawer() { g('fred-drawer').classList.toggle('open'); }
+
+// ── MACRO STRIP ───────────────────────────────────────────────────
+function renderMacroStrip(macro) {
+  if (!macro || !Object.keys(macro).length) return;
+  const LABELS = {
+    US_TREASURY_YIELD_10Y:'10Y UST', US_TREASURY_YIELD_2Y:'2Y UST',
+    VIX:'VIX', GOLD:'Gold', OIL_WTI:'WTI Oil', SP500_PE:'S&P P/E',
+  };
+  const items = Object.entries(macro).map(([k, v]) => {
+    if (!v || v.value == null) return '';
+    const lbl = LABELS[k] || k;
+    const chg = v.change;
+    const chgCls = !chg ? 'flat' : chg > 0 ? 'up' : 'dn';
+    const chgStr = chg != null ? ` <span class="macro-chg ${chgCls}">${chg > 0 ? '+' : ''}${chg.toFixed(3)}</span>` : '';
+    return `<span class="macro-item"><span class="macro-label">${lbl}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${chgStr}</span>`;
+  }).filter(Boolean).join('');
+  g('macro-items').innerHTML = items || '<span style="color:var(--t3);font-size:9px">No macro data — add NASDAQ_API_KEY to .env</span>';
+}
 
 // ── UTILS ─────────────────────────────────────────────────────────
 function g(id) { return document.getElementById(id); }

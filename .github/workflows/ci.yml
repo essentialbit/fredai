@@ -1,0 +1,84 @@
+name: FredAI CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 */6 * * *'  # Every 6 hours — triggers self-improvement cycle
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Run mode'
+        required: false
+        default: 'ci'
+        type: choice
+        options: [ci, improve, dry-run]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Validate imports
+        run: |
+          python3 -c "
+          from config import *
+          from memory_store import init_db
+          from market_data import fetch_quotes
+          from trend_detector import compute_sentiment_stats
+          from twitter_client import score_text
+          from agent import generate_summary
+          init_db()
+          s, t = score_text('NVDA is crushing earnings, bullish momentum')
+          assert t in ('bullish','bearish','neutral'), f'Bad sentiment type: {t}'
+          print('All imports OK')
+          print(f'VADER test: {s:.3f} / {t}')
+          "
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_CONSUMER_KEY: ${{ secrets.X_CONSUMER_KEY }}
+          X_CONSUMER_SECRET: ${{ secrets.X_CONSUMER_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+
+  self-improve:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event.inputs.mode == 'improve'
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+      - name: Install deps
+        run: pip install -r requirements.txt
+      - name: Run FredAI improvement cycle
+        run: python3 improve.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_CONSUMER_KEY: ${{ secrets.X_CONSUMER_KEY }}
+          X_CONSUMER_SECRET: ${{ secrets.X_CONSUMER_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+      - name: Push improvements
+        run: |
+          git config user.name "FredAI"
+          git config user.email "fredai@sentinel-fi.ai"
+          git add -A
+          git diff --staged --quiet || git commit -m "auto-improve: $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push origin main || echo "Nothing to push"

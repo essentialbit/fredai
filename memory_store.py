@@ -1,0 +1,353 @@
+import sqlite3
+import json
+from datetime import datetime, timedelta
+from contextlib import contextmanager
+from config import DB_PATH
+
+
+def init_db():
+    with get_conn() as conn:
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            display_name TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_login DATETIME,
+            preferences TEXT DEFAULT '{}'
+        );
+
+        CREATE TABLE IF NOT EXISTS watchlist (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            notes TEXT,
+            UNIQUE(user_id, symbol),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS portfolio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            shares REAL DEFAULT 0,
+            avg_cost REAL DEFAULT 0,
+            added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, symbol),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_interests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            interest_score REAL DEFAULT 1.0,
+            view_count INTEGER DEFAULT 0,
+            last_viewed DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, symbol),
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS signals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            source TEXT NOT NULL,
+            asset TEXT,
+            content TEXT,
+            author TEXT,
+            sentiment_score REAL,
+            signal_type TEXT,
+            metadata TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS summaries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            period_start DATETIME,
+            period_end DATETIME,
+            content TEXT,
+            key_signals TEXT,
+            overall_sentiment REAL,
+            risk_level TEXT,
+            signal_count INTEGER
+        );
+
+        CREATE TABLE IF NOT EXISTS trends (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            asset TEXT NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            metric TEXT,
+            value REAL,
+            trend_direction TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            level TEXT,
+            title TEXT,
+            message TEXT,
+            asset TEXT,
+            acknowledged INTEGER DEFAULT 0
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
+        CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
+        CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
+        CREATE INDEX IF NOT EXISTS idx_portfolio_user ON portfolio(user_id);
+        """)
+
+        # Seed a default admin user if none exist
+        existing = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if existing == 0:
+            import hashlib
+            pw = hashlib.sha256("sentinel2024".encode()).hexdigest()
+            conn.execute(
+                "INSERT INTO users (username, password_hash, display_name) VALUES (?,?,?)",
+                ("admin", pw, "Admin")
+            )
+
+
+@contextmanager
+def get_conn():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+        conn.commit()
+    finally:
+        conn.close()
+
+
+# ── AUTH ──────────────────────────────────────────────────────────────────────
+def verify_user(username: str, password: str) -> dict | None:
+    import hashlib
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=? AND password_hash=?", (username, pw_hash)
+        ).fetchone()
+        if row:
+            conn.execute("UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=?", (row["id"],))
+            return dict(row)
+    return None
+
+
+def create_user(username: str, password: str, display_name: str = None) -> dict | None:
+    import hashlib
+    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT INTO users (username, password_hash, display_name) VALUES (?,?,?)",
+                (username, pw_hash, display_name or username)
+            )
+            row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+            return dict(row)
+    except sqlite3.IntegrityError:
+        return None
+
+
+def get_user(user_id: int) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    return dict(row) if row else None
+
+
+# ── WATCHLIST ─────────────────────────────────────────────────────────────────
+def get_watchlist(user_id: int) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM watchlist WHERE user_id=? ORDER BY added_at DESC", (user_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def add_to_watchlist(user_id: int, symbol: str, notes: str = None):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO watchlist (user_id, symbol, notes) VALUES (?,?,?) ON CONFLICT(user_id,symbol) DO NOTHING",
+            (user_id, symbol.upper(), notes)
+        )
+    bump_interest(user_id, symbol, delta=2.0)
+
+
+def remove_from_watchlist(user_id: int, symbol: str):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM watchlist WHERE user_id=? AND symbol=?", (user_id, symbol.upper()))
+
+
+# ── USER INTERESTS (ML-lite preference learning) ──────────────────────────────
+def bump_interest(user_id: int, symbol: str, delta: float = 1.0):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO user_interests (user_id, symbol, interest_score, view_count)
+               VALUES (?,?,?,1)
+               ON CONFLICT(user_id,symbol) DO UPDATE SET
+                 interest_score = MIN(interest_score + ?, 100.0),
+                 view_count = view_count + 1,
+                 last_viewed = CURRENT_TIMESTAMP""",
+            (user_id, symbol.upper(), delta, delta)
+        )
+
+
+def get_user_interests(user_id: int, limit: int = 20) -> list[dict]:
+    """Return ranked list of user's interest scores per symbol."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM user_interests WHERE user_id=? ORDER BY interest_score DESC LIMIT ?",
+            (user_id, limit)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def decay_interests(user_id: int, decay: float = 0.98):
+    """Apply time decay to interest scores (call periodically)."""
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE user_interests SET interest_score = interest_score * ? WHERE user_id=?",
+            (decay, user_id)
+        )
+
+
+# ── PORTFOLIO ─────────────────────────────────────────────────────────────────
+def upsert_portfolio(user_id: int, symbol: str, shares: float, avg_cost: float):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO portfolio (user_id, symbol, shares, avg_cost) VALUES (?,?,?,?)
+               ON CONFLICT(user_id,symbol) DO UPDATE SET shares=excluded.shares, avg_cost=excluded.avg_cost""",
+            (user_id, symbol.upper(), shares, avg_cost)
+        )
+    bump_interest(user_id, symbol, delta=3.0)
+
+
+def get_portfolio(user_id: int) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM portfolio WHERE user_id=? AND shares > 0", (user_id,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── SIGNALS ───────────────────────────────────────────────────────────────────
+def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0, signal_type="neutral", metadata=None):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO signals (source, asset, content, author, sentiment_score, signal_type, metadata) VALUES (?,?,?,?,?,?,?)",
+            (source, asset, content, author, sentiment_score, signal_type, json.dumps(metadata or {}))
+        )
+
+
+def get_signals(hours=4, asset=None, limit=200) -> list[dict]:
+    since = datetime.utcnow() - timedelta(hours=hours)
+    with get_conn() as conn:
+        if asset:
+            rows = conn.execute(
+                "SELECT * FROM signals WHERE timestamp > ? AND asset = ? ORDER BY timestamp DESC LIMIT ?",
+                (since.isoformat(), asset, limit)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM signals WHERE timestamp > ? ORDER BY timestamp DESC LIMIT ?",
+                (since.isoformat(), limit)
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_trending_assets(hours: int = 4, limit: int = 20) -> list[dict]:
+    """Return assets ranked by signal volume and sentiment shift in last N hours."""
+    since = datetime.utcnow() - timedelta(hours=hours)
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT asset,
+                COUNT(*) as signal_count,
+                AVG(sentiment_score) as avg_sentiment,
+                SUM(CASE WHEN signal_type='bullish' THEN 1 ELSE 0 END) * 100.0 / COUNT(*) as bullish_pct,
+                MAX(timestamp) as latest
+               FROM signals
+               WHERE timestamp > ? AND asset IS NOT NULL
+               GROUP BY asset
+               ORDER BY signal_count DESC
+               LIMIT ?""",
+            (since.isoformat(), limit)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
+    since = datetime.utcnow() - timedelta(hours=hours)
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT
+                strftime('%Y-%m-%dT%H:', timestamp) ||
+                printf('%02d', (CAST(strftime('%M', timestamp) AS INTEGER) / ?) * ?) || ':00' as bucket,
+                AVG(sentiment_score) as avg_sentiment,
+                COUNT(*) as signal_count,
+                SUM(CASE WHEN signal_type='bullish' THEN 1 ELSE 0 END) as bullish,
+                SUM(CASE WHEN signal_type='bearish' THEN 1 ELSE 0 END) as bearish
+            FROM signals
+            WHERE timestamp > ? AND source = 'twitter'
+            GROUP BY bucket ORDER BY bucket ASC""",
+            (bucket_minutes, bucket_minutes, since.isoformat())
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── SUMMARIES ─────────────────────────────────────────────────────────────────
+def insert_summary(period_start, period_end, content, key_signals, overall_sentiment, risk_level, signal_count):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO summaries (period_start, period_end, content, key_signals, overall_sentiment, risk_level, signal_count) VALUES (?,?,?,?,?,?,?)",
+            (period_start.isoformat(), period_end.isoformat(), content, json.dumps(key_signals), overall_sentiment, risk_level, signal_count)
+        )
+
+
+def get_latest_summary() -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM summaries ORDER BY timestamp DESC LIMIT 1").fetchone()
+    return dict(row) if row else None
+
+
+def get_summaries(limit=10) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM summaries ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── TRENDS ────────────────────────────────────────────────────────────────────
+def insert_trend(asset, metric, value, trend_direction):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO trends (asset, metric, value, trend_direction) VALUES (?,?,?,?)",
+            (asset, metric, value, trend_direction)
+        )
+
+
+def get_trend_history(asset, metric, hours=24) -> list[dict]:
+    since = datetime.utcnow() - timedelta(hours=hours)
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM trends WHERE asset=? AND metric=? AND timestamp>? ORDER BY timestamp ASC",
+            (asset, metric, since.isoformat())
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── ALERTS ────────────────────────────────────────────────────────────────────
+def insert_alert(level, title, message, asset=None):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO alerts (level, title, message, asset) VALUES (?,?,?,?)",
+            (level, title, message, asset)
+        )
+
+
+def get_recent_alerts(limit=20) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]

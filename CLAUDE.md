@@ -79,6 +79,43 @@ Write improvement log to vault:
 /Volumes/Iron 1TBSSD/Shared/Obsidian Vault/AI/SMC/FredAI/improvements/YYYY-MM-DD-HH.md
 ```
 
+## Deployment Targets (from Raspberry Pi to hyperscaler — Fred runs everywhere)
+
+Fred must remain deployable across the entire compute spectrum:
+
+| Target | Constraints | Adaptation |
+|--------|------------|------------|
+| Apple Watch / wearable | Companion-only (no server) | Lightweight JSON API client, SwiftUI |
+| Raspberry Pi Zero | 512MB RAM, ARM32 | Minimal mode: no heavy ML, SQLite only |
+| Raspberry Pi 4 | 4-8GB RAM, ARM64 | Full stack (yfinance + Claude) |
+| MacBook / PC | Full stack | Default mode |
+| Cloud VM (1-2 vCPU) | Docker, 2GB RAM | docker-compose, minimal deps |
+| Hyperscaler (Kubernetes) | Horizontal scale | Stateless API layer + external DB |
+
+### Adaptive startup mode (auto-detects environment)
+
+```python
+# main.py detects RAM and scales accordingly
+import psutil
+RAM_GB = psutil.virtual_memory().total / 1e9
+LITE_MODE = RAM_GB < 1.0  # Raspberry Pi Zero / wearable companion
+```
+
+In LITE_MODE:
+- Skip yfinance heavy batch fetch (use single-ticker on demand)
+- Skip APScheduler R&D cycle
+- Compress SQLite journal more aggressively
+- Serve minimal dashboard (no Chart.js, text-based KPIs)
+
+### Docker Compose is the primary deployment mechanism
+- Works: macOS, Windows, Linux, Raspberry Pi (ARM64), any cloud VM
+- Image: ghcr.io/essentialbit/fredai:latest (auto-published on push)
+- No OS dependencies beyond Docker
+
+### Environment variable configuration (all platforms)
+Every configurable value is an env var — no hardcoded platform checks.
+This means the same image runs everywhere; the host supplies the profile.
+
 ## Code Standards
 - No comments unless the WHY is non-obvious
 - No trailing summaries in responses

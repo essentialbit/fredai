@@ -1,0 +1,32 @@
+version: "3.9"
+
+services:
+  fredai:
+    build: .
+    container_name: fredai
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - fredai_data:/app/data
+      - fredai_logs:/app/logs
+    environment:
+      # Copy from .env or set directly
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - X_BEARER_TOKEN=${X_BEARER_TOKEN}
+      - X_CONSUMER_KEY=${X_CONSUMER_KEY}
+      - X_CONSUMER_SECRET=${X_CONSUMER_SECRET}
+      - X_ACCESS_TOKEN=${X_ACCESS_TOKEN}
+      - X_ACCESS_TOKEN_SECRET=${X_ACCESS_TOKEN_SECRET}
+      - NASDAQ_API_KEY=${NASDAQ_API_KEY:-}
+      - SECRET_KEY=${SECRET_KEY:-fredai_prod_secret}
+      - PORT=8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  fredai_data:
+  fredai_logs:

@@ -1,0 +1,60 @@
+<!-- FredAI Windows Start Menu Live Tile — 150x150 / 310x150 / 310x310 -->
+<!-- Accent color: #00ff88 (Fluent Design compatible) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 310">
+  <defs>
+    <linearGradient id="wbg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#04101e"/>
+      <stop offset="100%" style="stop-color:#0a1628"/>
+    </linearGradient>
+    <linearGradient id="wg" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00b4ff"/>
+      <stop offset="100%" style="stop-color:#00ff88"/>
+    </linearGradient>
+    <filter id="wglow">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="310" height="310" fill="url(#wbg)"/>
+
+  <!-- Subtle grid -->
+  <g opacity="0.05" stroke="#00b4ff" stroke-width="0.5">
+    <line x1="0" y1="77" x2="310" y2="77"/>
+    <line x1="0" y1="155" x2="310" y2="155"/>
+    <line x1="0" y1="233" x2="310" y2="233"/>
+    <line x1="77" y1="0" x2="77" y2="310"/>
+    <line x1="155" y1="0" x2="155" y2="310"/>
+    <line x1="233" y1="0" x2="233" y2="310"/>
+  </g>
+
+  <!-- Candlestick mini chart -->
+  <rect x="30" y="200" width="16" height="40" rx="2" fill="#ff3b5c" opacity="0.7"/>
+  <rect x="56" y="185" width="16" height="50" rx="2" fill="#ff3b5c" opacity="0.7"/>
+  <rect x="82" y="165" width="16" height="45" rx="2" fill="#00ff88" opacity="0.8"/>
+  <rect x="108" y="145" width="16" height="50" rx="2" fill="#00ff88" opacity="0.85"/>
+  <rect x="134" y="125" width="16" height="50" rx="2" fill="#00ff88" opacity="0.9"/>
+  <rect x="160" y="105" width="16" height="48" rx="2" fill="#00ff88" opacity="0.92"/>
+  <rect x="186" y="85" width="16" height="48" rx="2" fill="#00ff88" opacity="0.95"/>
+  <rect x="212" y="65" width="16" height="50" rx="2" fill="#00ff88" opacity="0.97"/>
+  <rect x="238" y="50" width="16" height="48" rx="2" fill="#00ff88"/>
+  <rect x="264" y="38" width="16" height="48" rx="2" fill="#00ff88"/>
+
+  <!-- Trend line -->
+  <polyline
+    points="30,240 56,232 82,200 108,178 134,155 160,132 186,110 212,90 264,62"
+    fill="none" stroke="url(#wg)" stroke-width="3" stroke-linecap="round"
+    filter="url(#wglow)"
+  />
+
+  <!-- Live dot -->
+  <circle cx="264" cy="62" r="6" fill="#00ff88" filter="url(#wglow)"/>
+
+  <!-- App name bottom left (Windows tile convention) -->
+  <text x="20" y="285" font-family="'Segoe UI', Arial, sans-serif" font-size="22" font-weight="700" fill="#e8f4fd" letter-spacing="3">FREDAI</text>
+  <text x="20" y="302" font-family="'Segoe UI', Arial, sans-serif" font-size="10" fill="#3d5a73" letter-spacing="2">FINANCIAL INTELLIGENCE</text>
+
+  <!-- Hexagon badge top-right (brand mark) -->
+  <polygon points="285,20 305,31 305,53 285,64 265,53 265,31" fill="#040c17" stroke="#00ff88" stroke-width="2"/>
+  <text x="285" y="43" text-anchor="middle" dominant-baseline="middle" font-family="Arial" font-size="16" font-weight="900" fill="#00ff88">F</text>
+</svg>

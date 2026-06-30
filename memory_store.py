@@ -93,11 +93,28 @@ def init_db():
             acknowledged INTEGER DEFAULT 0
         );
 
+        CREATE TABLE IF NOT EXISTS feature_backlog (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            description TEXT,
+            category TEXT DEFAULT 'general',
+            implementation_spec TEXT,
+            priority INTEGER DEFAULT 3,
+            estimated_hours REAL DEFAULT 2,
+            impact_score REAL DEFAULT 5.0,
+            status TEXT DEFAULT 'proposed',
+            proposed_by TEXT DEFAULT 'rnd_cycle',
+            implementation_notes TEXT,
+            proposed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
         CREATE INDEX IF NOT EXISTS idx_portfolio_user ON portfolio(user_id);
+        CREATE INDEX IF NOT EXISTS idx_backlog_status ON feature_backlog(status);
         """)
 
         # Seed a default admin user if none exist
@@ -342,6 +359,58 @@ def insert_alert(level, title, message, asset=None):
         conn.execute(
             "INSERT INTO alerts (level, title, message, asset) VALUES (?,?,?,?)",
             (level, title, message, asset)
+        )
+
+
+# ── FEATURE BACKLOG ───────────────────────────────────────────────────────────
+
+def insert_feature_proposal(title, description, category, implementation_spec="",
+                             estimated_hours=2, impact_score=5.0, priority=3,
+                             proposed_by="rnd_cycle"):
+    with get_conn() as conn:
+        # Avoid exact duplicates
+        existing = conn.execute("SELECT id FROM feature_backlog WHERE title=?", (title,)).fetchone()
+        if existing:
+            return existing["id"]
+        conn.execute(
+            """INSERT INTO feature_backlog
+               (title, description, category, implementation_spec, estimated_hours, impact_score, priority, proposed_by)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (title, description, category, implementation_spec, estimated_hours, impact_score, priority, proposed_by)
+        )
+
+
+def get_top_proposals(status="proposed", limit=5) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM feature_backlog WHERE status=? ORDER BY impact_score DESC, priority ASC LIMIT ?",
+            (status, limit)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_all_proposals(limit=50) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM feature_backlog ORDER BY proposed_at DESC LIMIT ?", (limit,)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def mark_proposal_in_progress(proposal_id: int):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE feature_backlog SET status='in_progress', updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (proposal_id,)
+        )
+
+
+def mark_proposal_done(proposal_id: int, success: bool, notes: str = ""):
+    status = "implemented" if success else "failed"
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE feature_backlog SET status=?, implementation_notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
+            (status, notes, proposal_id)
         )
 
 

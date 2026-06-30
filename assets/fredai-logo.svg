@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Dark background gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#03080f"/>
+      <stop offset="100%" style="stop-color:#0a1628"/>
+    </linearGradient>
+    <!-- Hex border gradient -->
+    <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00b4ff"/>
+      <stop offset="50%" style="stop-color:#00ff88"/>
+      <stop offset="100%" style="stop-color:#00b4ff"/>
+    </linearGradient>
+    <!-- Chart line gradient -->
+    <linearGradient id="chartLine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00b4ff;stop-opacity:0.6"/>
+      <stop offset="60%" style="stop-color:#00ff88"/>
+      <stop offset="100%" style="stop-color:#00ff88"/>
+    </linearGradient>
+    <!-- Glow filter -->
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="softglow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="256" cy="256" r="256" fill="url(#bg)"/>
+
+  <!-- Hexagon border (finance AI theme) -->
+  <polygon
+    points="256,28 464,142 464,370 256,484 48,370 48,142"
+    fill="none"
+    stroke="url(#hexGrad)"
+    stroke-width="8"
+    opacity="0.9"
+  />
+
+  <!-- Inner hex ring -->
+  <polygon
+    points="256,58 440,158 440,354 256,454 72,354 72,158"
+    fill="none"
+    stroke="url(#hexGrad)"
+    stroke-width="2"
+    opacity="0.25"
+  />
+
+  <!-- Candlestick chart (bottom layer — finance signal) -->
+  <!-- Candle bodies -->
+  <rect x="110" y="310" width="22" height="45" rx="2" fill="#ff3b5c" opacity="0.7"/>
+  <rect x="148" y="295" width="22" height="55" rx="2" fill="#ff3b5c" opacity="0.7"/>
+  <rect x="186" y="270" width="22" height="50" rx="2" fill="#00ff88" opacity="0.7"/>
+  <rect x="224" y="250" width="22" height="60" rx="2" fill="#00ff88" opacity="0.8"/>
+  <rect x="262" y="230" width="22" height="55" rx="2" fill="#00ff88" opacity="0.85"/>
+  <rect x="300" y="205" width="22" height="60" rx="2" fill="#00ff88" opacity="0.9"/>
+  <rect x="338" y="185" width="22" height="55" rx="2" fill="#00ff88" opacity="0.9"/>
+  <!-- Wicks -->
+  <line x1="121" y1="300" x2="121" y2="360" stroke="#ff3b5c" stroke-width="2" opacity="0.5"/>
+  <line x1="159" y1="285" x2="159" y2="355" stroke="#ff3b5c" stroke-width="2" opacity="0.5"/>
+  <line x1="197" y1="260" x2="197" y2="325" stroke="#00ff88" stroke-width="2" opacity="0.5"/>
+  <line x1="235" y1="240" x2="235" y2="315" stroke="#00ff88" stroke-width="2" opacity="0.5"/>
+  <line x1="273" y1="220" x2="273" y2="290" stroke="#00ff88" stroke-width="2" opacity="0.5"/>
+  <line x1="311" y1="195" x2="311" y2="270" stroke="#00ff88" stroke-width="2" opacity="0.5"/>
+  <line x1="349" y1="175" x2="349" y2="245" stroke="#00ff88" stroke-width="2" opacity="0.5"/>
+
+  <!-- Trend line (bullish uptrend) -->
+  <polyline
+    points="110,355 159,338 197,282 235,268 273,248 311,230 380,190"
+    fill="none"
+    stroke="url(#chartLine)"
+    stroke-width="4"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#glow)"
+  />
+
+  <!-- Neural network nodes (AI theme) overlaid -->
+  <circle cx="256" cy="145" r="22" fill="#0a1628" stroke="#00b4ff" stroke-width="3" filter="url(#softglow)"/>
+  <circle cx="180" cy="200" r="16" fill="#0a1628" stroke="#9b59ff" stroke-width="2.5" opacity="0.8"/>
+  <circle cx="332" cy="200" r="16" fill="#0a1628" stroke="#9b59ff" stroke-width="2.5" opacity="0.8"/>
+
+  <!-- Neural connections -->
+  <line x1="256" y1="145" x2="180" y2="200" stroke="#9b59ff" stroke-width="2" opacity="0.5"/>
+  <line x1="256" y1="145" x2="332" y2="200" stroke="#9b59ff" stroke-width="2" opacity="0.5"/>
+  <line x1="180" y1="200" x2="332" y2="200" stroke="#9b59ff" stroke-width="1.5" opacity="0.3"/>
+
+  <!-- "F" lettermark in central node -->
+  <text
+    x="256" y="154"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="22"
+    font-weight="800"
+    fill="#00ff88"
+    filter="url(#glow)"
+    letter-spacing="0"
+  >F</text>
+
+  <!-- FREDAI wordmark -->
+  <text
+    x="256" y="428"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="44"
+    font-weight="800"
+    fill="#e8f4fd"
+    letter-spacing="8"
+  >FREDAI</text>
+
+  <!-- Subtitle -->
+  <text
+    x="256" y="465"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="14"
+    font-weight="400"
+    fill="#3d5a73"
+    letter-spacing="4"
+  >FINANCIAL INTELLIGENCE</text>
+</svg>

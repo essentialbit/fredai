@@ -7,6 +7,10 @@ from flask import Flask, render_template, request, jsonify, session, redirect, u
 from flask_socketio import SocketIO, emit
 from apscheduler.schedulers.background import BackgroundScheduler
 
+import psutil as _psutil
+RAM_GB = _psutil.virtual_memory().total / 1e9
+LITE_MODE = RAM_GB < 1.0  # Raspberry Pi Zero / wearable companion
+
 from config import SECRET_KEY, PORT, SCAN_INTERVAL_HOURS, MARKET_REFRESH_SECONDS, WATCHLIST, DISPLAY_SYMBOLS
 from memory_store import (
     init_db, get_signals, get_latest_summary, get_summaries,
@@ -23,6 +27,7 @@ from trend_detector import compute_sentiment_stats, detect_trends, get_risk_leve
 from agent import chat, generate_summary
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
+from memory_store import get_all_proposals, insert_feature_proposal
 
 _macro_cache: dict = {}
 
@@ -218,6 +223,44 @@ def api_manual_scan():
     return jsonify({"status": "scan started"})
 
 
+@app.route("/api/rnd/backlog")
+@login_required
+def api_rnd_backlog():
+    return jsonify(get_all_proposals(limit=50))
+
+
+@app.route("/api/rnd/propose", methods=["POST"])
+@login_required
+def api_rnd_propose():
+    data = request.json or {}
+    title = data.get("title", "").strip()
+    if not title:
+        return jsonify({"error": "title required"}), 400
+    insert_feature_proposal(
+        title=title,
+        description=data.get("description", ""),
+        category=data.get("category", "general"),
+        implementation_spec=data.get("spec", ""),
+        proposed_by=f"user:{session['username']}",
+    )
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/rnd/run", methods=["POST"])
+@login_required
+def api_rnd_run():
+    """Trigger a full R&D + implementation cycle (async)."""
+    def _run():
+        try:
+            from improve import run_improvement_cycle
+            results = run_improvement_cycle()
+            socketio.emit("rnd_complete", results)
+        except Exception as e:
+            socketio.emit("rnd_complete", {"error": str(e)})
+    socketio.start_background_task(_run)
+    return jsonify({"status": "R&D cycle started"})
+
+
 # ── BACKGROUND JOBS ───────────────────────────────────────────────────────────
 
 def job_market_refresh():
@@ -354,9 +397,17 @@ if __name__ == "__main__":
     print("=== SENTINEL FI — Financial Intelligence Dashboard ===")
     init_db()
 
+    def job_rnd():
+        try:
+            from improve import run_improvement_cycle
+            run_improvement_cycle()
+        except Exception as e:
+            print(f"[RnD] Cycle error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_scan_cycle, "interval", hours=SCAN_INTERVAL_HOURS, id="scan")
+    scheduler.add_job(job_rnd, "interval", hours=6, id="rnd")
     scheduler.start()
 
     # Non-blocking startup: fetch market data + scan in background

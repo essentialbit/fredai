@@ -49,6 +49,10 @@ WATCHLIST = [
     "JPM", "GS", "BAC",
     "SPY", "QQQ",
     "BTC-USD", "ETH-USD",
+    # ASX Blue Chips (prices in AUD via Yahoo Finance .AX suffix)
+    "BHP.AX", "CBA.AX", "CSL.AX", "WBC.AX", "ANZ.AX",
+    "NAB.AX", "WES.AX", "RIO.AX", "FMG.AX", "MQG.AX",
+    "WTC.AX", "XRO.AX", "WDS.AX", "STO.AX", "COH.AX",
 ]
 
 DISPLAY_SYMBOLS = {
@@ -57,6 +61,12 @@ DISPLAY_SYMBOLS = {
     "JPM": "JPMorgan", "GS": "Goldman Sachs", "BAC": "Bank of America",
     "SPY": "S&P 500 ETF", "QQQ": "Nasdaq ETF",
     "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum",
+    # ASX
+    "BHP.AX": "BHP Group", "CBA.AX": "Commonwealth Bank", "CSL.AX": "CSL",
+    "WBC.AX": "Westpac", "ANZ.AX": "ANZ", "NAB.AX": "NAB",
+    "WES.AX": "Wesfarmers", "RIO.AX": "Rio Tinto", "FMG.AX": "Fortescue",
+    "MQG.AX": "Macquarie", "WTC.AX": "WiseTech", "XRO.AX": "Xero",
+    "WDS.AX": "Woodside", "STO.AX": "Santos", "COH.AX": "Cochlear",
 }
 
 X_SEARCH_QUERIES = [

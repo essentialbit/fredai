@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from flask_socketio import SocketIO, emit
 from apscheduler.schedulers.background import BackgroundScheduler
-import eventlet
-eventlet.monkey_patch()
 
 from config import SECRET_KEY, PORT, SCAN_INTERVAL_HOURS, MARKET_REFRESH_SECONDS, WATCHLIST, DISPLAY_SYMBOLS
 from memory_store import (
@@ -24,11 +22,14 @@ from twitter_client import fetch_signals
 from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level
 from agent import chat, generate_summary
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
+from nasdaq_client import get_macro_snapshot
+
+_macro_cache: dict = {}
 
 app = Flask(__name__, template_folder="templates")
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-socketio = SocketIO(app, async_mode="eventlet", cors_allowed_origins="*")
+socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
 
 _quotes_cache: dict = {}
 _last_scan: datetime = datetime.min
@@ -129,6 +130,7 @@ def api_init():
         "next_scan": next_scan,
         "interests": interests,
         "trending": trending,
+        "macro": _macro_cache,
     })
 
 
@@ -219,7 +221,7 @@ def api_manual_scan():
 # ── BACKGROUND JOBS ───────────────────────────────────────────────────────────
 
 def job_market_refresh():
-    global _quotes_cache
+    global _quotes_cache, _macro_cache
     try:
         quotes = fetch_quotes()
         _quotes_cache = quotes
@@ -230,12 +232,21 @@ def job_market_refresh():
         sector = get_sector_snapshot(quotes)
         trending = get_trending_assets(hours=4, limit=15)
 
+        # Nasdaq macro data (cached 1h)
+        try:
+            macro = get_macro_snapshot()
+            if macro:
+                _macro_cache = macro
+        except Exception:
+            macro = _macro_cache
+
         socketio.emit("market_update", {
             "quotes": quotes,
             "sector": sector,
             "stats": stats,
             "risk_level": risk,
             "trending": trending,
+            "macro": _macro_cache,
             "timestamp": datetime.utcnow().isoformat(),
         })
     except Exception as e:
@@ -343,17 +354,23 @@ if __name__ == "__main__":
     print("=== SENTINEL FI — Financial Intelligence Dashboard ===")
     init_db()
 
-    print("[Init] Fetching initial market data...")
-    _quotes_cache = fetch_quotes()
-
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_scan_cycle, "interval", hours=SCAN_INTERVAL_HOURS, id="scan")
     scheduler.start()
 
-    print("[Init] Triggering initial scan...")
-    t = threading.Thread(target=job_scan_cycle, daemon=True)
-    t.start()
+    # Non-blocking startup: fetch market data + scan in background
+    def _startup():
+        global _quotes_cache
+        print("[Init] Fetching initial market data (background)...")
+        try:
+            _quotes_cache = fetch_quotes()
+        except Exception as e:
+            print(f"[Init] Market fetch error: {e}")
+        print("[Init] Triggering initial scan...")
+        job_scan_cycle()
+
+    threading.Thread(target=_startup, daemon=True).start()
 
     print(f"[Init] Dashboard → http://localhost:{PORT}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False)
+    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)

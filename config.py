@@ -37,6 +37,8 @@ X_SEARCH_QUERIES = [
     "federal reserve OR \"interest rate\" OR inflation OR \"earnings\" lang:en",
 ]
 
+NASDAQ_API_KEY = os.getenv("NASDAQ_API_KEY", "")
+
 SCAN_INTERVAL_HOURS = 4
 MARKET_REFRESH_SECONDS = 60
 SIGNAL_FETCH_LIMIT = 100

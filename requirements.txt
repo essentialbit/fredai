@@ -1,6 +1,7 @@
 flask==3.0.3
 flask-socketio==5.3.6
-yfinance==0.2.40
+feedparser==6.0.11
+beautifulsoup4==4.12.3
 anthropic>=0.113.0
 apscheduler==3.10.4
 vaderSentiment==3.3.2

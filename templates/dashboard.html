@@ -1279,7 +1279,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
         <div class="empty" id="wl-empty" style="display:none">No watchlist symbols yet.</div>
       </div>
       <div class="add-form">
-        <input id="wl-inp" placeholder="Add symbol (AAPL, BTC-USD...)" onkeydown="if(event.key==='Enter')addWatchlist()">
+        <input id="wl-inp" placeholder="Add symbol (AAPL, BTC-USD, BHP.AX...)" onkeydown="if(event.key==='Enter')addWatchlist()">
         <button class="btn btn-b" onclick="addWatchlist()">+ Add</button>
       </div>
     </div>
@@ -1291,8 +1291,8 @@ html[data-tier="ultra"] #ops-picture{display:block}
       <div class="scroll" id="port-positions-list"></div>
       <div class="port-form">
         <div style="font-size:var(--font-xs);letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Add / Update Position</div>
-        <input id="pf-sym" placeholder="Symbol (AAPL)">
-        <div class="row2"><input id="pf-shares" placeholder="Shares"><input id="pf-cost" placeholder="Avg cost ($)"></div>
+        <input id="pf-sym" placeholder="Symbol (AAPL or BHP.AX)">
+        <div class="row2"><input id="pf-shares" placeholder="Shares"><input id="pf-cost" placeholder="Avg cost ($ or A$)"></div>
         <button class="btn btn-g" onclick="addPortfolioPos()" style="width:100%">Update Position</button>
       </div>
     </div>
@@ -1574,9 +1574,21 @@ function updatePortfolioUI(p) {
   if (IS_NANO) { g('n-port').textContent=fmtD(p.total_value); g('n-pnl').textContent=`${pnl>=0?'+':''}${fmtD(pnl)} (${(p.total_pnl_pct||0).toFixed(2)}%)`; g('n-pnl').className=`nano-sub ${pnl>=0?'pos':'neg'}`; }
 }
 function renderPositions(positions, cid) {
-  g(cid).innerHTML = positions.length
-    ? positions.map(p=>`<div class="pos-row"><div><div class="ps">${p.symbol.replace('-USD','')}</div><div class="pn">${p.name||p.symbol}</div></div><div><div class="pv">${fmtD(p.value)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtD(p.pnl)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`).join('')
-    : '<div class="empty">No positions.</div>';
+  if(!positions.length){g(cid).innerHTML='<div class="empty">No positions.</div>';return;}
+  const usPos=positions.filter(p=>!isAsx(p.symbol));
+  const asxPos=positions.filter(p=>isAsx(p.symbol));
+  function posRow(p){
+    const currency=quotesCache[p.symbol]?.currency||(isAsx(p.symbol)?'AUD':'USD');
+    const cTag=currency==='AUD'?`<span style="font-size:7px;color:#f5a623;margin-left:3px">AUD</span>`:'';
+    return `<div class="pos-row"><div><div class="ps">${p.symbol.replace('-USD','').replace('.AX','')}${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}</div><div class="pn">${p.name||p.symbol}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
+  }
+  let html='';
+  if(usPos.length) html+=usPos.map(posRow).join('');
+  if(asxPos.length){
+    html+=`<div style="font-size:8px;letter-spacing:1.2px;color:#f5a623;padding:6px 10px 2px;text-transform:uppercase;border-top:1px solid #1a2a1a">◈ ASX Holdings (AUD)</div>`;
+    html+=asxPos.map(posRow).join('');
+  }
+  g(cid).innerHTML=html;
 }
 function updateIdxBar(q) {
   g('idx-bar').innerHTML=['SPY','QQQ','BTC-USD'].map(s=>{
@@ -1722,12 +1734,23 @@ function renderWatchlist(items,interests){
   if(!items.length){g('wl-empty').style.display='';tbody.innerHTML='';g('wl-cnt').textContent='0 symbols';return}
   g('wl-empty').style.display='none';
   g('wl-cnt').textContent=items.length+' symbols';
-  tbody.innerHTML=items.map(w=>{
+  const usItems=items.filter(w=>!isAsx(w.symbol||w));
+  const asxItems=items.filter(w=>isAsx(w.symbol||w));
+  function rowHtml(w){
     const sym=w.symbol||w,q=quotesCache[sym]||{},pct=q.change_pct||0,pos=pct>=0;
+    const currency=q.currency||(isAsx(sym)?'AUD':'USD');
     const interest=im[sym]||1,pct_bar=Math.min(interest/20*100,100);
     const sentCls=getSentClass(sym);
-    return `<tr class="wl-row"><td>${sym.replace('-USD','')}</td><td style="color:var(--t2)">${q.name||sym}</td><td style="font-family:var(--mono)">${q.price?fmtD(q.price):'--'}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
-  }).join('');
+    const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
+    return `<tr class="wl-row"><td>${sym.replace('-USD','').replace('.AX','')}<span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${q.name||sym}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+  }
+  let html='';
+  if(usItems.length){html+=usItems.map(rowHtml).join('');}
+  if(asxItems.length){
+    html+=`<tr><td colspan="7" style="padding:6px 8px 3px;font-size:9px;letter-spacing:1.5px;color:#f5a623;text-transform:uppercase;border-top:1px solid #1a3020;background:rgba(245,166,35,0.04)">◈ ASX — Australia (AUD)</td></tr>`;
+    html+=asxItems.map(rowHtml).join('');
+  }
+  tbody.innerHTML=html;
 }
 function getSentClass(sym){const r=allSignals.filter(s=>s.asset===sym).slice(0,10);if(!r.length)return'neutral';const b=r.filter(s=>s.signal_type==='bullish').length;return b>r.length/2?'bullish':b<r.length/3?'bearish':'neutral'}
 async function addWatchlist(){const sym=g('wl-inp').value.trim().toUpperCase();if(!sym)return;await fetch('/api/watchlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});g('wl-inp').value='';loadWatchlist()}
@@ -1737,12 +1760,28 @@ async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE
 async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p)}
 function renderPortfolioTab(p){
   portData=p;updatePortfolioUI(p);
-  g('port-total-big').textContent=fmtD(p.total_value);
+  const positions=p.positions||[];
+  const asxPos=positions.filter(x=>isAsx(x.symbol));
+  const hasAsx=asxPos.length>0;
+  g('port-total-big').textContent=fmtD(p.total_value)+(hasAsx?' USD':'');
   const pnl=p.total_pnl||0;
   g('port-pnl-big').textContent=`${pnl>=0?'+':''}${fmtD(pnl)} (${(p.total_pnl_pct||0).toFixed(2)}%)`;
   g('port-pnl-big').className='pnl-line '+(pnl>=0?'pos':'neg');
-  renderPositions(p.positions||[],'port-positions-list');
-  renderPortPie(p.positions||[]);
+  if(hasAsx){
+    const audVal=asxPos.reduce((s,x)=>s+(x.value||0),0);
+    const audPnl=asxPos.reduce((s,x)=>s+(x.pnl||0),0);
+    const audNote=document.getElementById('port-aud-note')||document.createElement('div');
+    audNote.id='port-aud-note';
+    audNote.style.cssText='font-size:9px;color:#f5a623;padding:2px 0 4px;letter-spacing:.5px';
+    audNote.textContent=`ASX sub-total: A$${audVal.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})} (P&L ${audPnl>=0?'+':''}A$${Math.abs(audPnl).toFixed(2)}) — AUD prices, not converted`;
+    const pnlEl=g('port-pnl-big');
+    if(!document.getElementById('port-aud-note')) pnlEl.parentNode.insertBefore(audNote,pnlEl.nextSibling);
+  } else {
+    const existing=document.getElementById('port-aud-note');
+    if(existing) existing.remove();
+  }
+  renderPositions(positions,'port-positions-list');
+  renderPortPie(positions);
 }
 function renderPortPie(pos){
   const ctx=g('port-pie'); if(!ctx||!pos.length) return;
@@ -2332,6 +2371,8 @@ function renderOpsPicture(d) {
 function g(id){return document.getElementById(id)}
 function pad(n){return String(n).padStart(2,'0')}
 function fmtD(n){if(n==null)return'$--';return'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function fmtPrice(n,currency){if(n==null)return'--';const prefix=currency==='AUD'?'A$':'$';return prefix+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3})}
+function isAsx(sym){return typeof sym==='string'&&sym.endsWith('.AX')}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 </script>
 

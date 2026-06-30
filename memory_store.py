@@ -109,6 +109,15 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS consent_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            policy_version TEXT NOT NULL,
+            ip_hash TEXT,
+            consented_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
@@ -420,3 +429,133 @@ def get_recent_alerts(limit=20) -> list[dict]:
             "SELECT * FROM alerts ORDER BY timestamp DESC LIMIT ?", (limit,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── PRIVACY / GDPR / CCPA / AUSTRALIAN PRIVACY ACT ───────────────────────────
+
+def log_consent(user_id: int, policy_version: str, ip_hash: str = None):
+    """Record user's explicit consent to privacy policy (required by GDPR Art.7)."""
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO consent_log (user_id, policy_version, ip_hash) VALUES (?,?,?)",
+            (user_id, policy_version, ip_hash)
+        )
+
+
+def has_consent(user_id: int, policy_version: str) -> bool:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM consent_log WHERE user_id=? AND policy_version=? LIMIT 1",
+            (user_id, policy_version)
+        ).fetchone()
+    return row is not None
+
+
+def export_user_data(user_id: int) -> dict:
+    """
+    GDPR Art.20 / CCPA / APP 12 — Right of access and data portability.
+    Returns all data held about a user as a JSON-serializable dict.
+    """
+    with get_conn() as conn:
+        user = conn.execute(
+            "SELECT id, username, display_name, created_at, last_login, preferences FROM users WHERE id=?",
+            (user_id,)
+        ).fetchone()
+        if not user:
+            return {}
+
+        watchlist = [dict(r) for r in conn.execute(
+            "SELECT symbol, notes, added_at FROM watchlist WHERE user_id=?", (user_id,)
+        ).fetchall()]
+
+        portfolio = [dict(r) for r in conn.execute(
+            "SELECT symbol, shares, avg_cost, added_at FROM portfolio WHERE user_id=?", (user_id,)
+        ).fetchall()]
+
+        interests = [dict(r) for r in conn.execute(
+            "SELECT symbol, interest_score, view_count, last_viewed FROM user_interests WHERE user_id=?",
+            (user_id,)
+        ).fetchall()]
+
+        consents = [dict(r) for r in conn.execute(
+            "SELECT policy_version, consented_at FROM consent_log WHERE user_id=? ORDER BY consented_at DESC",
+            (user_id,)
+        ).fetchall()]
+
+    return {
+        "export_generated_at": datetime.utcnow().isoformat() + "Z",
+        "data_controller": "FredAI (self-hosted)",
+        "user": {
+            "id": user["id"],
+            "username": user["username"],
+            "display_name": user["display_name"],
+            "created_at": user["created_at"],
+            "last_login": user["last_login"],
+        },
+        "watchlist": watchlist,
+        "portfolio": portfolio,
+        "interests": interests,
+        "consent_history": consents,
+        "note": (
+            "Signal data and market summaries are shared/aggregated and not linked "
+            "to individual users. Chat history is stored in-memory only and is not "
+            "persisted to disk."
+        ),
+    }
+
+
+def delete_user_data(user_id: int) -> bool:
+    """
+    GDPR Art.17 / CCPA 'Do Not Sell' / APP 13 — Right to erasure.
+    Permanently deletes all personal data for the given user.
+    Signal/summary/trend data is shared (not personal) and retained.
+    """
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM portfolio WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM watchlist WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM user_interests WHERE user_id=?", (user_id,))
+            conn.execute("DELETE FROM consent_log WHERE user_id=?", (user_id,))
+            # Anonymise rather than delete the user row to preserve referential integrity;
+            # username becomes a one-way hash so the account cannot be re-identified.
+            import hashlib
+            anon = "deleted_" + hashlib.sha256(str(user_id).encode()).hexdigest()[:12]
+            conn.execute(
+                "UPDATE users SET username=?, display_name='[Deleted]', password_hash='', preferences='{}' WHERE id=?",
+                (anon, user_id)
+            )
+        return True
+    except Exception:
+        return False
+
+
+def prune_old_data(retention_days: int = 90):
+    """
+    Data minimisation (GDPR Art.5 / APP 11.2).
+    Removes signals and summaries older than retention_days.
+    Personal data (users, portfolio, watchlist) is never auto-pruned.
+    """
+    from datetime import timedelta
+    cutoff = (datetime.utcnow() - timedelta(days=retention_days)).isoformat()
+    with get_conn() as conn:
+        deleted_signals = conn.execute(
+            "DELETE FROM signals WHERE timestamp < ?", (cutoff,)
+        ).rowcount
+        deleted_summaries = conn.execute(
+            "DELETE FROM summaries WHERE timestamp < ?", (cutoff,)
+        ).rowcount
+        deleted_trends = conn.execute(
+            "DELETE FROM trends WHERE timestamp < ?", (cutoff,)
+        ).rowcount
+        deleted_alerts = conn.execute(
+            "DELETE FROM alerts WHERE timestamp < ?", (cutoff,)
+        ).rowcount
+    return {
+        "cutoff": cutoff,
+        "deleted": {
+            "signals": deleted_signals,
+            "summaries": deleted_summaries,
+            "trends": deleted_trends,
+            "alerts": deleted_alerts,
+        }
+    }

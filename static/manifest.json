@@ -1,0 +1,36 @@
+{
+  "name": "FredAI Financial Intelligence",
+  "short_name": "FredAI",
+  "description": "AI-powered financial signals, portfolio tracking, and Fred's market intelligence.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#03080f",
+  "theme_color": "#03080f",
+  "lang": "en",
+  "categories": ["finance", "business"],
+  "icons": [
+    { "src": "/static/icons/icon-192.png",  "sizes": "192x192",  "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icons/icon-512.png",  "sizes": "512x512",  "type": "image/png", "purpose": "any maskable" },
+    { "src": "/static/icons/icon-1024.png", "sizes": "1024x1024","type": "image/png" }
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Portfolio",
+      "short_name": "Portfolio",
+      "description": "View your portfolio P&L",
+      "url": "/?tab=portfolio",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Trending",
+      "short_name": "Trending",
+      "description": "Top trending assets from X signals",
+      "url": "/?tab=trending",
+      "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

@@ -20,6 +20,7 @@ from memory_store import (
     get_user_interests, bump_interest, decay_interests,
     get_trending_assets,
     verify_user, create_user, get_user,
+    log_consent, has_consent, export_user_data, delete_user_data, prune_old_data,
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
@@ -28,6 +29,7 @@ from agent import chat, generate_summary
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
 from memory_store import get_all_proposals, insert_feature_proposal
+from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS
 
 _macro_cache: dict = {}
 
@@ -83,6 +85,11 @@ def register():
     session["user_id"] = user["id"]
     session["username"] = user["username"]
     session["display_name"] = user.get("display_name") or user["username"]
+    # Log consent at registration (GDPR Art.7 / CCPA / APP 5)
+    if data.get("consent_accepted"):
+        import hashlib
+        ip_hash = hashlib.sha256((request.remote_addr or "").encode()).hexdigest()[:16]
+        log_consent(user["id"], PRIVACY_POLICY_VERSION, ip_hash)
     return jsonify({"status": "ok", "display_name": session["display_name"]})
 
 
@@ -261,6 +268,180 @@ def api_rnd_run():
     return jsonify({"status": "R&D cycle started"})
 
 
+# ── PRIVACY / DATA GOVERNANCE ROUTES ──────────────────────────────────────────
+# GDPR (EU) · Australian Privacy Act 1988 · US CCPA / state laws
+
+DISCLAIMER_TEXT = """FredAI — Disclaimer & Terms of Use
+
+IMPORTANT: Please read before using FredAI.
+
+1. NOT FINANCIAL ADVICE
+   FredAI is an AI-powered information and signal aggregation tool.
+   It is NOT a licensed financial advisor, investment advisor, broker-dealer,
+   or regulated financial professional under any jurisdiction, including but
+   not limited to the United States, United Kingdom, European Union, Australia,
+   and Canada.
+
+2. INFORMATIONAL PURPOSES ONLY
+   All content produced by FredAI — including market signals, summaries,
+   portfolio commentary, trend analysis, and Fred's conversational responses —
+   is provided for INFORMATIONAL AND EDUCATIONAL PURPOSES ONLY.
+   Nothing constitutes a solicitation, recommendation, or offer to buy or sell
+   any security, cryptocurrency, or other financial instrument.
+
+3. YOUR RISK, YOUR DECISION
+   All investment and financial decisions you make based on information from
+   FredAI are ENTIRELY YOUR OWN RESPONSIBILITY. You acknowledge that:
+   - Financial markets involve substantial risk of loss, including total loss of capital.
+   - Past signal accuracy or performance does not predict future results.
+   - AI-generated analysis may be incomplete, inaccurate, or delayed.
+   - X/Twitter signals and third-party market data relayed by FredAI may be
+     erroneous, manipulated, or unreliable.
+
+4. NO LIABILITY
+   FredAI, its developers, contributors, operators, and affiliates accept
+   ZERO LIABILITY for any direct, indirect, incidental, or consequential
+   financial losses, damages, or harm arising from:
+   - Your use of or reliance on FredAI's output
+   - Errors, omissions, or delays in data
+   - System downtime or technical failures
+   - Any third-party data sources integrated with FredAI
+
+5. SEEK PROFESSIONAL ADVICE
+   Before making any investment decision, consult a licensed and regulated
+   financial advisor in your jurisdiction. FredAI is not a substitute for
+   professional financial guidance.
+
+6. ACCEPTANCE
+   By using FredAI, you confirm that you have read, understood, and accepted
+   this disclaimer in its entirety. You agree to use FredAI solely for
+   informational and educational purposes.
+
+Version 1.0 — Effective from first use."""
+
+DISCLAIMER_VERSION = "1.0"
+
+
+@app.route("/disclaimer")
+def api_disclaimer_page():
+    """Public endpoint — no auth required."""
+    return DISCLAIMER_TEXT, 200, {"Content-Type": "text/plain; charset=utf-8"}
+
+
+@app.route("/api/disclaimer")
+def api_disclaimer_json():
+    """Machine-readable disclaimer for the frontend."""
+    return jsonify({
+        "version": DISCLAIMER_VERSION,
+        "text": DISCLAIMER_TEXT,
+        "requires_acceptance": True,
+        "acceptance_endpoint": "/api/user/accept-disclaimer",
+    })
+
+
+@app.route("/api/user/accept-disclaimer", methods=["POST"])
+@login_required
+def api_accept_disclaimer():
+    """Record that the user has accepted the disclaimer."""
+    import hashlib
+    uid = session["user_id"]
+    ip_hash = hashlib.sha256((request.remote_addr or "").encode()).hexdigest()[:16]
+    log_consent(uid, f"disclaimer-{DISCLAIMER_VERSION}", ip_hash)
+    return jsonify({"status": "accepted", "version": DISCLAIMER_VERSION})
+
+
+@app.route("/api/user/disclaimer-status")
+@login_required
+def api_disclaimer_status():
+    uid = session["user_id"]
+    accepted = has_consent(uid, f"disclaimer-{DISCLAIMER_VERSION}")
+    return jsonify({"accepted": accepted, "version": DISCLAIMER_VERSION})
+
+
+@app.route("/api/user/privacy")
+@login_required
+def api_privacy_info():
+    """Return privacy settings and AI provider status."""
+    from agent import get_provider_status
+    uid = session["user_id"]
+    return jsonify({
+        "data_location": "local",
+        "database": "SQLite on this device — never transmitted",
+        "ai_provider": get_provider_status(),
+        "privacy_mode": PRIVACY_MODE,
+        "strip_portfolio_from_ai": STRIP_PORTFOLIO_FROM_AI,
+        "data_retention_days": DATA_RETENTION_DAYS,
+        "policy_version": PRIVACY_POLICY_VERSION,
+        "user_has_consented": has_consent(uid, PRIVACY_POLICY_VERSION),
+        "applicable_laws": ["GDPR (EU)", "Australian Privacy Act 1988", "CCPA (California)"],
+        "agent_code_source": "github.com/essentialbit/fredai (public code, no user data)",
+        "user_rights": {
+            "access": "GET /api/user/export",
+            "erasure": "DELETE /api/user/delete",
+            "consent": "POST /api/user/consent",
+        },
+        "third_party_data_flows": [
+            {"recipient": "yfinance/Yahoo Finance", "data": "ticker symbols only", "personal": False},
+            {"recipient": "X/Twitter API", "data": "public search queries", "personal": False},
+            {"recipient": "Anthropic API (if AI_PROVIDER=anthropic)", "data": "market signals + anonymized context", "personal": False if STRIP_PORTFOLIO_FROM_AI else "partial"},
+            {"recipient": "Nasdaq Data Link", "data": "macro data requests", "personal": False},
+            {"recipient": "Ollama (if AI_PROVIDER=ollama)", "data": "none — fully local", "personal": False},
+        ],
+    })
+
+
+@app.route("/api/user/consent", methods=["POST"])
+@login_required
+def api_record_consent():
+    """Record explicit consent (GDPR Art.7 / APP 5)."""
+    import hashlib
+    uid = session["user_id"]
+    ip_hash = hashlib.sha256((request.remote_addr or "").encode()).hexdigest()[:16]
+    log_consent(uid, PRIVACY_POLICY_VERSION, ip_hash)
+    return jsonify({"status": "consent_recorded", "policy_version": PRIVACY_POLICY_VERSION})
+
+
+@app.route("/api/user/export")
+@login_required
+def api_user_export():
+    """
+    GDPR Art.20 / CCPA / APP 12 — Data portability.
+    Returns all personal data held for the current user as JSON.
+    """
+    uid = session["user_id"]
+    data = export_user_data(uid)
+    from flask import Response
+    return Response(
+        __import__("json").dumps(data, indent=2, default=str),
+        mimetype="application/json",
+        headers={"Content-Disposition": f"attachment; filename=fredai-data-{uid}.json"}
+    )
+
+
+@app.route("/api/user/delete", methods=["DELETE"])
+@login_required
+def api_user_delete():
+    """
+    GDPR Art.17 / CCPA opt-out / APP 13 — Right to erasure.
+    Permanently deletes all personal data. Requires password confirmation.
+    """
+    data = request.json or {}
+    uid = session["user_id"]
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    # Require password re-confirmation before erasure
+    import hashlib
+    pw_hash = hashlib.sha256(data.get("password", "").encode()).hexdigest()
+    if pw_hash != user["password_hash"]:
+        return jsonify({"error": "Password confirmation required"}), 403
+    ok = delete_user_data(uid)
+    if ok:
+        session.clear()
+        return jsonify({"status": "deleted", "message": "All personal data has been permanently erased."})
+    return jsonify({"error": "Deletion failed"}), 500
+
+
 # ── BACKGROUND JOBS ───────────────────────────────────────────────────────────
 
 def job_market_refresh():
@@ -375,7 +556,11 @@ def on_chat(data):
     history.append({"role": "user", "content": user_msg})
 
     interests = get_user_interests(user_id, limit=5) if user_id else []
-    response = chat(user_msg, history, quotes=_quotes_cache, user_interests=interests)
+    # Pass portfolio for context — values anonymized per privacy settings in agent.py
+    holdings = get_portfolio(user_id) if user_id else []
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    response = chat(user_msg, history, quotes=_quotes_cache,
+                    user_interests=interests, portfolio=portfolio)
 
     history.append({"role": "assistant", "content": response})
     if len(history) > 24:
@@ -404,10 +589,19 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[RnD] Cycle error: {e}")
 
+    def job_prune():
+        """Data retention enforcement — GDPR Art.5 / APP 11.2 data minimisation."""
+        from config import DATA_RETENTION_DAYS
+        result = prune_old_data(DATA_RETENTION_DAYS)
+        total = sum(result["deleted"].values())
+        if total:
+            print(f"[Prune] Removed {total} records older than {DATA_RETENTION_DAYS}d: {result['deleted']}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_scan_cycle, "interval", hours=SCAN_INTERVAL_HOURS, id="scan")
     scheduler.add_job(job_rnd, "interval", hours=6, id="rnd")
+    scheduler.add_job(job_prune, "cron", hour=2, minute=0, id="prune")  # 02:00 UTC daily
     scheduler.start()
 
     # Non-blocking startup: fetch market data + scan in background

@@ -1,0 +1,138 @@
+<!-- FredAI App Icon — Square format for macOS/Windows/Linux/iOS/Android -->
+<!-- Designed for: macOS Dock, Windows Start Menu/Taskbar, iOS Home Screen, Android Launcher, Linux app menu -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="iconBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#040c17"/>
+      <stop offset="100%" style="stop-color:#0d1e35"/>
+    </linearGradient>
+    <linearGradient id="hexG" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00b4ff"/>
+      <stop offset="100%" style="stop-color:#00ff88"/>
+    </linearGradient>
+    <linearGradient id="trendG" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00b4ff"/>
+      <stop offset="100%" style="stop-color:#00ff88"/>
+    </linearGradient>
+    <filter id="g1">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="g2">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <clipPath id="roundRect">
+      <rect width="1024" height="1024" rx="230" ry="230"/>
+    </clipPath>
+  </defs>
+
+  <!-- iOS/Android style rounded rectangle background -->
+  <rect width="1024" height="1024" rx="230" ry="230" fill="url(#iconBg)"/>
+
+  <!-- Subtle grid lines (Bloomberg terminal feel) -->
+  <g opacity="0.06" stroke="#00b4ff" stroke-width="1">
+    <line x1="0" y1="256" x2="1024" y2="256"/>
+    <line x1="0" y1="512" x2="1024" y2="512"/>
+    <line x1="0" y1="768" x2="1024" y2="768"/>
+    <line x1="256" y1="0" x2="256" y2="1024"/>
+    <line x1="512" y1="0" x2="512" y2="1024"/>
+    <line x1="768" y1="0" x2="768" y2="1024"/>
+  </g>
+
+  <!-- Hexagon (AI + finance badge) -->
+  <polygon
+    points="512,120 820,292 820,636 512,808 204,636 204,292"
+    fill="none"
+    stroke="url(#hexG)"
+    stroke-width="18"
+    opacity="0.95"
+    clip-path="url(#roundRect)"
+  />
+  <polygon
+    points="512,160 790,312 790,616 512,768 234,616 234,312"
+    fill="none"
+    stroke="url(#hexG)"
+    stroke-width="4"
+    opacity="0.2"
+    clip-path="url(#roundRect)"
+  />
+
+  <!-- Candlestick chart bars (bullish run) -->
+  <g clip-path="url(#roundRect)">
+    <!-- Red candles (before breakout) -->
+    <rect x="200" y="620" width="44" height="90" rx="4" fill="#ff3b5c" opacity="0.65"/>
+    <line x1="222" y1="600" x2="222" y2="720" stroke="#ff3b5c" stroke-width="4" opacity="0.4"/>
+    <rect x="262" y="600" width="44" height="100" rx="4" fill="#ff3b5c" opacity="0.65"/>
+    <line x1="284" y1="580" x2="284" y2="710" stroke="#ff3b5c" stroke-width="4" opacity="0.4"/>
+    <!-- Green candles (breakout + uptrend) -->
+    <rect x="324" y="545" width="44" height="95" rx="4" fill="#00ff88" opacity="0.75"/>
+    <line x1="346" y1="525" x2="346" y2="645" stroke="#00ff88" stroke-width="4" opacity="0.4"/>
+    <rect x="386" y="490" width="44" height="100" rx="4" fill="#00ff88" opacity="0.8"/>
+    <line x1="408" y1="465" x2="408" y2="595" stroke="#00ff88" stroke-width="4" opacity="0.4"/>
+    <rect x="448" y="435" width="44" height="105" rx="4" fill="#00ff88" opacity="0.85"/>
+    <line x1="470" y1="410" x2="470" y2="545" stroke="#00ff88" stroke-width="4" opacity="0.4"/>
+    <rect x="510" y="375" width="44" height="110" rx="4" fill="#00ff88" opacity="0.9"/>
+    <line x1="532" y1="350" x2="532" y2="490" stroke="#00ff88" stroke-width="4" opacity="0.4"/>
+    <rect x="572" y="315" width="44" height="110" rx="4" fill="#00ff88" opacity="0.9"/>
+    <line x1="594" y1="288" x2="594" y2="430" stroke="#00ff88" stroke-width="4" opacity="0.4"/>
+    <rect x="634" y="260" width="44" height="105" rx="4" fill="#00ff88" opacity="0.95"/>
+    <line x1="656" y1="235" x2="656" y2="370" stroke="#00ff88" stroke-width="4" opacity="0.4"/>
+    <rect x="696" y="205" width="44" height="105" rx="4" fill="#00ff88" opacity="0.95"/>
+    <line x1="718" y1="180" x2="718" y2="315" stroke="#00ff88" stroke-width="4" opacity="0.4"/>
+  </g>
+
+  <!-- Bullish trend line (glowing) -->
+  <polyline
+    points="200,710 262,702 324,592 386,538 448,485 510,428 572,368 634,308 718,250 820,195"
+    fill="none"
+    stroke="url(#trendG)"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#g2)"
+    clip-path="url(#roundRect)"
+  />
+
+  <!-- Central "F" mark in hexagon center -->
+  <text
+    x="512" y="460"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="'SF Pro Display', 'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="220"
+    font-weight="900"
+    fill="url(#hexG)"
+    filter="url(#g1)"
+    opacity="0.15"
+  >F</text>
+
+  <!-- Bold F mark (solid) -->
+  <text
+    x="512" y="460"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="'SF Pro Display', 'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="180"
+    font-weight="900"
+    fill="#00ff88"
+    filter="url(#g1)"
+  >F</text>
+
+  <!-- FREDAI wordmark at bottom -->
+  <text
+    x="512" y="888"
+    text-anchor="middle"
+    dominant-baseline="middle"
+    font-family="'SF Pro Display', 'Inter', 'Helvetica Neue', Arial, sans-serif"
+    font-size="78"
+    font-weight="800"
+    fill="#e8f4fd"
+    letter-spacing="14"
+    opacity="0.92"
+  >FREDAI</text>
+
+  <!-- AI dot indicator (pulsing in animation context) -->
+  <circle cx="820" cy="195" r="18" fill="#00ff88" filter="url(#g1)" opacity="0.9"/>
+  <circle cx="820" cy="195" r="10" fill="#00ff88"/>
+</svg>

@@ -118,12 +118,71 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
 
+        CREATE TABLE IF NOT EXISTS news_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            guid TEXT UNIQUE,
+            title TEXT NOT NULL,
+            summary TEXT,
+            url TEXT,
+            source TEXT,
+            category TEXT DEFAULT 'market',
+            tickers TEXT,
+            sentiment_score REAL DEFAULT 0.0,
+            published_at DATETIME,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS calendar_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_key TEXT UNIQUE,
+            event_type TEXT NOT NULL,
+            title TEXT NOT NULL,
+            symbol TEXT,
+            event_date TEXT NOT NULL,
+            event_time TEXT,
+            description TEXT,
+            eps_forecast TEXT,
+            eps_actual TEXT,
+            importance TEXT DEFAULT 'medium',
+            source TEXT,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS tech_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            alert_type TEXT NOT NULL,
+            condition TEXT NOT NULL,
+            threshold REAL,
+            period INTEGER DEFAULT 20,
+            enabled INTEGER DEFAULT 1,
+            triggered_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS ticker_info (
+            symbol TEXT PRIMARY KEY,
+            name TEXT,
+            sector TEXT,
+            industry TEXT,
+            description TEXT,
+            country TEXT,
+            market_cap REAL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
         CREATE INDEX IF NOT EXISTS idx_portfolio_user ON portfolio(user_id);
         CREATE INDEX IF NOT EXISTS idx_backlog_status ON feature_backlog(status);
+        CREATE INDEX IF NOT EXISTS idx_news_published ON news_items(published_at);
+        CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
+        CREATE INDEX IF NOT EXISTS idx_calendar_date ON calendar_events(event_date);
+        CREATE INDEX IF NOT EXISTS idx_techalerts_user ON tech_alerts(user_id);
         """)
 
         # Seed a default admin user if none exist
@@ -559,3 +618,149 @@ def prune_old_data(retention_days: int = 90):
             "alerts": deleted_alerts,
         }
     }
+
+
+# ── NEWS ──────────────────────────────────────────────────────────────────────
+
+def upsert_news_items(items: list[dict]) -> int:
+    saved = 0
+    with get_conn() as conn:
+        for item in items:
+            try:
+                conn.execute("""
+                    INSERT INTO news_items (guid, title, summary, url, source, category, tickers, sentiment_score, published_at)
+                    VALUES (:guid, :title, :summary, :url, :source, :category, :tickers, :sentiment_score, :published_at)
+                    ON CONFLICT(guid) DO NOTHING
+                """, item)
+                saved += 1
+            except Exception:
+                pass
+    return saved
+
+
+def get_news(category: str = None, ticker: str = None, hours: int = 24,
+             limit: int = 50, offset: int = 0) -> list[dict]:
+    from datetime import datetime, timedelta
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    with get_conn() as conn:
+        base = "SELECT * FROM news_items WHERE published_at > ?"
+        params: list = [cutoff]
+        if category and category != "all":
+            base += " AND category=?"
+            params.append(category)
+        if ticker:
+            base += " AND (tickers LIKE ? OR title LIKE ?)"
+            params += [f"%{ticker}%", f"%{ticker}%"]
+        base += " ORDER BY published_at DESC LIMIT ? OFFSET ?"
+        params += [limit, offset]
+        return [dict(r) for r in conn.execute(base, params).fetchall()]
+
+
+def count_news(category: str = None, ticker: str = None, hours: int = 24) -> int:
+    from datetime import datetime, timedelta
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    with get_conn() as conn:
+        base = "SELECT COUNT(*) FROM news_items WHERE published_at > ?"
+        params: list = [cutoff]
+        if category and category != "all":
+            base += " AND category=?"
+            params.append(category)
+        if ticker:
+            base += " AND (tickers LIKE ? OR title LIKE ?)"
+            params += [f"%{ticker}%", f"%{ticker}%"]
+        return conn.execute(base, params).fetchone()[0]
+
+
+# ── ECONOMIC CALENDAR ─────────────────────────────────────────────────────────
+
+def upsert_calendar_events(events: list[dict]) -> int:
+    saved = 0
+    with get_conn() as conn:
+        for ev in events:
+            try:
+                conn.execute("""
+                    INSERT INTO calendar_events
+                        (event_key, event_type, title, symbol, event_date, event_time,
+                         description, eps_forecast, eps_actual, importance, source)
+                    VALUES (:event_key, :event_type, :title, :symbol, :event_date, :event_time,
+                            :description, :eps_forecast, :eps_actual, :importance, :source)
+                    ON CONFLICT(event_key) DO UPDATE SET
+                        eps_actual=excluded.eps_actual,
+                        updated_at=CURRENT_TIMESTAMP
+                """, ev)
+                saved += 1
+            except Exception:
+                pass
+    return saved
+
+
+def get_calendar_events(days: int = 7) -> list[dict]:
+    from datetime import datetime, timedelta
+    today = datetime.utcnow().date().isoformat()
+    end = (datetime.utcnow().date() + timedelta(days=days)).isoformat()
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM calendar_events WHERE event_date BETWEEN ? AND ? ORDER BY event_date, event_time",
+            (today, end)
+        ).fetchall()]
+
+
+# ── TECHNICAL ALERTS ─────────────────────────────────────────────────────────
+
+def get_tech_alerts(user_id: int) -> list[dict]:
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM tech_alerts WHERE user_id=? ORDER BY created_at DESC", (user_id,)
+        ).fetchall()]
+
+
+def create_tech_alert(user_id: int, symbol: str, alert_type: str,
+                      condition: str, threshold: float, period: int = 20) -> dict:
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO tech_alerts (user_id, symbol, alert_type, condition, threshold, period)
+               VALUES (?,?,?,?,?,?)""",
+            (user_id, symbol.upper(), alert_type, condition, threshold, period)
+        )
+        return {"id": cur.lastrowid, "symbol": symbol, "alert_type": alert_type,
+                "condition": condition, "threshold": threshold, "period": period}
+
+
+def delete_tech_alert(user_id: int, alert_id: int) -> bool:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM tech_alerts WHERE id=? AND user_id=?", (alert_id, user_id))
+    return True
+
+
+def mark_tech_alert_triggered(alert_id: int):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE tech_alerts SET triggered_at=CURRENT_TIMESTAMP WHERE id=?", (alert_id,)
+        )
+
+
+def get_all_tech_alerts_enabled() -> list[dict]:
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            "SELECT * FROM tech_alerts WHERE enabled=1"
+        ).fetchall()]
+
+
+# ── TICKER INFO ───────────────────────────────────────────────────────────────
+
+def get_ticker_info(symbol: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM ticker_info WHERE symbol=?", (symbol,)).fetchone()
+        return dict(row) if row else None
+
+
+def upsert_ticker_info(info: dict):
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO ticker_info (symbol, name, sector, industry, description, country, market_cap)
+            VALUES (:symbol, :name, :sector, :industry, :description, :country, :market_cap)
+            ON CONFLICT(symbol) DO UPDATE SET
+                name=excluded.name, sector=excluded.sector, industry=excluded.industry,
+                description=excluded.description, country=excluded.country,
+                market_cap=excluded.market_cap, updated_at=CURRENT_TIMESTAMP
+        """, info)

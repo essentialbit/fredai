@@ -656,6 +656,355 @@ html[data-tier="nano"] #mobile-nav { display:none !important }
 .nano-chat-inp{width:100%;padding:8px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:12px;outline:none}
 .nano-ask{width:100%;padding:10px;background:rgba(155,89,255,.15);border:1px solid rgba(155,89,255,.3);border-radius:8px;color:var(--purple);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:6px}
 .nano-resp{font-size:10px;color:var(--t2);line-height:1.6;margin-top:8px;text-align:left;max-height:80px;overflow-y:auto}
+
+/* ══ OV-EXTRA ROW (Calendar, News, TechAlerts) ══ */
+#ov-extra{
+  grid-column:1/-1;display:none;
+  display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--gap);
+}
+html[data-tier="nano"] #ov-extra{display:none}
+html[data-tier="micro"] #ov-extra,
+html[data-tier="compact"] #ov-extra{grid-template-columns:1fr;display:grid}
+html[data-tier="standard"] #ov-extra,
+html[data-tier="full"] #ov-extra,
+html[data-tier="ultra"] #ov-extra{display:grid}
+
+/* Calendar event items */
+.cal-event{
+  display:flex;align-items:flex-start;gap:8px;
+  padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);
+}
+.cal-event:last-child{border-bottom:none}
+.cal-date{
+  flex-shrink:0;width:42px;text-align:center;
+  font-size:9px;font-family:var(--mono);color:var(--t3);
+  line-height:1.3;
+}
+.cal-date .day{font-size:16px;font-weight:700;color:var(--t2);line-height:1}
+.cal-importance{
+  width:6px;flex-shrink:0;align-self:stretch;border-radius:3px;margin-top:2px;
+}
+.cal-importance.HIGH{background:var(--red)}
+.cal-importance.medium{background:var(--t3)}
+.cal-title{font-size:10px;color:var(--t1);line-height:1.4}
+.cal-meta{font-size:9px;color:var(--t3);margin-top:2px}
+.cal-type-tag{
+  font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 5px;
+  border-radius:3px;text-transform:uppercase;margin-right:4px;
+}
+.cal-type-fomc,.cal-type-fomc_press_conference{color:#f5a623;background:rgba(245,166,35,.1)}
+.cal-type-rba{color:#00b4ff;background:rgba(0,180,255,.1)}
+.cal-type-macro{color:#9b59ff;background:rgba(155,89,255,.1)}
+.cal-type-earnings{color:#00ff88;background:rgba(0,255,136,.1)}
+
+/* News preview items */
+.news-item{
+  padding:8px 10px;border-bottom:1px solid rgba(255,255,255,.04);
+  cursor:pointer;transition:background .15s;
+}
+.news-item:hover{background:rgba(255,255,255,.025)}
+.news-item:last-child{border-bottom:none}
+.ni-source{font-size:8px;font-weight:700;letter-spacing:.5px;color:var(--t3);text-transform:uppercase;margin-bottom:3px}
+.ni-title{font-size:10px;color:var(--t1);line-height:1.4;margin-bottom:3px;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ni-meta{display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t3)}
+.ni-sent{font-family:var(--mono);font-weight:700}
+.ni-sent.pos{color:var(--green)}
+.ni-sent.neg{color:var(--red)}
+
+/* Tech alert items */
+.ta-item{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:10px;
+}
+.ta-item:last-child{border-bottom:none}
+.ta-sym{font-family:var(--mono);font-weight:700;color:var(--blue);flex-shrink:0;min-width:44px}
+.ta-desc{flex:1;color:var(--t2);line-height:1.3}
+.ta-del{background:none;border:none;color:var(--t3);cursor:pointer;font-size:12px;padding:2px 4px;flex-shrink:0}
+.ta-del:hover{color:var(--red)}
+.ta-triggered{color:var(--green);font-size:9px;flex-shrink:0}
+
+/* AI Universe */
+.ai-sector{border-bottom:1px solid var(--border);padding:12px 16px}
+.ai-sector-header{
+  display:flex;align-items:center;gap:10px;margin-bottom:10px;cursor:pointer;
+}
+.ai-sector-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.ai-sector-name{font-size:var(--font-xs);font-weight:700;letter-spacing:1px;color:var(--t1)}
+.ai-sector-desc{font-size:9px;color:var(--t3);flex:1}
+.ai-tickers{display:flex;flex-wrap:wrap;gap:6px}
+.ai-ticker{
+  display:flex;align-items:center;gap:6px;
+  padding:6px 10px;background:rgba(255,255,255,.025);
+  border:1px solid rgba(255,255,255,.06);border-radius:8px;
+  font-size:10px;cursor:pointer;transition:.15s;min-width:100px;
+}
+.ai-ticker:hover{border-color:rgba(0,180,255,.3);background:rgba(0,180,255,.05)}
+.ai-ticker-sym{font-family:var(--mono);font-weight:700;color:var(--t1)}
+.ai-ticker-price{font-family:var(--mono);font-size:9px;color:var(--t2)}
+.ai-ticker-chg{font-family:var(--mono);font-size:9px;font-weight:700}
+.ai-ticker-chg.up{color:var(--green)}
+.ai-ticker-chg.dn{color:var(--red)}
+
+/* ══ FRED'S INTELLIGENCE — Futuristic AI Recommendations Panel ══ */
+#fred-intelligence{
+  grid-column:1/-1;display:none;
+  background:linear-gradient(135deg,rgba(0,180,255,.04) 0%,rgba(155,89,255,.06) 50%,rgba(0,255,136,.04) 100%);
+  border:1px solid rgba(0,180,255,.18);
+  border-radius:14px;overflow:hidden;
+  position:relative;flex-shrink:0;
+}
+html[data-tier="standard"] #fred-intelligence,
+html[data-tier="full"] #fred-intelligence,
+html[data-tier="ultra"] #fred-intelligence,
+html[data-tier="compact"] #fred-intelligence { display:flex;flex-direction:column; }
+#fi-scanner{
+  position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent 0%,rgba(0,180,255,.8) 50%,transparent 100%);
+  animation:fi-scan 3s ease-in-out infinite;pointer-events:none;z-index:2;
+}
+@keyframes fi-scan{
+  0%{transform:translateY(0);opacity:0}
+  10%{opacity:1}
+  90%{opacity:1}
+  100%{transform:translateY(200px);opacity:0}
+}
+#fi-header{
+  display:flex;align-items:center;gap:10px;
+  padding:12px 16px 8px;border-bottom:1px solid rgba(0,180,255,.1);
+  position:relative;
+}
+.fi-icon{
+  width:28px;height:28px;border-radius:50%;
+  background:linear-gradient(135deg,rgba(0,180,255,.3),rgba(155,89,255,.3));
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;flex-shrink:0;
+  box-shadow:0 0 12px rgba(0,180,255,.3);
+  animation:fi-pulse 2.5s ease-in-out infinite;
+}
+@keyframes fi-pulse{
+  0%,100%{box-shadow:0 0 12px rgba(0,180,255,.3)}
+  50%{box-shadow:0 0 24px rgba(0,180,255,.7),0 0 48px rgba(155,89,255,.3)}
+}
+.fi-title{font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--blue);text-transform:uppercase}
+.fi-subtitle{font-size:10px;color:var(--t3);letter-spacing:.5px}
+.fi-meta{margin-left:auto;display:flex;align-items:center;gap:8px}
+.fi-risk{font-size:10px;font-weight:700;letter-spacing:1.5px;padding:2px 8px;border-radius:20px}
+.fi-risk.LOW{color:#00ff88;border:1px solid rgba(0,255,136,.3);background:rgba(0,255,136,.08)}
+.fi-risk.MEDIUM{color:#f5a623;border:1px solid rgba(245,166,35,.3);background:rgba(245,166,35,.08)}
+.fi-risk.HIGH{color:#ff3b5c;border:1px solid rgba(255,59,92,.3);background:rgba(255,59,92,.08)}
+.fi-refresh{font-size:9px;color:var(--t3);cursor:pointer;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:none;transition:.2s}
+.fi-refresh:hover{color:var(--blue);border-color:var(--blue)}
+
+#fi-body{display:flex;flex-direction:column;gap:0;flex:1}
+#fi-pulse-line{
+  padding:8px 16px;font-size:var(--font-xs);color:var(--t2);
+  border-bottom:1px solid rgba(255,255,255,.04);
+  font-style:italic;line-height:1.5;
+}
+#fi-pulse-line::before{content:"◈ ";color:var(--purple);font-style:normal}
+
+#fi-cards{display:flex;gap:12px;padding:12px 16px;overflow-x:auto;scrollbar-width:thin}
+#fi-cards::-webkit-scrollbar{height:3px}
+#fi-cards::-webkit-scrollbar-thumb{background:rgba(0,180,255,.3);border-radius:2px}
+
+/* TOP PICK — hero card */
+.fi-top-pick{
+  flex-shrink:0;min-width:220px;max-width:280px;
+  background:linear-gradient(135deg,rgba(0,255,136,.06) 0%,rgba(0,180,255,.08) 100%);
+  border:1px solid rgba(0,255,136,.25);border-radius:12px;
+  padding:14px;position:relative;overflow:hidden;
+  transition:transform .2s,box-shadow .2s;
+}
+.fi-top-pick:hover{transform:translateY(-2px);box-shadow:0 8px 32px rgba(0,255,136,.15)}
+.fi-top-pick::before{
+  content:'TOP PICK';position:absolute;top:10px;right:-20px;
+  background:linear-gradient(90deg,rgba(0,255,136,.8),rgba(0,180,255,.8));
+  color:#03080f;font-size:8px;font-weight:900;letter-spacing:2px;
+  padding:3px 28px;transform:rotate(30deg);transform-origin:right center;
+}
+.fi-top-glow{
+  position:absolute;top:-40px;right:-40px;width:120px;height:120px;
+  background:radial-gradient(circle,rgba(0,255,136,.12) 0%,transparent 70%);
+  pointer-events:none;
+}
+
+/* PICK CARDS — standard */
+.fi-pick{
+  flex-shrink:0;min-width:190px;max-width:230px;
+  background:rgba(255,255,255,.02);
+  border:1px solid rgba(255,255,255,.08);border-radius:12px;
+  padding:12px;position:relative;overflow:hidden;
+  transition:transform .2s,border-color .2s;
+}
+.fi-pick:hover{transform:translateY(-2px);border-color:rgba(0,180,255,.3)}
+.fi-pick.portfolio{border-top:2px solid rgba(0,255,136,.4)}
+.fi-pick.watchlist{border-top:2px solid rgba(0,180,255,.4)}
+.fi-pick.trending{border-top:2px solid rgba(155,89,255,.4)}
+
+.fi-card-label{
+  font-size:9px;font-weight:700;letter-spacing:1.5px;
+  text-transform:uppercase;margin-bottom:8px;
+}
+.fi-pick.portfolio .fi-card-label{color:rgba(0,255,136,.7)}
+.fi-pick.watchlist .fi-card-label{color:rgba(0,180,255,.7)}
+.fi-pick.trending .fi-card-label{color:rgba(155,89,255,.7)}
+.fi-top-pick .fi-card-label{color:rgba(0,255,136,.9)}
+
+.fi-sym{font-size:22px;font-weight:800;font-family:var(--mono);color:var(--t1);line-height:1}
+.fi-sym-name{font-size:10px;color:var(--t3);margin-top:2px;margin-bottom:8px}
+.fi-price-row{display:flex;align-items:baseline;gap:6px;margin-bottom:8px}
+.fi-price{font-size:var(--font-sm);font-family:var(--mono);font-weight:700;color:var(--t1)}
+.fi-chg{font-size:var(--font-xs);font-family:var(--mono);font-weight:700}
+.fi-chg.up{color:var(--green)}
+.fi-chg.dn{color:var(--red)}
+.fi-rationale{font-size:10px;color:var(--t2);line-height:1.55;margin-bottom:10px}
+.fi-strength{
+  display:inline-block;font-size:9px;font-weight:700;letter-spacing:1px;
+  padding:2px 7px;border-radius:20px;text-transform:uppercase;
+}
+.fi-strength.STRONG{color:#00ff88;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.25)}
+.fi-strength.MODERATE{color:#f5a623;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.25)}
+.fi-strength.WATCH{color:#00b4ff;background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.25)}
+.fi-source-badge{
+  font-size:8px;letter-spacing:.5px;color:var(--t3);margin-left:5px;
+  text-transform:uppercase;
+}
+
+#fi-loading{
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:32px 16px;color:var(--t3);font-size:var(--font-xs);
+}
+.fi-spin{
+  width:16px;height:16px;border:2px solid rgba(0,180,255,.2);
+  border-top-color:var(--blue);border-radius:50%;
+  animation:fi-rotate 0.8s linear infinite;
+}
+@keyframes fi-rotate{to{transform:rotate(360deg)}}
+
+/* Grid glow lines on hover (compact+) */
+@media (min-width:768px){
+  #fred-intelligence::after{
+    content:'';position:absolute;inset:0;
+    background:
+      repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(0,180,255,.03) 40px),
+      repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(0,180,255,.03) 40px);
+    pointer-events:none;z-index:0;
+  }
+}
+
+/* ── FRED QUERY BAR ── */
+#fred-query-wrap{
+  padding:6px 14px;background:rgba(3,8,15,.6);border-bottom:1px solid var(--border);
+  position:relative;z-index:50;
+}
+html[data-tier="nano"] #fred-query-wrap,
+html[data-tier="micro"] #fred-query-wrap{display:none}
+#fred-query-box{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(0,180,255,.04);border:1px solid rgba(0,180,255,.14);
+  border-radius:20px;padding:5px 12px;
+}
+#fq-icon{color:var(--blue);font-size:14px;flex-shrink:0}
+#fred-query-input{
+  flex:1;background:none;border:none;color:var(--t1);font-size:11px;
+  outline:none;font-family:var(--sans);
+}
+#fred-query-input::placeholder{color:var(--t3)}
+#fq-btn{
+  padding:3px 12px;background:rgba(0,180,255,.12);border:1px solid rgba(0,180,255,.25);
+  border-radius:12px;color:var(--blue);font-size:10px;cursor:pointer;font-family:var(--sans);
+  transition:.15s;white-space:nowrap;
+}
+#fq-btn:hover{background:rgba(0,180,255,.22)}
+#fred-query-results{
+  background:rgba(7,17,28,.98);border:1px solid rgba(0,180,255,.15);
+  border-radius:10px;margin-top:6px;max-height:320px;overflow-y:auto;
+}
+.fq-header{padding:10px 14px;border-bottom:1px solid var(--border);font-size:10px;color:var(--t3);display:flex;gap:8px;align-items:center}
+.fq-interpretation{color:var(--blue)}
+.fq-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;padding:10px 14px}
+.fq-item{
+  background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:8px;
+  padding:8px 10px;cursor:pointer;transition:.15s;
+}
+.fq-item:hover{border-color:rgba(0,180,255,.25);background:rgba(0,180,255,.04)}
+.fq-sym{font-family:var(--mono);font-weight:800;font-size:12px;color:var(--t1)}
+.fq-name{font-size:9px;color:var(--t3);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fq-sector{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;margin-bottom:4px;display:inline-block}
+.fq-price{font-family:var(--mono);font-size:10px;color:var(--t1)}
+.fq-chg{font-family:var(--mono);font-size:9px;font-weight:700}
+.fq-reason{font-size:9px;color:var(--t3);line-height:1.4;margin-top:4px}
+.fq-summary{padding:10px 14px;font-size:10px;color:var(--t2);border-top:1px solid var(--border);line-height:1.5}
+.fq-loading{padding:16px;text-align:center;color:var(--t3);font-size:10px}
+
+/* ── OPERATIONAL PICTURE PANEL ── */
+#ops-picture{
+  grid-column:1/-1;display:none;
+  background:linear-gradient(135deg,rgba(255,59,92,.03),rgba(0,180,255,.04));
+  border:1px solid rgba(255,59,92,.12);border-radius:12px;overflow:hidden;
+  flex-shrink:0;
+}
+html[data-tier="standard"] #ops-picture,
+html[data-tier="full"] #ops-picture,
+html[data-tier="ultra"] #ops-picture{display:block}
+#ops-header{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid rgba(255,59,92,.1);
+  background:rgba(255,59,92,.04);
+}
+.ops-title{font-size:9px;font-weight:700;letter-spacing:2px;color:var(--red);text-transform:uppercase}
+#ops-market-status{font-size:9px;font-weight:700;padding:2px 8px;border-radius:10px}
+#ops-refresh{margin-left:auto;font-size:9px;color:var(--t3);cursor:pointer;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:none}
+#ops-body{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0}
+@media(max-width:1200px){
+  #ops-body{grid-template-columns:1fr 1fr}
+}
+.ops-col{padding:10px 14px;border-right:1px solid var(--border)}
+.ops-col:last-child{border-right:none}
+.ops-col-title{font-size:8px;font-weight:700;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.ops-badge{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+
+/* Signal density items */
+.sd-item{
+  display:flex;align-items:center;gap:8px;padding:5px 0;
+  border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;
+  transition:.1s;
+}
+.sd-item:hover{background:rgba(255,255,255,.02)}
+.sd-item:last-child{border-bottom:none}
+.sd-sym{font-family:var(--mono);font-weight:800;font-size:11px;color:var(--t1);width:44px;flex-shrink:0}
+.sd-bar-wrap{flex:1;height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden}
+.sd-bar{height:100%;border-radius:2px;transition:width .4s}
+.sd-score{font-size:9px;font-family:var(--mono);color:var(--t3);width:28px;text-align:right;flex-shrink:0}
+.sd-signal{font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;flex-shrink:0}
+.sd-signal.BUY{background:rgba(0,255,136,.15);color:var(--green)}
+.sd-signal.SELL{background:rgba(255,59,92,.15);color:var(--red)}
+.sd-signal.HOLD{background:rgba(245,166,35,.1);color:var(--gold)}
+.sd-signal.WATCH{background:rgba(0,180,255,.1);color:var(--blue)}
+
+/* Cascade items in ops panel */
+.ops-cascade{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:9px}
+.ops-cascade:last-child{border-bottom:none}
+.ops-cascade-trigger{display:flex;align-items:center;gap:4px;color:var(--t2);margin-bottom:2px}
+.ops-cascade-sym{font-family:var(--mono);font-weight:800;color:var(--t1)}
+.ops-cascade-chg{font-family:var(--mono);font-weight:700}
+.ops-cascade-chg.up{color:var(--green)}
+.ops-cascade-chg.dn{color:var(--red)}
+.ops-cascade-arrows{display:flex;gap:3px;flex-wrap:wrap}
+.ops-arrow-sym{
+  padding:1px 5px;border-radius:3px;font-size:8px;font-weight:700;
+  background:rgba(255,255,255,.06);color:var(--t2);cursor:pointer;
+  transition:.1s;
+}
+.ops-arrow-sym:hover{background:rgba(0,180,255,.1);color:var(--blue)}
+
+/* Ops events */
+.ops-event{padding:5px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:9px}
+.ops-event:last-child{border-bottom:none}
+.ops-event-title{color:var(--t1);line-height:1.4;margin-bottom:2px}
+.ops-event-meta{color:var(--t3);font-size:8px}
+.ops-imp-dot{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:4px}
 </style>
 </head>
 <body>
@@ -718,6 +1067,18 @@ html[data-tier="nano"] #mobile-nav { display:none !important }
     <button class="nav-tab" onclick="switchTab('watchlist',this)">Watchlist</button>
     <button class="nav-tab" onclick="switchTab('portfolio',this)">Portfolio</button>
     <button class="nav-tab" onclick="switchTab('trending',this)">Trending</button>
+    <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
+    <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
+    <button class="nav-tab" onclick="window.location='/graph'" style="color:var(--purple)">Graph ↗</button>
+  </div>
+  <!-- ── FRED QUERY BAR ── -->
+  <div id="fred-query-wrap">
+    <div id="fred-query-box">
+      <span id="fq-icon">⌖</span>
+      <input id="fred-query-input" placeholder='Ask Fred: "show AI stocks with positive momentum"...' autocomplete="off" onkeydown="if(event.key==='Enter')runFredQuery()">
+      <button id="fq-btn" onclick="runFredQuery()">Ask →</button>
+    </div>
+    <div id="fred-query-results" style="display:none"></div>
   </div>
 
   <!-- KPI ROW -->
@@ -764,6 +1125,54 @@ html[data-tier="nano"] #mobile-nav { display:none !important }
   <!-- ══ MAIN CONTENT AREA ══ -->
   <div id="content" class="tab-overview">
 
+    <!-- FRED'S INTELLIGENCE PANEL -->
+    <div id="fred-intelligence">
+      <div id="fi-scanner"></div>
+      <div id="fi-header">
+        <div class="fi-icon">◈</div>
+        <div>
+          <div class="fi-title">Fred's Intelligence</div>
+          <div class="fi-subtitle" id="fi-generated-at">Generating picks...</div>
+        </div>
+        <div class="fi-meta">
+          <span class="fi-risk MEDIUM" id="fi-risk-badge">MEDIUM</span>
+          <button class="fi-refresh" onclick="loadRecommendations(true)" title="Refresh picks">↻ Refresh</button>
+        </div>
+      </div>
+      <div id="fi-body">
+        <div id="fi-loading"><div class="fi-spin"></div>Asking Fred for today's picks...</div>
+        <div id="fi-pulse-line" style="display:none"></div>
+        <div id="fi-cards" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- OPERATIONAL PICTURE — Mission Control -->
+    <div id="ops-picture">
+      <div id="ops-header">
+        <span style="font-size:14px">◉</span>
+        <div class="ops-title">Mission Control — Operational Picture</div>
+        <span id="ops-market-status">LOADING</span>
+        <button id="ops-refresh" onclick="loadOpsPicture()">↻</button>
+      </div>
+      <div id="ops-body">
+        <!-- Col 1: Signal Density -->
+        <div class="ops-col">
+          <div class="ops-col-title"><div class="ops-badge" style="background:var(--blue)"></div>Signal Density</div>
+          <div id="ops-density-list"><div style="color:var(--t3);font-size:9px">Loading...</div></div>
+        </div>
+        <!-- Col 2: Cascade Events -->
+        <div class="ops-col">
+          <div class="ops-col-title"><div class="ops-badge" style="background:var(--red)"></div>Cascade Alerts</div>
+          <div id="ops-cascade-list"><div style="color:var(--t3);font-size:9px">Loading...</div></div>
+        </div>
+        <!-- Col 3: Today's High-Impact Events -->
+        <div class="ops-col">
+          <div class="ops-col-title"><div class="ops-badge" style="background:var(--gold)"></div>Today's Events</div>
+          <div id="ops-events-list"><div style="color:var(--t3);font-size:9px">Loading...</div></div>
+        </div>
+      </div>
+    </div>
+
     <!-- OVERVIEW: Portfolio panel -->
     <div class="panel" id="ov-portfolio">
       <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
@@ -806,6 +1215,59 @@ html[data-tier="nano"] #mobile-nav { display:none !important }
       </div>
     </div>
 
+    <!-- OVERVIEW: Economic Calendar + News + Tech Alerts row -->
+    <div id="ov-extra">
+
+      <!-- Economic Calendar -->
+      <div class="panel" id="ov-calendar">
+        <div class="ph">Economic Calendar <span class="ptag">7 DAYS</span></div>
+        <div class="scroll" id="cal-list">
+          <div style="color:var(--t3);font-size:var(--font-xs);padding:20px;text-align:center">Loading events...</div>
+        </div>
+      </div>
+
+      <!-- News Preview -->
+      <div class="panel" id="ov-news">
+        <div class="ph" style="display:flex;align-items:center;gap:8px">
+          News Feed
+          <span class="ptag" id="news-badge">0</span>
+          <a href="/news" style="margin-left:auto;font-size:9px;color:var(--blue);text-decoration:none;letter-spacing:.5px">VIEW ALL ↗</a>
+        </div>
+        <div class="scroll" id="news-preview-list">
+          <div style="color:var(--t3);font-size:var(--font-xs);padding:20px;text-align:center">Fetching news...</div>
+        </div>
+      </div>
+
+      <!-- Technical Alerts -->
+      <div class="panel" id="ov-tech-alerts">
+        <div class="ph">Technical Alerts <span class="ptag" id="ta-cnt">0</span></div>
+        <div class="scroll" id="ta-list">
+          <div style="color:var(--t3);font-size:var(--font-xs);padding:12px">No alerts configured.</div>
+        </div>
+        <div class="add-form" id="ta-form">
+          <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Add Alert</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+            <input id="ta-sym" placeholder="Symbol" style="flex:1;min-width:70px">
+            <select id="ta-type" style="flex:2;min-width:120px;background:var(--bg2);border:1px solid var(--border);color:var(--t1);padding:6px;border-radius:6px;font-size:var(--font-xs)">
+              <option value="price_above">Price above</option>
+              <option value="price_below">Price below</option>
+              <option value="ma_cross_above">MA cross above</option>
+              <option value="ma_cross_below">MA cross below</option>
+              <option value="rsi_above">RSI above (overbought)</option>
+              <option value="rsi_below">RSI below (oversold)</option>
+              <option value="volume_spike">Volume spike</option>
+            </select>
+          </div>
+          <div style="display:flex;gap:6px;margin-bottom:6px">
+            <input id="ta-threshold" placeholder="Threshold" style="flex:1">
+            <input id="ta-period" placeholder="Period (20)" style="flex:1">
+          </div>
+          <button class="btn btn-b" style="width:100%" onclick="addTechAlert()">+ Add Alert</button>
+        </div>
+      </div>
+
+    </div>
+
     <!-- WATCHLIST TAB -->
     <div class="panel" id="tab-watchlist" style="display:none;grid-column:1/-1">
       <div class="ph">Your Watchlist <span class="ptag" id="wl-cnt">0 symbols</span></div>
@@ -837,6 +1299,16 @@ html[data-tier="nano"] #mobile-nav { display:none !important }
     <div class="panel" id="tab-portfolio-chart" style="display:none">
       <div class="ph">Allocation <span class="ptag">CHART</span></div>
       <div class="pie-wrap"><canvas id="port-pie"></canvas></div>
+    </div>
+
+    <!-- ══ AI UNIVERSE TAB ══ -->
+    <div class="panel" id="tab-ai" style="display:none;grid-column:1/-1;padding:0;overflow:hidden">
+      <div style="padding:12px 16px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+        <div style="font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--purple);text-transform:uppercase">◈ AI Universe</div>
+        <div style="font-size:10px;color:var(--t3)">All sectors of the AI revolution — live prices</div>
+        <div id="ai-loading" style="font-size:9px;color:var(--t3);margin-left:auto">Loading...</div>
+      </div>
+      <div id="ai-sectors" style="overflow-y:auto;max-height:calc(100vh - 200px)"></div>
     </div>
 
     <!-- TRENDING TAB -->
@@ -984,6 +1456,15 @@ async function loadInitData() {
     if (d.timeline && !IS_NANO && !IS_MOBILE) initSentChart(d.timeline);
     // Nano-specific
     if (IS_NANO) { updateNanoQuotes(quotesCache); updateNanoSignal(allSignals); updateNanoRisk(d.risk_level); }
+    // New panels
+    if (!IS_NANO) {
+      setTimeout(loadRecommendations, 800);
+      setTimeout(loadOpsPicture, 1200);
+      if (d.calendar) renderCalendar(d.calendar);
+      else loadCalendar();
+      if (d.news_preview) renderNewsPreview(d.news_preview);
+      if (d.tech_alerts) renderTechAlerts(d.tech_alerts);
+    }
   } catch(e) { console.error('Init error:',e); }
 }
 
@@ -1009,11 +1490,12 @@ function tickClock() {
 setInterval(tickClock, 1000); tickClock();
 
 // ── TABS ──────────────────────────────────────────────────────────────────
-const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom'];
+const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture'];
 const WL=['tab-watchlist'];
 const PF=['tab-portfolio-left','tab-portfolio-chart'];
 const TR=['tab-trending-list','tab-trending-chart'];
-const ALL_PANELS=[...OV,...WL,...PF,...TR];
+const AI=['tab-ai'];
+const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI];
 
 function switchTab(tab, btn) {
   activeTab = tab;
@@ -1045,6 +1527,10 @@ function switchTab(tab, btn) {
     g('tab-trending-list').style.display='';
     if (TIER!=='standard' && TIER!=='micro' && TIER!=='compact') g('tab-trending-chart').style.display='';
     loadTrending(4);
+  } else if (tab==='ai') {
+    content.className='tab-overview';
+    g('tab-ai').style.display='';
+    loadAIUniverse();
   }
 }
 
@@ -1401,6 +1887,445 @@ async function acceptDisclaimer() {
 
 function showFullDisclaimer() {
   window.open('/disclaimer','_blank','noopener,noreferrer');
+}
+
+// ── ECONOMIC CALENDAR ────────────────────────────────────────────────────
+async function loadCalendar() {
+  try {
+    const r = await fetch('/api/calendar?days=7');
+    const d = await r.json();
+    renderCalendar(d.events || []);
+  } catch(e) { console.error('Calendar error:', e); }
+}
+
+function renderCalendar(events) {
+  const el = g('cal-list');
+  if (!el) return;
+  if (!events.length) { el.innerHTML='<div style="color:var(--t3);font-size:var(--font-xs);padding:20px;text-align:center">No upcoming events.</div>'; return; }
+  el.innerHTML = events.map(ev => {
+    const dt = new Date(ev.event_date + 'T00:00:00Z');
+    const day = dt.getUTCDate();
+    const mon = dt.toLocaleString('en-US',{month:'short',timeZone:'UTC'});
+    const imp = ev.importance || 'medium';
+    const et = ev.event_type || '';
+    return `
+    <div class="cal-event">
+      <div class="cal-date"><div class="day">${day}</div>${mon}</div>
+      <div class="cal-importance ${esc(imp)}"></div>
+      <div>
+        <div class="cal-title">
+          <span class="cal-type-tag cal-type-${esc(et)}">${esc(et.replace('_',' '))}</span>
+          ${esc(ev.title)}
+        </div>
+        <div class="cal-meta">${esc(ev.event_time||'')} UTC · ${esc(ev.source||'')}${ev.eps_forecast?` · Est: ${esc(ev.eps_forecast)}`:''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── NEWS PREVIEW ──────────────────────────────────────────────────────────
+function renderNewsPreview(items) {
+  const el = g('news-preview-list');
+  const badge = g('news-badge');
+  if (!el) return;
+  if (!items || !items.length) {
+    el.innerHTML='<div style="color:var(--t3);font-size:var(--font-xs);padding:12px">News loading — first fetch in progress...</div>';
+    return;
+  }
+  if (badge) badge.textContent = items.length;
+  el.innerHTML = items.map(item => {
+    const sent = item.sentiment_score || 0;
+    const sentClass = sent>0.1?'pos':sent<-0.1?'neg':'';
+    const sentText = sent>0.1?`▲${sent.toFixed(2)}`:sent<-0.1?`▼${sent.toFixed(2)}`:'';
+    const pub = relTime(item.published_at);
+    return `<div class="news-item" onclick="window.open('${esc(item.url)}','_blank','noopener')">
+      <div class="ni-source">${esc(item.source||'')} · ${esc(item.category||'')}</div>
+      <div class="ni-title">${esc(item.title)}</div>
+      <div class="ni-meta">
+        <span>${pub}</span>
+        ${sentText?`<span class="ni-sent ${sentClass}">${sentText}</span>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function relTime(dt) {
+  if (!dt) return '';
+  try {
+    const d = new Date(dt.includes('Z')?dt:dt+' UTC');
+    const m = Math.round((Date.now()-d.getTime())/60000);
+    if (m<1) return 'now';
+    if (m<60) return m+'m ago';
+    if (m<1440) return Math.round(m/60)+'h ago';
+    return Math.round(m/1440)+'d ago';
+  } catch { return ''; }
+}
+
+// ── TECHNICAL ALERTS ──────────────────────────────────────────────────────
+let _techAlerts = [];
+
+function renderTechAlerts(alerts) {
+  _techAlerts = alerts || [];
+  const el = g('ta-list');
+  const cnt = g('ta-cnt');
+  if (!el) return;
+  if (cnt) cnt.textContent = _techAlerts.length;
+  if (!_techAlerts.length) {
+    el.innerHTML='<div style="color:var(--t3);font-size:var(--font-xs);padding:12px">No alerts configured. Add one below.</div>';
+    return;
+  }
+  el.innerHTML = _techAlerts.map(a => {
+    const trig = a.triggered_at ? `<span class="ta-triggered">✓ Fired</span>` : '';
+    return `<div class="ta-item">
+      <span class="ta-sym">${esc(a.symbol)}</span>
+      <span class="ta-desc">${esc(a.alert_type.replace(/_/g,' '))} ${a.threshold||''} (p${a.period||20})</span>
+      ${trig}
+      <button class="ta-del" onclick="deleteTechAlert(${a.id})" title="Delete">✕</button>
+    </div>`;
+  }).join('');
+}
+
+async function addTechAlert() {
+  const sym = (g('ta-sym').value||'').trim().toUpperCase();
+  const type = g('ta-type').value;
+  const thr = parseFloat(g('ta-threshold').value||0);
+  const per = parseInt(g('ta-period').value||20);
+  if (!sym) { g('ta-sym').focus(); return; }
+  try {
+    const r = await fetch('/api/tech-alerts', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({symbol:sym,alert_type:type,condition:type,threshold:thr,period:per})
+    });
+    const d = await r.json();
+    if (d.alert) { _techAlerts.push(d.alert); renderTechAlerts(_techAlerts); }
+    g('ta-sym').value=''; g('ta-threshold').value=''; g('ta-period').value='';
+  } catch(e) { console.error('Alert error:', e); }
+}
+
+async function deleteTechAlert(id) {
+  try {
+    await fetch('/api/tech-alerts/'+id, {method:'DELETE'});
+    _techAlerts = _techAlerts.filter(a=>a.id!==id);
+    renderTechAlerts(_techAlerts);
+  } catch(e) {}
+}
+
+// ── AI UNIVERSE ───────────────────────────────────────────────────────────
+async function loadAIUniverse() {
+  const el = g('ai-sectors');
+  const loading = g('ai-loading');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/ai-universe');
+    const d = await r.json();
+    if (loading) loading.textContent='';
+    el.innerHTML = (d.sectors||[]).map(sector => renderAISector(sector)).join('');
+  } catch(e) {
+    if (el) el.innerHTML='<div style="color:var(--t3);padding:20px">Failed to load AI universe data.</div>';
+  }
+}
+
+function renderAISector(sector) {
+  const tickers = sector.tickers.map(t => {
+    const chgClass = (t.change_pct||0)>=0?'up':'dn';
+    const chgSign = (t.change_pct||0)>=0?'+':'';
+    const price = t.price>0?'$'+t.price.toFixed(2):'--';
+    return `<div class="ai-ticker" onclick="loadSymbolChart('${esc(t.symbol)}')">
+      <div>
+        <div class="ai-ticker-sym">${esc(t.symbol)}</div>
+        <div class="ai-ticker-price">${price}</div>
+      </div>
+      <div class="ai-ticker-chg ${chgClass}">${t.price>0?chgSign+(t.change_pct||0).toFixed(2)+'%':'--'}</div>
+    </div>`;
+  }).join('');
+  return `<div class="ai-sector">
+    <div class="ai-sector-header">
+      <div class="ai-sector-dot" style="background:${esc(sector.color)};box-shadow:0 0 8px ${esc(sector.color)}55"></div>
+      <div class="ai-sector-name">${esc(sector.name)}</div>
+      <div class="ai-sector-desc">${esc(sector.desc)}</div>
+    </div>
+    <div class="ai-tickers">${tickers}</div>
+  </div>`;
+}
+
+function loadSymbolChart(sym) {
+  const sel = g('sym-sel');
+  if (sel) {
+    const opt = [...sel.options].find(o=>o.value===sym);
+    if (!opt) { const o=new Option(sym,sym); sel.add(o); }
+    sel.value = sym;
+  }
+  switchTab('overview', document.querySelector('.nav-tab'));
+  setTimeout(loadPriceChart, 100);
+}
+
+// ── FRED'S INTELLIGENCE ───────────────────────────────────────────────────
+let _recsLoaded = false;
+async function loadRecommendations(force=false) {
+  if (_recsLoaded && !force) return;
+  const loading = g('fi-loading');
+  const pulse   = g('fi-pulse-line');
+  const cards   = g('fi-cards');
+  if (loading) loading.style.display='flex';
+  if (pulse)   pulse.style.display='none';
+  if (cards)   cards.style.display='none';
+  try {
+    const r = await fetch('/api/recommendations');
+    if (!r.ok) throw new Error('fetch failed');
+    const d = await r.json();
+    renderRecommendations(d);
+    _recsLoaded = true;
+  } catch(e) {
+    if (loading) loading.innerHTML='<span style="color:var(--t3)">Picks unavailable — market data loading...</span>';
+  }
+}
+
+function renderRecommendations(d) {
+  const loading = g('fi-loading');
+  const pulse   = g('fi-pulse-line');
+  const cards   = g('fi-cards');
+  const riskEl  = g('fi-risk-badge');
+  const genAt   = g('fi-generated-at');
+
+  if (loading) loading.style.display='none';
+
+  // Market pulse + risk
+  if (pulse && d.market_pulse) {
+    pulse.textContent = d.market_pulse;
+    pulse.style.display='';
+  }
+  if (riskEl && d.risk_level) {
+    riskEl.textContent = d.risk_level;
+    riskEl.className = 'fi-risk ' + d.risk_level;
+  }
+  if (genAt && d.generated_at) {
+    genAt.textContent = 'Updated ' + d.generated_at;
+  }
+
+  if (!cards) return;
+  cards.innerHTML = '';
+
+  // TOP PICK card
+  if (d.top_pick) {
+    cards.appendChild(buildTopPickCard(d.top_pick));
+  }
+
+  // Category cards
+  const catClass = { 'Portfolio Star':'portfolio', 'Watchlist Leader':'watchlist', 'Trending Discovery':'trending' };
+  (d.picks||[]).forEach(p => {
+    if (d.top_pick && p.symbol === d.top_pick.symbol && p.category === d.top_pick.category) return;
+    cards.appendChild(buildPickCard(p, catClass[p.category]||'watchlist'));
+  });
+
+  cards.style.display='flex';
+}
+
+function buildTopPickCard(p) {
+  const div = document.createElement('div');
+  div.className = 'fi-top-pick';
+  const chgClass = (p.change_pct||0) >= 0 ? 'up' : 'dn';
+  const chgSign  = (p.change_pct||0) >= 0 ? '+' : '';
+  div.innerHTML = `
+    <div class="fi-top-glow"></div>
+    <div class="fi-card-label">◈ Today's Top Pick</div>
+    <div class="fi-sym">${esc(p.symbol)}</div>
+    <div class="fi-sym-name">${esc(p.name||p.symbol)}</div>
+    <div class="fi-price-row">
+      <span class="fi-price">${p.price>0?'$'+p.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'--'}</span>
+      <span class="fi-chg ${chgClass}">${chgSign}${(p.change_pct||0).toFixed(2)}%</span>
+    </div>
+    <div class="fi-rationale">${esc(p.rationale||'')}</div>
+    <span class="fi-strength ${esc(p.signal_strength||'WATCH')}">${esc(p.signal_strength||'WATCH')}</span>
+    <span class="fi-source-badge">${esc(p.category||'')}</span>
+  `;
+  return div;
+}
+
+function buildPickCard(p, cls) {
+  const div = document.createElement('div');
+  div.className = 'fi-pick ' + cls;
+  const chgClass = (p.change_pct||0) >= 0 ? 'up' : 'dn';
+  const chgSign  = (p.change_pct||0) >= 0 ? '+' : '';
+  const catIcon  = cls==='portfolio'?'◉':cls==='watchlist'?'◈':'▲';
+  div.innerHTML = `
+    <div class="fi-card-label">${catIcon} ${esc(p.category||cls)}</div>
+    <div class="fi-sym">${esc(p.symbol)}</div>
+    <div class="fi-sym-name">${esc(p.name||p.symbol)}</div>
+    <div class="fi-price-row">
+      <span class="fi-price">${p.price>0?'$'+p.price.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}):'--'}</span>
+      <span class="fi-chg ${chgClass}">${chgSign}${(p.change_pct||0).toFixed(2)}%</span>
+    </div>
+    <div class="fi-rationale">${esc(p.rationale||'')}</div>
+    <span class="fi-strength ${esc(p.signal_strength||'WATCH')}">${esc(p.signal_strength||'WATCH')}</span>
+  `;
+  return div;
+}
+
+// ── FRED QUERY BAR ────────────────────────────────────────────────────────
+async function runFredQuery() {
+  const input = g('fred-query-input');
+  const query = (input.value || '').trim();
+  if (!query) return;
+  const resEl = g('fred-query-results');
+  const btn = g('fq-btn');
+  resEl.style.display = 'block';
+  resEl.innerHTML = '<div class="fq-loading">◈ Fred is thinking...</div>';
+  btn.textContent = '...';
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/query', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({query})
+    });
+    const d = await r.json();
+    renderQueryResults(d);
+  } catch(e) {
+    resEl.innerHTML = '<div class="fq-loading" style="color:var(--red)">Query failed — try again.</div>';
+  }
+  btn.textContent = 'Ask →';
+  btn.disabled = false;
+}
+
+function renderQueryResults(d) {
+  const resEl = g('fred-query-results');
+  if (!d.results || !d.results.length) {
+    resEl.innerHTML = `<div class="fq-header"><span class="fq-interpretation">${esc(d.interpretation||d.query||'')}</span></div><div class="fq-loading">No matching stocks found.</div>`;
+    return;
+  }
+  let html = `<div class="fq-header">
+    <span class="fq-interpretation">◈ ${esc(d.interpretation||'')}</span>
+    <span style="margin-left:auto;font-size:9px">${d.results.length} results</span>
+    <span style="cursor:pointer;color:var(--t3)" onclick="g('fred-query-results').style.display='none'">✕</span>
+  </div>
+  <div class="fq-grid">`;
+  d.results.forEach(r => {
+    const chg = r.change_pct || 0;
+    const chgCls = chg >= 0 ? 'up' : 'dn';
+    const chgSign = chg >= 0 ? '+' : '';
+    const col = r.color || '#4a6380';
+    html += `<div class="fq-item" onclick="loadSymbolChart('${esc(r.symbol)}')">
+      <div class="fq-sym">${esc(r.symbol)}</div>
+      <div class="fq-name">${esc(r.name||r.symbol)}</div>
+      <span class="fq-sector" style="background:${col}22;color:${col};border:1px solid ${col}44">${esc(r.sector||'')}</span>
+      <div style="display:flex;gap:8px;align-items:baseline">
+        <span class="fq-price">${r.price?'$'+r.price.toFixed(2):'--'}</span>
+        <span class="fq-chg ${chgCls}">${chgSign}${chg.toFixed(2)}%</span>
+      </div>
+      <div class="fq-reason">${esc(r.reason||'')}</div>
+    </div>`;
+  });
+  html += `</div>`;
+  if (d.summary) html += `<div class="fq-summary">${esc(d.summary)}</div>`;
+  resEl.innerHTML = html;
+}
+
+// Close query results on click outside
+document.addEventListener('click', e => {
+  const wrap = g('fred-query-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const resEl = g('fred-query-results');
+    if (resEl) resEl.style.display = 'none';
+  }
+});
+
+// ── OPERATIONAL PICTURE ────────────────────────────────────────────────────
+let _opsPictureLoaded = false;
+async function loadOpsPicture() {
+  try {
+    const r = await fetch('/api/ops-picture');
+    const d = await r.json();
+    renderOpsPicture(d);
+    _opsPictureLoaded = true;
+  } catch(e) {
+    console.warn('Ops picture failed:', e);
+  }
+}
+
+function renderOpsPicture(d) {
+  // Market status
+  const ms = d.market_status || {};
+  const msEl = g('ops-market-status');
+  if (msEl) {
+    msEl.textContent = ms.label || '';
+    msEl.style.color = ms.color || 'var(--t3)';
+    msEl.style.background = (ms.color || '#4a6380') + '18';
+    msEl.style.border = `1px solid ${(ms.color||'#4a6380')}33`;
+    msEl.style.padding = '2px 8px';
+    msEl.style.borderRadius = '10px';
+  }
+
+  // Signal density
+  const densityEl = g('ops-density-list');
+  if (densityEl) {
+    const scores = d.top_signals || [];
+    if (scores.length) {
+      densityEl.innerHTML = scores.map(s => {
+        const chg = s.change_pct || 0;
+        const chgCls = chg >= 0 ? 'up' : 'dn';
+        const sigColors = {BUY:'var(--green)',SELL:'var(--red)',HOLD:'var(--gold)',WATCH:'var(--blue)'};
+        const barColor = sigColors[s.signal] || 'var(--blue)';
+        return `<div class="sd-item" onclick="loadSymbolChart('${esc(s.symbol)}')">
+          <span class="sd-sym">${esc(s.symbol)}</span>
+          <div class="sd-bar-wrap"><div class="sd-bar" style="width:${s.score_pct}%;background:${barColor}"></div></div>
+          <span class="sd-score">${s.score_pct}</span>
+          <span class="sd-signal ${s.signal||'HOLD'}">${s.signal||'?'}</span>
+        </div>`;
+      }).join('');
+    } else {
+      densityEl.innerHTML = '<div style="color:var(--t3);font-size:9px">Loading signal data...</div>';
+    }
+  }
+
+  // Cascade alerts
+  const cascadeEl = g('ops-cascade-list');
+  if (cascadeEl) {
+    const cascades = d.cascades || [];
+    if (cascades.length) {
+      cascadeEl.innerHTML = cascades.map(c => {
+        const t = c.trigger || {};
+        const chg = t.magnitude || 0;
+        const chgCls = chg >= 0 ? 'up' : 'dn';
+        const chgSign = chg >= 0 ? '+' : '';
+        const affected = (c.cascades || []).slice(0,5);
+        return `<div class="ops-cascade">
+          <div class="ops-cascade-trigger">
+            <span class="ops-cascade-sym">${esc(t.symbol||'')}</span>
+            <span class="ops-cascade-chg ${chgCls}">${chgSign}${chg.toFixed(1)}%</span>
+            <span style="color:var(--t3)">→ ripples to:</span>
+          </div>
+          <div class="ops-cascade-arrows">
+            ${affected.map(a => `<span class="ops-arrow-sym" onclick="window.location='/timeline/${esc(a.symbol)}'">${esc(a.symbol)}</span>`).join('')}
+          </div>
+        </div>`;
+      }).join('');
+    } else {
+      cascadeEl.innerHTML = '<div style="color:var(--t3);font-size:9px">No major moves today. All quiet.</div>';
+    }
+  }
+
+  // Today's events
+  const eventsEl = g('ops-events-list');
+  if (eventsEl) {
+    const events = d.today_events || [];
+    if (events.length) {
+      eventsEl.innerHTML = events.slice(0,6).map(ev => {
+        const imp = ev.importance || 'medium';
+        const impColor = imp === 'high' || imp === 'critical' ? 'var(--red)' : imp === 'medium' ? 'var(--gold)' : 'var(--t3)';
+        const evDate = ev.event_date ? new Date(ev.event_date).toLocaleDateString('en-AU',{month:'short',day:'numeric'}) : '';
+        return `<div class="ops-event">
+          <div class="ops-event-title">
+            <span class="ops-imp-dot" style="background:${impColor}"></span>${esc(ev.title||ev.event_type||'')}
+            ${ev.symbol ? `<span style="color:var(--blue);font-weight:700;margin-left:4px;cursor:pointer" onclick="loadSymbolChart('${esc(ev.symbol)}')">${esc(ev.symbol)}</span>` : ''}
+          </div>
+          <div class="ops-event-meta">${evDate}${ev.event_time ? ' · ' + ev.event_time : ''} · ${imp.toUpperCase()}</div>
+        </div>`;
+      }).join('');
+    } else {
+      eventsEl.innerHTML = '<div style="color:var(--t3);font-size:9px">No high-impact events today.</div>';
+    }
+  }
 }
 
 // ── UTILS ─────────────────────────────────────────────────────────────────

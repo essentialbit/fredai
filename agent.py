@@ -397,3 +397,205 @@ def _top_mentioned_assets(signals: list[dict]) -> dict:
         if asset:
             counts[asset] = counts.get(asset, 0) + 1
     return dict(sorted(counts.items(), key=lambda x: x[1], reverse=True)[:8])
+
+
+_recs_cache: dict = {"ts": 0, "data": None}
+_RECS_TTL = 3600  # regenerate every hour
+
+
+def generate_recommendations(quotes: dict, portfolio: dict,
+                             watchlist: list[str]) -> dict:
+    """Return Fred's top picks: portfolio star, watchlist leader, trending discovery."""
+    import time as _time
+    now = _time.time()
+    if _recs_cache["data"] and (now - _recs_cache["ts"]) < _RECS_TTL:
+        return _recs_cache["data"]
+
+    signals = get_signals(hours=4, limit=100)
+    trending = get_trending_assets(hours=24, limit=15)
+
+    # Build ranked lists from available data
+    port_positions = portfolio.get("positions", []) if portfolio else []
+    port_by_pnl = sorted(
+        [p for p in port_positions if p.get("pnl_pct") is not None],
+        key=lambda x: abs(x.get("pnl_pct", 0)), reverse=True
+    )
+
+    wl_with_quotes = [
+        {"symbol": s, **quotes[s]} for s in watchlist if s in quotes
+    ]
+    wl_by_move = sorted(
+        wl_with_quotes, key=lambda x: abs(x.get("change_pct", 0)), reverse=True
+    )
+
+    trending_syms = [t["asset"] for t in trending if t["asset"] not in watchlist
+                     and not any(p["symbol"] == t["asset"] for p in port_positions)]
+
+    asset_signals = {}
+    for s in signals:
+        a = s.get("asset")
+        if a:
+            if a not in asset_signals:
+                asset_signals[a] = {"bullish": 0, "bearish": 0, "score": 0.0}
+            asset_signals[a]["score"] = (
+                asset_signals[a]["score"] + s.get("sentiment_score", 0)
+            )
+            if s.get("signal_type") == "bullish":
+                asset_signals[a]["bullish"] += 1
+            else:
+                asset_signals[a]["bearish"] += 1
+
+    prompt_data = {
+        "timestamp": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+        "portfolio_star": port_by_pnl[0] if port_by_pnl else None,
+        "watchlist_leader": wl_by_move[0] if wl_by_move else None,
+        "trending_discovery": trending[:5],
+        "quotes_snapshot": {
+            k: {"price": v["price"], "change_pct": v["change_pct"]}
+            for k, v in list(quotes.items())[:12]
+        },
+        "signal_summary": {
+            a: d for a, d in sorted(
+                asset_signals.items(),
+                key=lambda x: x[1]["bullish"] - x[1]["bearish"],
+                reverse=True
+            )[:8]
+        },
+        "new_trending_discoveries": trending_syms[:3],
+    }
+
+    port_block = ""
+    if port_by_pnl:
+        p = port_by_pnl[0]
+        port_block = f"{p['symbol']}: {p['pnl_pct']:+.1f}% P&L, current ${p['price']}"
+
+    prompt = f"""You are FredAI. Generate today's TOP PICKS in strict JSON format.
+
+DATA:
+{json.dumps(prompt_data, indent=2)}
+
+Return ONLY valid JSON, no markdown fences, no preamble:
+{{
+  "top_pick": {{
+    "symbol": "TICKER",
+    "name": "Full Name",
+    "category": "Portfolio Star | Watchlist Leader | Trending Discovery",
+    "price": 0.00,
+    "change_pct": 0.00,
+    "rationale": "2-3 sentence analytical rationale with specific data points. Frame as observation, not advice.",
+    "signal_strength": "STRONG | MODERATE | WATCH",
+    "source": "portfolio | watchlist | trending"
+  }},
+  "picks": [
+    {{
+      "symbol": "TICKER",
+      "name": "Full Name",
+      "category": "Portfolio Star",
+      "price": 0.00,
+      "change_pct": 0.00,
+      "rationale": "1-2 sentence data-anchored observation.",
+      "signal_strength": "STRONG | MODERATE | WATCH",
+      "source": "portfolio | watchlist | trending"
+    }},
+    {{
+      "symbol": "TICKER",
+      "name": "Full Name",
+      "category": "Watchlist Leader",
+      "price": 0.00,
+      "change_pct": 0.00,
+      "rationale": "1-2 sentence data-anchored observation.",
+      "signal_strength": "STRONG | MODERATE | WATCH",
+      "source": "portfolio | watchlist | trending"
+    }},
+    {{
+      "symbol": "TICKER",
+      "name": "Full Name",
+      "category": "Trending Discovery",
+      "price": 0.00,
+      "change_pct": 0.00,
+      "rationale": "1-2 sentence data-anchored observation from X/market signals.",
+      "signal_strength": "STRONG | MODERATE | WATCH",
+      "source": "portfolio | watchlist | trending"
+    }}
+  ],
+  "market_pulse": "One sentence on overall market tone from signal data.",
+  "risk_level": "LOW | MEDIUM | HIGH",
+  "generated_at": "{prompt_data['timestamp']}"
+}}
+
+Rules: Use only symbols present in the data. If a category has no data, pick the best available alternative. No financial advice language — observations only."""
+
+    raw = _provider.complete(
+        [{"role": "user", "content": prompt}],
+        FRED_SYSTEM,
+        tier="summary",
+        max_tokens=1200,
+    )
+
+    try:
+        # Strip any accidental markdown fences
+        clean = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
+        result = json.loads(clean)
+    except Exception:
+        result = _fallback_recs(quotes, watchlist, port_positions, trending)
+
+    _recs_cache["ts"] = now
+    _recs_cache["data"] = result
+    return result
+
+
+def _fallback_recs(quotes, watchlist, positions, trending) -> dict:
+    """Rule-based fallback when AI is unavailable or returns bad JSON."""
+    picks = []
+
+    if positions:
+        p = max(positions, key=lambda x: abs(x.get("pnl_pct", 0)))
+        q = quotes.get(p["symbol"], {})
+        picks.append({
+            "symbol": p["symbol"], "name": p.get("name", p["symbol"]),
+            "category": "Portfolio Star",
+            "price": q.get("price", p.get("price", 0)),
+            "change_pct": q.get("change_pct", 0),
+            "rationale": f"Largest P&L mover in your portfolio at {p.get('pnl_pct', 0):+.1f}%.",
+            "signal_strength": "WATCH", "source": "portfolio",
+        })
+
+    wl_quotes = [(s, quotes[s]) for s in watchlist if s in quotes]
+    if wl_quotes:
+        sym, q = max(wl_quotes, key=lambda x: abs(x[1].get("change_pct", 0)))
+        picks.append({
+            "symbol": sym, "name": q.get("name", sym),
+            "category": "Watchlist Leader",
+            "price": q.get("price", 0),
+            "change_pct": q.get("change_pct", 0),
+            "rationale": f"Largest move on your watchlist today at {q.get('change_pct', 0):+.2f}%.",
+            "signal_strength": "WATCH", "source": "watchlist",
+        })
+
+    if trending:
+        t = trending[0]
+        q = quotes.get(t["asset"], {})
+        picks.append({
+            "symbol": t["asset"], "name": t["asset"],
+            "category": "Trending Discovery",
+            "price": q.get("price", 0),
+            "change_pct": q.get("change_pct", 0),
+            "rationale": f"Top trending asset by signal volume ({t.get('signal_count', 0)} signals, {t.get('bullish_pct', 0):.0f}% bullish).",
+            "signal_strength": "MODERATE", "source": "trending",
+        })
+
+    top = picks[0] if picks else {
+        "symbol": "SPY", "name": "S&P 500 ETF", "category": "Watchlist Leader",
+        "price": quotes.get("SPY", {}).get("price", 0),
+        "change_pct": quotes.get("SPY", {}).get("change_pct", 0),
+        "rationale": "Market benchmark — no specific signals available yet.",
+        "signal_strength": "WATCH", "source": "watchlist",
+    }
+
+    return {
+        "top_pick": top,
+        "picks": picks if picks else [top],
+        "market_pulse": "Signal collection underway — check back after first scan cycle.",
+        "risk_level": "MEDIUM",
+        "generated_at": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+    }

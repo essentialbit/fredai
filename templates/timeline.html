@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#03080f">
+<title>FredAI — Intelligence Timeline</title>
+<link rel="icon" href="/static/icons/favicon.ico" sizes="any">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#03080f;--bg1:#07111c;--bg2:#0d1a2a;
+  --green:#00ff88;--red:#ff3b5c;--blue:#00b4ff;--purple:#9b59ff;--gold:#f5a623;
+  --t1:#e8f4ff;--t2:#8ba3b8;--t3:#4a6380;
+  --border:rgba(0,180,255,.10);
+  --sans:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--sans);overflow-x:hidden}
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--border)}
+
+/* ── TOP BAR ── */
+#top-bar{
+  position:sticky;top:0;z-index:100;
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  background:rgba(3,8,15,.92);backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+}
+.brand{font-size:14px;font-weight:800;letter-spacing:2px;color:var(--blue)}
+.brand span{color:var(--green)}
+#back-btn{padding:4px 12px;background:rgba(0,180,255,.08);border:1px solid rgba(0,180,255,.2);border-radius:6px;color:var(--blue);font-size:11px;cursor:pointer;font-family:var(--sans)}
+#tl-sym{font-size:18px;font-weight:800;font-family:var(--mono);color:var(--t1)}
+#tl-price{font-size:14px;font-family:var(--mono);color:var(--t1)}
+#tl-chg{font-size:11px;font-family:var(--mono);font-weight:700;padding:2px 7px;border-radius:10px}
+#graph-link{margin-left:auto;padding:4px 12px;background:rgba(155,89,255,.1);border:1px solid rgba(155,89,255,.25);border-radius:6px;color:var(--purple);font-size:11px;text-decoration:none}
+
+/* ── LAYOUT ── */
+#tl-layout{
+  display:grid;grid-template-columns:280px 1fr 260px;gap:0;height:calc(100vh - 42px);
+}
+@media(max-width:1100px){#tl-layout{grid-template-columns:1fr}}
+
+/* ── LEFT SIDEBAR — Company Profile ── */
+#tl-sidebar{
+  border-right:1px solid var(--border);overflow-y:auto;padding:14px;
+  background:var(--bg1);
+}
+.sb-section{margin-bottom:16px}
+.sb-lbl{font-size:8px;font-weight:700;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:6px}
+.assess-card{
+  background:rgba(0,180,255,.05);border:1px solid rgba(0,180,255,.12);
+  border-radius:8px;padding:10px;
+}
+.assess-sig{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:800;letter-spacing:1px;margin-bottom:4px}
+.assess-sig.BUY{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
+.assess-sig.SELL{background:rgba(255,59,92,.15);color:var(--red);border:1px solid rgba(255,59,92,.3)}
+.assess-sig.HOLD{background:rgba(245,166,35,.15);color:var(--gold);border:1px solid rgba(245,166,35,.3)}
+.assess-sig.WATCH{background:rgba(0,180,255,.15);color:var(--blue);border:1px solid rgba(0,180,255,.3)}
+.assess-rat{font-size:10px;color:var(--t2);line-height:1.5;margin-top:5px}
+.assess-cases{margin-top:6px}
+.bull{font-size:9px;color:var(--green);line-height:1.5}
+.bear{font-size:9px;color:var(--red);line-height:1.5;margin-top:2px}
+
+.tech-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tech-item{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:6px;padding:7px 9px}
+.tech-lbl{font-size:8px;color:var(--t3);margin-bottom:3px}
+.tech-val{font-size:13px;font-family:var(--mono);font-weight:700;color:var(--t1)}
+.tech-val.bull{color:var(--green)}
+.tech-val.bear{color:var(--red)}
+
+.rel-item{display:flex;align-items:flex-start;gap:7px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04);font-size:9px}
+.rel-item:last-child{border-bottom:none}
+.rel-type{padding:1px 5px;border-radius:3px;font-weight:700;font-size:8px;flex-shrink:0;margin-top:1px}
+.rel-other{font-weight:700;color:var(--t1)}
+.rel-desc{color:var(--t3);line-height:1.4;margin-top:1px}
+
+.pos-card{background:rgba(0,255,136,.04);border:1px solid rgba(0,255,136,.1);border-radius:8px;padding:10px;font-size:10px}
+.pos-row{display:flex;justify-content:space-between;margin-bottom:3px;color:var(--t2)}
+.pos-val{font-family:var(--mono);font-weight:700;color:var(--t1)}
+.pos-pnl{font-family:var(--mono);font-weight:700}
+
+/* ── MAIN TIMELINE ── */
+#tl-main{overflow-y:auto;padding:14px 20px;position:relative}
+#tl-filters{
+  display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center;
+}
+.tf-btn{
+  padding:4px 11px;background:none;border:1px solid var(--border);
+  border-radius:20px;font-size:10px;color:var(--t3);cursor:pointer;font-family:var(--sans);
+  transition:.15s;
+}
+.tf-btn.active{color:var(--blue);border-color:rgba(0,180,255,.4);background:rgba(0,180,255,.08)}
+#tl-search{
+  margin-left:auto;padding:5px 10px;background:rgba(255,255,255,.04);
+  border:1px solid var(--border);border-radius:6px;color:var(--t1);
+  font-size:10px;outline:none;font-family:var(--sans);width:160px;
+}
+#tl-search:focus{border-color:rgba(0,180,255,.3)}
+#tl-count{font-size:10px;color:var(--t3);padding:4px 8px}
+
+/* Timeline track */
+.tl-track{position:relative;padding-left:24px}
+.tl-track::before{
+  content:'';position:absolute;left:8px;top:0;bottom:0;
+  width:1px;background:linear-gradient(to bottom,var(--blue),var(--purple),rgba(0,180,255,.1));
+}
+
+/* Timeline entries */
+.tl-entry{
+  position:relative;margin-bottom:12px;
+  background:rgba(255,255,255,.025);border:1px solid var(--border);
+  border-radius:8px;padding:10px 12px;cursor:pointer;transition:.15s;
+}
+.tl-entry:hover{border-color:rgba(0,180,255,.25);background:rgba(0,180,255,.04)}
+.tl-entry::before{
+  content:'';position:absolute;left:-20px;top:14px;
+  width:8px;height:8px;border-radius:50%;border:2px solid var(--bg);
+}
+.tl-entry.type-news::before{background:var(--blue)}
+.tl-entry.type-calendar::before{background:var(--gold)}
+.tl-entry.type-alert::before{background:var(--green)}
+.tl-entry.type-assessment::before{background:var(--purple)}
+
+.tl-meta{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.tl-badge{padding:1px 6px;border-radius:3px;font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.tl-badge.news{background:rgba(0,180,255,.15);color:var(--blue)}
+.tl-badge.calendar{background:rgba(245,166,35,.15);color:var(--gold)}
+.tl-badge.alert{background:rgba(0,255,136,.15);color:var(--green)}
+.tl-badge.assessment{background:rgba(155,89,255,.15);color:var(--purple)}
+.tl-source{font-size:9px;color:var(--t3);font-weight:700}
+.tl-time{font-size:9px;color:var(--t3);margin-left:auto;font-family:var(--mono)}
+.tl-title{font-size:11px;color:var(--t1);line-height:1.4;font-weight:500}
+.tl-foot{display:flex;align-items:center;gap:8px;margin-top:5px}
+.tl-sent{font-size:9px;font-family:var(--mono);font-weight:700;padding:1px 5px;border-radius:10px}
+.tl-sent.pos{color:var(--green);background:rgba(0,255,136,.1)}
+.tl-sent.neg{color:var(--red);background:rgba(255,59,92,.1)}
+.tl-sent.neu{color:var(--t3);background:rgba(255,255,255,.04)}
+.tl-cat{font-size:8px;color:var(--t3)}
+.tl-imp{font-size:8px;font-weight:700}
+.tl-imp.high{color:var(--red)}
+.tl-imp.medium{color:var(--gold)}
+.tl-imp.low{color:var(--t3)}
+.tl-link{font-size:9px;color:var(--blue);text-decoration:none;margin-left:auto}
+.tl-link:hover{text-decoration:underline}
+
+.tl-date-divider{
+  font-size:9px;font-weight:700;letter-spacing:1.5px;color:var(--t3);
+  text-transform:uppercase;padding:12px 0 6px;position:relative;
+  padding-left:0;
+}
+
+/* ── RIGHT SIDEBAR — Cascade Panel ── */
+#tl-cascade{
+  border-left:1px solid var(--border);overflow-y:auto;padding:14px;
+  background:var(--bg1);
+}
+#cascade-loading{color:var(--t3);font-size:10px;text-align:center;padding:20px}
+.cascade-trigger{
+  background:rgba(255,59,92,.06);border:1px solid rgba(255,59,92,.15);
+  border-radius:8px;padding:10px 12px;margin-bottom:12px;
+}
+.cascade-trigger-lbl{font-size:8px;font-weight:700;letter-spacing:1px;color:var(--red);text-transform:uppercase;margin-bottom:4px}
+.cascade-trigger-move{font-size:18px;font-family:var(--mono);font-weight:800}
+.cascade-trigger-desc{font-size:10px;color:var(--t2);margin-top:3px}
+.cascade-item{
+  display:flex;gap:9px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.04);
+  cursor:pointer;transition:.1s;
+}
+.cascade-item:hover{background:rgba(255,255,255,.02)}
+.cascade-item:last-child{border-bottom:none}
+.ci-sym{font-family:var(--mono);font-weight:800;font-size:12px;color:var(--t1);width:44px;flex-shrink:0}
+.ci-body{flex:1}
+.ci-rel{font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.ci-reason{font-size:9px;color:var(--t3);line-height:1.4}
+.ci-impact{font-size:10px;font-family:var(--mono);font-weight:700;text-align:right;flex-shrink:0}
+.ci-impact.pos{color:var(--green)}
+.ci-impact.neg{color:var(--red)}
+.ci-sev{font-size:7px;font-weight:700;padding:1px 4px;border-radius:3px}
+.ci-sev.HIGH{background:rgba(255,59,92,.2);color:var(--red)}
+.ci-sev.MEDIUM{background:rgba(245,166,35,.2);color:var(--gold)}
+.ci-sev.LOW{background:rgba(139,163,184,.1);color:var(--t3)}
+
+/* Loading */
+#tl-loading{text-align:center;padding:40px;color:var(--t3);font-size:12px}
+.spin{width:24px;height:24px;border:2px solid rgba(0,180,255,.2);border-top-color:var(--blue);border-radius:50%;animation:rot .8s linear infinite;margin:0 auto 10px}
+@keyframes rot{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="top-bar">
+  <button id="back-btn" onclick="history.back()">← Back</button>
+  <div class="brand">Fred<span>AI</span></div>
+  <span id="tl-sym">{{ symbol }}</span>
+  <span id="tl-price">--</span>
+  <span id="tl-chg">--%</span>
+  <a id="graph-link" href="/graph">◈ View Graph</a>
+</div>
+
+<div id="tl-layout">
+
+  <!-- LEFT: Company Profile -->
+  <div id="tl-sidebar">
+    <div class="sb-section">
+      <div class="sb-lbl">Fred's Assessment</div>
+      <div class="assess-card" id="assess-card">
+        <div style="color:var(--t3);font-size:10px">Loading assessment...</div>
+      </div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-lbl">Technical Indicators</div>
+      <div class="tech-grid" id="tech-grid">
+        <div style="color:var(--t3);font-size:9px;grid-column:1/-1">Loading...</div>
+      </div>
+    </div>
+    <div class="sb-section" id="position-section" style="display:none">
+      <div class="sb-lbl">Your Position</div>
+      <div class="pos-card" id="position-card"></div>
+    </div>
+    <div class="sb-section">
+      <div class="sb-lbl">Relationships ({{ symbol }})</div>
+      <div id="relationships-list">
+        <div style="color:var(--t3);font-size:9px">Loading...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: Timeline -->
+  <div id="tl-main">
+    <div id="tl-filters">
+      <button class="tf-btn active" onclick="filterType('all',this)">All</button>
+      <button class="tf-btn" onclick="filterType('news',this)">News</button>
+      <button class="tf-btn" onclick="filterType('calendar',this)">Events</button>
+      <span id="tl-count"></span>
+      <input id="tl-search" placeholder="Search events..." oninput="searchTimeline(this.value)">
+    </div>
+    <div id="tl-loading"><div class="spin"></div>Building intelligence timeline...</div>
+    <div class="tl-track" id="tl-track" style="display:none"></div>
+  </div>
+
+  <!-- RIGHT: Cascade Impact -->
+  <div id="tl-cascade">
+    <div class="sb-lbl" style="margin-bottom:10px">Cascade Impact Analysis</div>
+    <div id="cascade-loading">Calculating ripple effects...</div>
+    <div id="cascade-content"></div>
+  </div>
+
+</div>
+
+<script>
+const SYM = '{{ symbol }}';
+let allEvents = [];
+let activeFilter = 'all';
+let searchQ = '';
+
+async function loadTimeline() {
+  try {
+    const r = await fetch('/api/timeline/' + SYM);
+    const d = await r.json();
+    allEvents = d.events || [];
+    renderSidebar(d);
+    renderTimeline();
+    document.getElementById('tl-loading').style.display = 'none';
+    document.getElementById('tl-track').style.display = '';
+    loadCascade(d.quote);
+  } catch(e) {
+    document.getElementById('tl-loading').textContent = 'Failed to load timeline.';
+  }
+}
+
+function renderSidebar(d) {
+  // Price
+  const q = d.quote || {};
+  const price = q.price || 0;
+  const chg = q.change_pct || 0;
+  document.getElementById('tl-price').textContent = price > 0 ? '$' + price.toFixed(2) : '--';
+  const chgEl = document.getElementById('tl-chg');
+  chgEl.textContent = (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%';
+  chgEl.style.background = chg >= 0 ? 'rgba(0,255,136,.12)' : 'rgba(255,59,92,.12)';
+  chgEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Assessment
+  const a = d.assessment || {};
+  const signal = a.signal || 'WATCH';
+  document.getElementById('assess-card').innerHTML = `
+    <span class="assess-sig ${signal}">${signal}</span>
+    <span style="font-size:9px;color:var(--t3);margin-left:6px">${a.conviction||''} · ${a.time_horizon||''}</span>
+    <div class="assess-rat">${esc(a.rationale||'Assessment loading...')}</div>
+    <div class="assess-cases">
+      <div class="bull">▲ ${esc(a.bull_case||'')}</div>
+      <div class="bear">▼ ${esc(a.bear_case||'')}</div>
+    </div>
+    <div style="font-size:8px;color:var(--t3);margin-top:6px">${esc(a.generated_at||'')}</div>
+  `;
+
+  // Technicals
+  const t = d.technicals || {};
+  const rsi = t.rsi14;
+  const rsiClass = rsi ? (rsi > 70 ? 'bear' : rsi < 30 ? 'bull' : '') : '';
+  document.getElementById('tech-grid').innerHTML = [
+    ['RSI (14)', rsi ? rsi.toFixed(1) : '--', rsiClass],
+    ['SMA 20', t.sma20 ? '$'+t.sma20.toFixed(1) : '--', ''],
+    ['SMA 50', t.sma50 ? '$'+t.sma50.toFixed(1) : '--', ''],
+    ['Vol Ratio', t.volume_ratio ? t.volume_ratio.toFixed(2)+'×' : '--', t.volume_ratio>1.5?'bull':''],
+  ].map(([lbl,val,cls]) => `
+    <div class="tech-item">
+      <div class="tech-lbl">${lbl}</div>
+      <div class="tech-val ${cls}">${val}</div>
+    </div>
+  `).join('');
+
+  // Position
+  const pos = d.position;
+  if (pos && pos.shares > 0) {
+    document.getElementById('position-section').style.display = '';
+    const pnlSign = (pos.pnl_pct||0) >= 0 ? '+' : '';
+    document.getElementById('position-card').innerHTML = `
+      <div class="pos-row"><span>Shares</span><span class="pos-val">${pos.shares}</span></div>
+      <div class="pos-row"><span>Avg Cost</span><span class="pos-val">$${(pos.avg_cost||0).toFixed(2)}</span></div>
+      <div class="pos-row"><span>P&amp;L</span><span class="pos-pnl" style="color:${(pos.pnl_pct||0)>=0?'var(--green)':'var(--red)'}">
+        ${pnlSign}${(pos.pnl_pct||0).toFixed(2)}%
+      </span></div>
+    `;
+  }
+
+  // Relationships
+  const rels = d.relationships || [];
+  document.getElementById('relationships-list').innerHTML = rels.length
+    ? rels.map(r => {
+        const col = r.color || '#4a6380';
+        return `<div class="rel-item">
+          <span class="rel-type" style="background:${col}22;color:${col};border:1px solid ${col}44">${r.type||''}</span>
+          <div>
+            <div class="rel-other" onclick="window.location='/timeline/${r.symbol}'" style="cursor:pointer">${r.symbol}</div>
+            <div class="rel-desc">${esc(r.desc||r.description||'')}</div>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div style="color:var(--t3);font-size:9px">No mapped relationships.</div>';
+}
+
+function renderTimeline() {
+  let events = allEvents;
+  if (activeFilter !== 'all') events = events.filter(e => e.type === activeFilter);
+  if (searchQ) {
+    const q = searchQ.toLowerCase();
+    events = events.filter(e => (e.title||'').toLowerCase().includes(q) || (e.source||'').toLowerCase().includes(q));
+  }
+
+  document.getElementById('tl-count').textContent = `${events.length} events`;
+  const track = document.getElementById('tl-track');
+  track.innerHTML = '';
+
+  let lastDate = '';
+  events.forEach(ev => {
+    const dateStr = formatDate(ev.ts);
+    if (dateStr !== lastDate) {
+      const div = document.createElement('div');
+      div.className = 'tl-date-divider';
+      div.textContent = dateStr;
+      track.appendChild(div);
+      lastDate = dateStr;
+    }
+    track.appendChild(buildEntry(ev));
+  });
+
+  if (!events.length) {
+    track.innerHTML = '<div style="color:var(--t3);font-size:11px;padding:20px 0">No events match the filter.</div>';
+  }
+}
+
+function buildEntry(ev) {
+  const div = document.createElement('div');
+  div.className = `tl-entry type-${ev.type}`;
+
+  const time = formatTime(ev.ts);
+  let inner = `<div class="tl-meta">
+    <span class="tl-badge ${ev.type}">${ev.type}</span>
+    <span class="tl-source">${esc(ev.source||ev.event_type||'')}</span>
+    <span class="tl-time">${time}</span>
+  </div>
+  <div class="tl-title">${esc(ev.title||ev.description||'')}</div>`;
+
+  const foot = [];
+
+  if (ev.type === 'news') {
+    const s = ev.sentiment || 0;
+    const sentCls = s > 0.05 ? 'pos' : s < -0.05 ? 'neg' : 'neu';
+    const sentLabel = s > 0 ? '+' + s.toFixed(2) : s.toFixed(2);
+    foot.push(`<span class="tl-sent ${sentCls}">${sentLabel}</span>`);
+    if (ev.category) foot.push(`<span class="tl-cat">${ev.category}</span>`);
+    if (ev.url) foot.push(`<a class="tl-link" href="${esc(ev.url)}" target="_blank" rel="noopener">Read →</a>`);
+  }
+
+  if (ev.type === 'calendar') {
+    const imp = ev.importance || 'medium';
+    foot.push(`<span class="tl-imp ${imp}">${imp.toUpperCase()} IMPACT</span>`);
+    if (ev.eps_forecast != null) foot.push(`<span style="font-size:9px;color:var(--t3)">EPS est: $${ev.eps_forecast}</span>`);
+    if (ev.eps_actual != null) foot.push(`<span style="font-size:9px;color:var(--gold)">Actual: $${ev.eps_actual}</span>`);
+  }
+
+  if (foot.length) inner += `<div class="tl-foot">${foot.join('')}</div>`;
+  div.innerHTML = inner;
+  return div;
+}
+
+async function loadCascade(quote) {
+  const chg = (quote || {}).change_pct || 0;
+  try {
+    const r = await fetch(`/api/cascade/${SYM}?magnitude=${chg}`);
+    const d = await r.json();
+    renderCascade(d, chg);
+  } catch(e) {
+    document.getElementById('cascade-loading').textContent = 'Cascade unavailable.';
+  }
+}
+
+function renderCascade(d, chg) {
+  document.getElementById('cascade-loading').style.display = 'none';
+  const el = document.getElementById('cascade-content');
+
+  const chgSign = chg >= 0 ? '+' : '';
+  const chgColor = chg >= 0 ? 'var(--green)' : 'var(--red)';
+
+  el.innerHTML = `<div class="cascade-trigger">
+    <div class="cascade-trigger-lbl">◉ Trigger: ${SYM}</div>
+    <div class="cascade-trigger-move" style="color:${chgColor}">${chgSign}${chg.toFixed(2)}%</div>
+    <div class="cascade-trigger-desc">Today's price movement propagating through ${d.cascades?.length||0} connected companies</div>
+  </div>`;
+
+  if (!d.cascades || !d.cascades.length) {
+    el.innerHTML += '<div style="color:var(--t3);font-size:9px;padding:10px 0">No significant cascade impact detected — below threshold or no mapped relationships.</div>';
+    return;
+  }
+
+  d.cascades.forEach(c => {
+    const impColor = c.impact_direction === 'positive' ? 'var(--green)' : 'var(--red)';
+    const impSign = c.impact_direction === 'positive' ? '↑' : '↓';
+    const impPct = (c.impact_score * 100).toFixed(1);
+    el.innerHTML += `<div class="cascade-item" onclick="window.location='/timeline/${c.symbol}'">
+      <div>
+        <div class="ci-sym">${c.symbol}</div>
+        <span class="ci-sev ${c.impact_severity}">${c.impact_severity}</span>
+      </div>
+      <div class="ci-body">
+        <div class="ci-rel" style="color:${c.edge_color}">${c.relationship}</div>
+        <div class="ci-reason">${esc(c.reason)}</div>
+        ${c.price ? `<div style="font-size:9px;color:var(--t3);margin-top:2px">$${c.price.toFixed(2)} · ${(c.change_pct||0).toFixed(2)}%</div>` : ''}
+      </div>
+      <div>
+        <div class="ci-impact ${c.impact_direction}" >${impSign} ${Math.abs(+impPct)}%</div>
+        <div style="font-size:8px;color:var(--t3);text-align:right;margin-top:2px">${c.sector}</div>
+      </div>
+    </div>`;
+  });
+}
+
+function filterType(type, btn) {
+  activeFilter = type;
+  document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTimeline();
+}
+function searchTimeline(q) { searchQ = q; renderTimeline(); }
+
+function formatDate(ts) {
+  if (!ts) return 'Unknown';
+  try {
+    const d = new Date(ts);
+    const today = new Date();
+    const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+    if (d.toDateString() === today.toDateString()) return 'Today';
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-AU', {weekday:'short', month:'short', day:'numeric'});
+  } catch { return ts.slice(0,10); }
+}
+
+function formatTime(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleTimeString('en-AU', {hour:'2-digit', minute:'2-digit'});
+  } catch { return ''; }
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s || '';
+  return d.innerHTML;
+}
+
+loadTimeline();
+</script>
+</body>
+</html>

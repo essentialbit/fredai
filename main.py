@@ -41,6 +41,7 @@ from technical_alerts import run_technical_alerts, get_technicals
 from graph_engine import build_graph, generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves
 from signal_density import compute_signal_density, invalidate as invalidate_density
+from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS
 
 _macro_cache: dict = {}
@@ -111,6 +112,16 @@ AI_UNIVERSE = {
         "color": "#00ff88",
         "desc": "AI-powered consumer products, media, and entertainment",
         "tickers": ["AAPL", "AMZN", "GOOGL", "NFLX", "SPOT", "META", "SNAP", "PINS", "RBLX"],
+    },
+    "ASX — Australia": {
+        "color": "#f5a623",
+        "desc": "Australian Securities Exchange blue chips: banks, mining, energy, tech, healthcare",
+        "tickers": [
+            "BHP.AX", "CBA.AX", "CSL.AX", "WBC.AX", "ANZ.AX", "NAB.AX",
+            "WES.AX", "RIO.AX", "FMG.AX", "MQG.AX", "WTC.AX", "XRO.AX",
+            "WDS.AX", "STO.AX", "COH.AX", "MIN.AX", "LYC.AX", "PLS.AX",
+            "PME.AX", "REA.AX", "SEK.AX", "QBE.AX", "WOW.AX", "COL.AX",
+        ],
     },
 }
 
@@ -948,6 +959,40 @@ def _get_market_status() -> dict:
     return {"status": "CLOSED", "label": "Market Closed", "color": "#4a6380"}
 
 
+@app.route("/api/asx/quotes")
+@login_required
+def api_asx_quotes():
+    """Live ASX quotes (AUD). Returns quotes for all tracked ASX tickers."""
+    asx_live = {sym: q for sym, q in _quotes_cache.items() if is_asx_ticker(sym)}
+    # Return sector groupings too
+    from asx_client import ASX_SECTORS
+    sectors: dict = {}
+    for sym, q in asx_live.items():
+        sec = ASX_SECTORS.get(sym, "ASX")
+        sectors.setdefault(sec, []).append(q)
+    return jsonify({
+        "quotes": asx_live,
+        "sectors": sectors,
+        "sector_colors": ASX_SECTOR_COLORS,
+        "count": len(asx_live),
+        "currency": "AUD",
+        "generated_at": datetime.utcnow().isoformat(),
+    })
+
+
+@app.route("/api/asx/news")
+@login_required
+def api_asx_news():
+    """Australian-scoped news feed."""
+    page = int(request.args.get("page", 1))
+    limit = int(request.args.get("limit", 30))
+    offset = (page - 1) * limit
+    items = get_news(category="australia", hours=int(request.args.get("hours", 48)),
+                     limit=limit, offset=offset)
+    total = count_news(category="australia", hours=int(request.args.get("hours", 48)))
+    return jsonify({"items": items, "total": total, "page": page, "limit": limit})
+
+
 @app.route("/api/recommendations")
 @login_required
 def api_recommendations():
@@ -962,6 +1007,17 @@ def api_recommendations():
 
 
 # ── BACKGROUND JOBS ───────────────────────────────────────────────────────────
+
+def job_asx_refresh():
+    """Refresh ASX quotes separately (AUD-priced, staggered to avoid 429s)."""
+    global _quotes_cache
+    try:
+        asx_quotes = fetch_asx_quotes()
+        _quotes_cache.update(asx_quotes)
+        print(f"[ASX] Refreshed {len(asx_quotes)} ASX quotes")
+    except Exception as e:
+        print(f"[ASX] Refresh error: {e}")
+
 
 def job_market_refresh():
     global _quotes_cache, _macro_cache
@@ -1117,16 +1173,25 @@ if __name__ == "__main__":
             print(f"[Prune] Removed {total} records older than {DATA_RETENTION_DAYS}d: {result['deleted']}")
 
     def job_news_refresh():
-        """Refresh news from all sources every 30 minutes."""
+        """Refresh news from all sources every 30 minutes (global + ASX)."""
         try:
             wl_rows = []
-            # Pull all unique watchlist symbols across all users
             from memory_store import get_conn as _gc
             with _gc() as c:
                 wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
             symbols = list(set(WATCHLIST + wl_rows))
-            count = fetch_all_news(symbols)
-            print(f"[News] Refreshed — {count} new items")
+            global_syms = [s for s in symbols if not is_asx_ticker(s)]
+            asx_syms = [s for s in symbols if is_asx_ticker(s)]
+            count = fetch_all_news(global_syms)
+            # Australian news
+            try:
+                au_items = fetch_au_news(watchlist_asx=asx_syms)
+                if au_items:
+                    upsert_news_items(au_items)
+                    count += len(au_items)
+            except Exception as e:
+                print(f"[ASX News] Error: {e}")
+            print(f"[News] Refreshed — {count} new items (incl. AU)")
         except Exception as e:
             print(f"[News] Refresh error: {e}")
 
@@ -1156,6 +1221,7 @@ if __name__ == "__main__":
 
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
+    scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx")  # ASX refresh every 2min
     scheduler.add_job(job_scan_cycle, "interval", hours=SCAN_INTERVAL_HOURS, id="scan")
     scheduler.add_job(job_rnd, "interval", hours=6, id="rnd")
     scheduler.add_job(job_prune, "cron", hour=2, minute=0, id="prune")
@@ -1172,6 +1238,13 @@ if __name__ == "__main__":
             _quotes_cache = fetch_quotes()
         except Exception as e:
             print(f"[Init] Market fetch error: {e}")
+        # ASX quotes (separate thread — AUD-priced, staggered)
+        try:
+            asx_q = fetch_asx_quotes()
+            _quotes_cache.update(asx_q)
+            print(f"[Init] ASX quotes: {len(asx_q)} symbols")
+        except Exception as e:
+            print(f"[Init] ASX fetch error: {e}")
         # Seed macro calendar events (instant — no network)
         try:
             from calendar_client import _seed_macro_events

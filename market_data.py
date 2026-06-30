@@ -21,6 +21,11 @@ SECTORS = {
     "Finance": ["JPM", "GS", "BAC"],
     "Index ETF": ["SPY", "QQQ"],
     "Crypto": ["BTC-USD", "ETH-USD"],
+    "ASX Banks": ["CBA.AX", "WBC.AX", "ANZ.AX", "NAB.AX"],
+    "ASX Mining": ["BHP.AX", "RIO.AX", "FMG.AX"],
+    "ASX Tech": ["WTC.AX", "XRO.AX", "REA.AX"],
+    "ASX Healthcare": ["CSL.AX", "COH.AX"],
+    "ASX Energy": ["WDS.AX", "STO.AX"],
 }
 
 _INTERVAL_MAP = {
@@ -74,6 +79,7 @@ def fetch_quotes(symbols: list[str] = None) -> dict:
                 prev = price
             change = price - prev
             change_pct = (change / prev * 100) if prev else 0
+            currency = "AUD" if sym.endswith(".AX") else "USD"
             results[sym] = {
                 "symbol": sym,
                 "name": DISPLAY_SYMBOLS.get(sym, sym),
@@ -81,6 +87,7 @@ def fetch_quotes(symbols: list[str] = None) -> dict:
                 "change": round(change, 2),
                 "change_pct": round(change_pct, 2),
                 "prev_close": round(prev, 2),
+                "currency": currency,
                 "updated": datetime.utcnow().isoformat(),
             }
         except Exception as e:

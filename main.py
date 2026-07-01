@@ -1431,6 +1431,19 @@ if __name__ == "__main__":
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.start()
 
+    # Auto-install shortcuts on first run (or if missing)
+    def _auto_install():
+        try:
+            result = _installer.install(PORT)
+            if result["success"] and result["actions"]:
+                print(f"[Install] Shortcuts created: {', '.join(result['actions'])}")
+            elif result.get("warnings"):
+                print(f"[Install] {'; '.join(result['warnings'])}")
+        except Exception as e:
+            print(f"[Install] Auto-install skipped: {e}")
+
+    threading.Thread(target=_auto_install, daemon=True).start()
+
     # Non-blocking startup: fetch market data + scan in background
     def _startup():
         global _quotes_cache

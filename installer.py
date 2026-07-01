@@ -420,12 +420,43 @@ def _pwa_instructions(device: dict, port: int = 8080) -> InstallResult:
     )
 
 
+# ── Install-state checks ──────────────────────────────────────────────────────
+
+def is_installed() -> bool:
+    """Return True if FredAI shortcuts are already in place for this OS."""
+    import sys as _sys
+    p = _sys.platform
+    if p == "darwin":
+        return (
+            Path("/Applications/FredAI.app/Contents/MacOS/fredai").exists()
+            or (Path.home() / "Applications/FredAI.app/Contents/MacOS/fredai").exists()
+        )
+    elif p.startswith("win"):
+        return Path(os.path.expandvars(r"%USERPROFILE%\Desktop\FredAI.url")).exists()
+    elif p.startswith("linux"):
+        return (Path.home() / ".local/share/applications/fredai.desktop").exists()
+    return False
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def install(port: int = 8080) -> InstallResult:
-    """Detect device and install the appropriate shortcut/icon set."""
+def install(port: int = 8080, force: bool = False) -> InstallResult:
+    """Detect device and install the appropriate shortcut/icon set.
+
+    Idempotent: skips if all shortcuts are already in place unless force=True.
+    """
     device = detect_device()
     os_family = device["os_family"]
+
+    if not force and is_installed():
+        return InstallResult(
+            platform=os_family,
+            device_type=device["device_type"],
+            actions=[],
+            warnings=[],
+            instructions="FredAI shortcuts already installed.",
+            success=True,
+        )
 
     if os_family == "macos":
         return _install_macos(port)

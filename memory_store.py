@@ -254,6 +254,12 @@ def get_user(user_id: int) -> dict | None:
     return dict(row) if row else None
 
 
+def get_user_by_username(username: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+    return dict(row) if row else None
+
+
 # ── WATCHLIST ─────────────────────────────────────────────────────────────────
 def get_watchlist(user_id: int) -> list[dict]:
     with get_conn() as conn:

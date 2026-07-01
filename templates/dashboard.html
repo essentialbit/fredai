@@ -296,6 +296,17 @@ html[data-tier="nano"] .install-btn{display:none!important}
 
 /* ══ INSTALL MODAL ══════════════════════════════════════════════════════════ */
 #install-modal{position:fixed;inset:0;background:rgba(3,8,15,.88);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+
+/* ══ SETTINGS MODAL ══════════════════════════════════════════════════════════ */
+#settings-modal{position:fixed;inset:0;background:rgba(3,8,15,.88);z-index:9100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#settings-modal.open{display:flex}
+.settings-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:24px;max-width:440px;width:90%;box-shadow:0 0 40px rgba(0,180,255,.1)}
+.settings-tabs{display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.settings-tab{background:none;border:none;color:var(--t3);padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500}
+.settings-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.settings-content{min-height:220px}
+.settings-content p{margin:0 0 16px 0;line-height:1.4;font-size:11px;color:var(--t2)}
+.settings-footer{display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:12px;margin-top:16px}
 #install-modal.open{display:flex}
 .install-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(0,255,136,.1)}
 .install-box h2{margin:0 0 6px;font-size:18px;color:var(--t1);font-weight:600}
@@ -1050,6 +1061,21 @@ html[data-tier="ultra"] #ops-picture{display:block}
       <div class="form-group"><label>Username</label><input id="l-user" placeholder="username" autocomplete="username"></div>
       <div class="form-group"><label>Password</label><input id="l-pass" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="login-btn" onclick="doLogin()">SIGN IN →</button>
+      
+      <div id="oauth-divider" style="display:none;margin:16px 0;text-align:center;position:relative">
+        <span style="background:var(--bg2);padding:0 8px;font-size:10px;color:var(--t3);position:relative;z-index:2">OR SIGN IN WITH</span>
+        <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:var(--border);z-index:1"></div>
+      </div>
+      <div id="oauth-buttons" style="display:none;flex-direction:column;gap:8px">
+        <button id="btn-oauth-google" class="login-btn" onclick="location.href='/login/google'" style="background:#fff;color:#000;border:1px solid #ddd;display:none;justify-content:center;align-items:center;gap:8px;font-size:12px;font-weight:600">
+          <svg style="width:16px;height:16px" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.49 3.77v3.12h4.01c2.34-2.16 3.69-5.32 3.69-8.74z"/><path fill="#34A853" d="M12 24c3.24 0 5.97-1.08 7.96-2.91l-4.01-3.12c-1.12.75-2.54 1.19-3.95 1.19-3.05 0-5.63-2.06-6.55-4.83H1.31v3.22A12 12 0 0 0 12 24z"/><path fill="#FBBC05" d="M5.45 14.33a7.22 7.22 0 0 1 0-2.66V8.45H1.31a12 12 0 0 0 0 7.1l4.14-3.22z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.22 0 12 0A12 12 0 0 0 1.31 8.45l4.14 3.22c.92-2.77 3.5-4.83 6.55-4.83z"/></svg>
+          Google
+        </button>
+        <button id="btn-oauth-github" class="login-btn" onclick="location.href='/login/github'" style="background:#24292e;color:#fff;border:1px solid #444;display:none;justify-content:center;align-items:center;gap:8px;font-size:12px;font-weight:600">
+          <svg style="width:16px;height:16px;fill:currentColor" viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          GitHub
+        </button>
+      </div>
       <div class="login-footer">Default: admin / sentinel2024</div>
     </div>
     <div id="auth-register" style="display:none">
@@ -1079,7 +1105,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
     <div class="hdr-right">
       <div class="scan-timer">NEXT <span id="scan-cdwn">--</span></div>
       <button id="btn-install" class="install-btn" onclick="openInstallModal()" title="Install FredAI on this device" style="display:none">+ Install</button>
-      <div class="user-badge" id="user-badge" onclick="doLogout()">-- ×</div>
+      <div class="user-badge" id="user-badge" onclick="openSettingsModal()">-- ×</div>
       <div class="ws-dot off" id="ws-dot" title="WebSocket"></div>
     </div>
   </div>
@@ -1434,6 +1460,59 @@ html[data-tier="ultra"] #ops-picture{display:block}
   </div>
 </div>
 
+<!-- SETTINGS MODAL -->
+<div id="settings-modal">
+  <div class="settings-box">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h2 style="margin:0;font-size:16px;color:var(--blue)">User Settings &amp; Profile</h2>
+      <button class="install-close" onclick="closeSettingsModal()" style="margin:0;padding:2px 8px;font-size:10px">Close</button>
+    </div>
+    <div class="settings-tabs">
+      <button class="settings-tab active" id="stab-security" onclick="switchSettingsTab('security')">Security</button>
+      <button class="settings-tab" id="stab-privacy" onclick="switchSettingsTab('privacy')">Privacy &amp; Data</button>
+    </div>
+    
+    <div class="settings-content" id="settings-security">
+      <div style="margin-bottom:12px">
+        <h3 style="margin:0 0 8px 0;font-size:12px;color:var(--t2)">Change Password</h3>
+        <div class="form-group" style="margin-bottom:8px"><label style="font-size:9px">Current Password</label><input id="s-curr-pass" type="password" placeholder="current password" style="width:100%;box-sizing:border-box"></div>
+        <div class="form-group" style="margin-bottom:8px"><label style="font-size:9px">New Password (min 6 chars)</label><input id="s-new-pass" type="password" placeholder="new password" style="width:100%;box-sizing:border-box"></div>
+        <div class="form-group" style="margin-bottom:8px"><label style="font-size:9px">Confirm New Password</label><input id="s-conf-pass" type="password" placeholder="confirm new password" style="width:100%;box-sizing:border-box"></div>
+        <button class="login-btn" onclick="changePassword()" style="margin-top:4px;padding:6px;font-size:11px">Update Password</button>
+        <div id="settings-pw-msg" style="font-size:10px;margin-top:4px"></div>
+      </div>
+      
+      <div id="admin-reset-section" style="display:none;border-top:1px dashed var(--border);padding-top:12px;margin-top:12px">
+        <h3 style="margin:0 0 8px 0;font-size:12px;color:var(--red)">Admin: Reset User Password</h3>
+        <div class="form-group" style="margin-bottom:8px"><label style="font-size:9px">Target Username</label><input id="s-reset-user" placeholder="username" style="width:100%;box-sizing:border-box"></div>
+        <div class="form-group" style="margin-bottom:8px"><label style="font-size:9px">New Password (min 6 chars)</label><input id="s-reset-pass" type="password" placeholder="new password" style="width:100%;box-sizing:border-box"></div>
+        <button class="login-btn" onclick="resetPassword()" style="margin-top:4px;padding:6px;font-size:11px;background:var(--red)">Reset Password</button>
+        <div id="settings-reset-msg" style="font-size:10px;margin-top:4px"></div>
+      </div>
+    </div>
+    
+    <div class="settings-content" id="settings-privacy" style="display:none">
+      <p style="font-size:11px;color:var(--t2);line-height:1.4;margin:0 0 16px 0">
+        All your portfolio details, watchlist, and learned preferences are stored securely on this device.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <button class="install-action-btn secondary" onclick="exportUserData()" style="display:flex;justify-content:center;padding:8px">
+          <span>Export My User Data (JSON)</span>
+        </button>
+        <button class="install-action-btn secondary" onclick="deleteUserData()" style="display:flex;justify-content:center;padding:8px;background:rgba(255,59,92,0.1);border-color:var(--red);color:var(--red)">
+          <span>Delete My Account &amp; Data</span>
+        </button>
+      </div>
+      <div id="settings-privacy-msg" style="font-size:10px;margin-top:8px"></div>
+    </div>
+    
+    <div class="settings-footer">
+      <button class="login-btn" onclick="doLogout()" style="background:var(--red);padding:6px 12px;font-size:11px;margin:0;max-width:120px">Sign Out</button>
+      <button class="install-close" onclick="closeSettingsModal()" style="margin:0">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- FRED DRAWER -->
 <div id="fred-drawer"></div>
 
@@ -1443,6 +1522,38 @@ html[data-tier="ultra"] #ops-picture{display:block}
 const socket = io();
 const TIER = window.FRED_TIER || 'full';
 const IS_TOUCH = window.FRED_TOUCH;
+
+async function checkAuthProviders() {
+  try {
+    const r = await fetch('/api/auth/status');
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.status !== 'anonymous' && d.display_name) {
+      if (g('login-screen').style.display !== 'none') {
+        g('login-screen').style.display = 'none';
+        g('app-shell').classList.add('visible');
+        g('user-badge').textContent = d.display_name.slice(0,12) + ' ×';
+        if (IS_ULTRA) g('ultra-trend-mini').style.display = '';
+        checkDisclaimer();
+        initInstaller();
+      }
+    }
+    if (d.providers && d.providers.length > 0) {
+      g('oauth-divider').style.display = 'block';
+      g('oauth-buttons').style.display = 'flex';
+      d.providers.forEach(p => {
+        const btn = g(`btn-oauth-${p}`);
+        if (btn) btn.style.display = 'flex';
+      });
+    } else {
+      g('oauth-divider').style.display = 'none';
+      g('oauth-buttons').style.display = 'none';
+    }
+  } catch (e) {
+    console.error('[FredAI] Auth check failed:', e);
+  }
+}
+checkAuthProviders();
 const IS_NANO = TIER === 'nano';
 const IS_MOBILE = TIER === 'micro' || TIER === 'compact';
 const IS_ULTRA = TIER === 'ultra';
@@ -1569,6 +1680,160 @@ function closeInstallModal() {
   g('install-modal').classList.remove('open');
 }
 
+// ── USER SETTINGS MODAL ──────────────────────────────────────────────────
+function openSettingsModal() {
+  g('settings-modal').classList.add('open');
+  const userText = g('user-badge').textContent || '';
+  if (userText.toLowerCase().includes('admin')) {
+    g('admin-reset-section').style.display = 'block';
+  } else {
+    g('admin-reset-section').style.display = 'none';
+  }
+  g('s-curr-pass').value = '';
+  g('s-new-pass').value = '';
+  g('s-conf-pass').value = '';
+  g('settings-pw-msg').textContent = '';
+  g('settings-pw-msg').className = '';
+  if (g('s-reset-user')) g('s-reset-user').value = '';
+  if (g('s-reset-pass')) g('s-reset-pass').value = '';
+  if (g('settings-reset-msg')) g('settings-reset-msg').textContent = '';
+  g('settings-privacy-msg').textContent = '';
+}
+function closeSettingsModal() {
+  g('settings-modal').classList.remove('open');
+}
+function switchSettingsTab(tab) {
+  g('stab-security').classList.toggle('active', tab === 'security');
+  g('stab-privacy').classList.toggle('active', tab === 'privacy');
+  g('settings-security').style.display = tab === 'security' ? '' : 'none';
+  g('settings-privacy').style.display = tab === 'privacy' ? '' : 'none';
+}
+async function changePassword() {
+  const curr = g('s-curr-pass').value;
+  const newPw = g('s-new-pass').value;
+  const conf = g('s-conf-pass').value;
+  const msgEl = g('settings-pw-msg');
+  if (!curr || !newPw || !conf) {
+    msgEl.textContent = 'All fields are required';
+    msgEl.className = 'warn';
+    return;
+  }
+  if (newPw !== conf) {
+    msgEl.textContent = 'New passwords do not match';
+    msgEl.className = 'warn';
+    return;
+  }
+  if (newPw.length < 6) {
+    msgEl.textContent = 'Password must be at least 6 characters';
+    msgEl.className = 'warn';
+    return;
+  }
+  try {
+    const r = await fetch('/api/user/change-password', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({current_password: curr, new_password: newPw})
+    });
+    const d = await r.json();
+    if (r.ok) {
+      msgEl.textContent = 'Password updated successfully!';
+      msgEl.className = 'ok';
+      g('s-curr-pass').value = '';
+      g('s-new-pass').value = '';
+      g('s-conf-pass').value = '';
+    } else {
+      msgEl.textContent = d.error || 'Password update failed';
+      msgEl.className = 'warn';
+    }
+  } catch (e) {
+    msgEl.textContent = 'Network error occurred';
+    msgEl.className = 'warn';
+  }
+}
+async function resetPassword() {
+  const target = g('s-reset-user').value.trim();
+  const newPw = g('s-reset-pass').value;
+  const msgEl = g('settings-reset-msg');
+  if (!target || !newPw) {
+    msgEl.textContent = 'Username and password required';
+    msgEl.className = 'warn';
+    return;
+  }
+  if (newPw.length < 6) {
+    msgEl.textContent = 'Password must be at least 6 characters';
+    msgEl.className = 'warn';
+    return;
+  }
+  try {
+    const r = await fetch('/api/user/reset-password', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({username: target, new_password: newPw})
+    });
+    const d = await r.json();
+    if (r.ok) {
+      msgEl.textContent = `Password reset for "${target}" succeeded!`;
+      msgEl.className = 'ok';
+      g('s-reset-user').value = '';
+      g('s-reset-pass').value = '';
+    } else {
+      msgEl.textContent = d.error || 'Reset failed';
+      msgEl.className = 'warn';
+    }
+  } catch (e) {
+    msgEl.textContent = 'Network error occurred';
+    msgEl.className = 'warn';
+  }
+}
+async function exportUserData() {
+  try {
+    const r = await fetch('/api/user/export');
+    if (!r.ok) {
+      g('settings-privacy-msg').textContent = 'Export failed';
+      g('settings-privacy-msg').className = 'warn';
+      return;
+    }
+    const blob = await r.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `fredai-data-export-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    g('settings-privacy-msg').textContent = 'Data exported!';
+    g('settings-privacy-msg').className = 'ok';
+  } catch (e) {
+    g('settings-privacy-msg').textContent = 'Export failed';
+    g('settings-privacy-msg').className = 'warn';
+  }
+}
+async function deleteUserData() {
+  if (!confirm('Are you absolutely sure you want to delete your account? This action is irreversible and will delete your entire profile, watchlist, and portfolio details.')) {
+    return;
+  }
+  const password = prompt("Please enter your password to confirm account deletion (leave empty if you signed in using Google or GitHub):");
+  if (password === null) return;
+  try {
+    const r = await fetch('/api/user/delete', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({password: password})
+    });
+    if (r.ok) {
+      alert('Your account and data have been deleted.');
+      location.reload();
+    } else {
+      const d = await r.json();
+      g('settings-privacy-msg').textContent = d.error || 'Deletion failed';
+      g('settings-privacy-msg').className = 'warn';
+    }
+  } catch (e) {
+    g('settings-privacy-msg').textContent = 'Network error occurred';
+    g('settings-privacy-msg').className = 'warn';
+  }
+}
+
 function _renderInstallModal() {
   const d = _deviceInfo;
   const lbl = g('install-device-label');
@@ -1657,6 +1922,18 @@ async function loadInitData() {
     const r = await fetch('/api/init');
     if (r.status===401) return;
     const d = await r.json();
+    
+    // Auto-login transition if authenticated
+    if (d.user && d.user.display_name) {
+      if (g('login-screen').style.display !== 'none') {
+        g('login-screen').style.display = 'none';
+        g('app-shell').classList.add('visible');
+        g('user-badge').textContent = d.user.display_name.slice(0,12) + ' ×';
+        if (IS_ULTRA) g('ultra-trend-mini').style.display = '';
+        checkDisclaimer();
+        initInstaller();
+      }
+    }
     quotesCache = d.quotes||{};
     updateIdxBar(quotesCache);
     updatePortfolioUI(d.portfolio||{});

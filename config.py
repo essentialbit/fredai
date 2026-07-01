@@ -101,3 +101,9 @@ GITHUB_REPO  = os.getenv("GITHUB_REPO", "essentialbit/fredai")
 SCAN_INTERVAL_HOURS = 4
 MARKET_REFRESH_SECONDS = 60
 SIGNAL_FETCH_LIMIT = 100
+
+# ── OAuth Configuration ───────────────────────────────────────────────────────
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GITHUB_CLIENT_ID = os.getenv("GITHUB_CLIENT_ID", "")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET", "")

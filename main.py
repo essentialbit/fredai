@@ -1168,8 +1168,11 @@ def api_system_refresh():
         
     # 3. Trigger re-execution replacement in 800ms
     def do_restart():
-        print("[System] Replacing process (execv) to restart Fred...")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        print("[System] Spawning detached restart helper...")
+        cmd = f"sleep 1.2 && {sys.executable} main.py"
+        subprocess.Popen(cmd, shell=True, env=os.environ, start_new_session=True)
+        print("[System] Exiting old process to clear port 8080...")
+        os._exit(0)
         
     threading.Timer(0.8, do_restart).start()
     

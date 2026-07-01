@@ -211,6 +211,19 @@ jobs:
           draft: false
           prerelease: false
           token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Update README changelog
+        run: |
+          pip install requests -q
+          python3 scripts/update_readme_changelog.py
+          git config user.name "FredAI"
+          git config user.email "fredai-bot@users.noreply.github.com"
+          git add README.md
+          git diff --staged --quiet || \
+            git commit -m "docs: sync README changelog to ${{ steps.version.outputs.version }}"
+          git push origin HEAD:main || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
 
   # ── Deploy: notify registered instances ────────────────────────
   deploy:

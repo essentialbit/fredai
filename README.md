@@ -7,7 +7,8 @@
 **AI-powered financial signals, portfolio intelligence, and live market awareness — in one self-hosted dashboard.**
 
 [![CI](https://github.com/essentialbit/fredai/actions/workflows/ci.yml/badge.svg)](https://github.com/essentialbit/fredai/actions/workflows/ci.yml)
-[![Docker](https://ghcr.io/essentialbit/fredai)](https://ghcr.io/essentialbit/fredai)
+[![Latest Release](https://img.shields.io/github/v/release/essentialbit/fredai?label=version&color=00ff88)](https://github.com/essentialbit/fredai/releases/latest)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fessentialbit%2Ffredai-blue)](https://ghcr.io/essentialbit/fredai)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Discussions](https://img.shields.io/badge/community-discussions-purple)](https://github.com/essentialbit/fredai/discussions)
@@ -15,6 +16,33 @@
 [Quick Start](#-one-command-start) · [Features](#-what-fred-does) · [Install Guide](#-installation) · [User Guide](#-using-fred) · [Security](#-security) · [Contribute](#-contributing)
 
 </div>
+
+---
+
+<!-- CHANGELOG_START -->
+## What's New
+
+See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
+
+### v1.2.0 — Community Engagement + CI Fix
+- Autonomous GitHub community engagement: Fred responds to Issues, Discussions, and PRs every 6h
+- Fixed CI/CD YAML error that blocked all pipeline runs since v1.1.0
+- CI `rnd` job now has correct write permissions for issues, discussions, pull-requests
+
+### v1.1.0 — Security Hardening + CI/CD Automation
+- OWASP top-10 hardening: brute-force rate limiting, session fixation prevention, CSP headers, SocketIO CORS lockdown
+- Multi-arch Docker builds (linux/amd64 + linux/arm64) published to GHCR on every push
+- Autonomous installer: macOS Dock shortcut, Windows .url, Linux .desktop — all created on first run
+- Interactive 3D Signal Globe (globe.gl + WebGL) on News and Dashboard tabs
+- YouTube video intelligence: Bloomberg, Yahoo Finance, CNBC in-page player
+
+### v1.0.0 — Initial release
+- Real-time market data (26+ assets), X/Twitter signals, VADER sentiment
+- Claude-powered 4h briefings and conversational Fred advisor
+- Multi-user auth, per-user portfolios and watchlists
+- SQLite persistence, Obsidian vault integration
+
+<!-- CHANGELOG_END -->
 
 ---
 

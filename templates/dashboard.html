@@ -68,6 +68,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script src="//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
@@ -320,6 +321,81 @@ html[data-tier="nano"] .install-btn{display:none!important}
 }
 #settings-modal{z-index:9100}
 #install-modal.open, #settings-modal.open{display:flex}
+
+/* Ticker Link & Analyst Modal Styles */
+.ticker-link {
+  color: #00ff88;
+  font-weight: 700;
+  text-decoration: underline dashed rgba(0, 255, 136, 0.4);
+  cursor: pointer;
+  padding: 1px 3px;
+  border-radius: 3px;
+  transition: all 0.15s ease-in-out;
+  display: inline-block;
+}
+.ticker-link:hover {
+  background: rgba(0, 255, 136, 0.15);
+  color: #fff;
+  text-shadow: 0 0 8px #00ff88;
+  transform: scale(1.05);
+}
+
+#analyst-modal {
+  position: fixed; inset: 0; background: rgba(3, 8, 15, 0.9);
+  display: none; align-items: center; justify-content: center;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  z-index: 9500;
+}
+#analyst-modal.open { display: flex; }
+.analyst-box {
+  background: rgba(10, 20, 38, 0.85);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  border-radius: 14px;
+  width: 90%;
+  max-width: 800px;
+  height: 80%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 60px rgba(0, 255, 136, 0.15), 0 25px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.analyst-hdr {
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(0, 255, 136, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 255, 136, 0.03);
+}
+.analyst-title {
+  margin: 0; font-size: 18px; font-weight: 700; color: #00ff88; letter-spacing: 0.5px;
+}
+.analyst-body {
+  flex: 1; overflow-y: auto; padding: 24px 30px; color: var(--t1); line-height: 1.6; font-size: 13px;
+}
+.analyst-body h1, .analyst-body h2, .analyst-body h3 {
+  color: #00ff88; margin-top: 24px; margin-bottom: 12px; font-weight: 600;
+}
+.analyst-body h1 { font-size: 20px; border-bottom: 1px solid rgba(0,255,136,0.15); padding-bottom: 6px; }
+.analyst-body h2 { font-size: 16px; }
+.analyst-body h3 { font-size: 14px; }
+.analyst-body p { margin-bottom: 16px; }
+.analyst-body table {
+  width: 100%; border-collapse: collapse; margin: 16px 0; background: rgba(255,255,255,0.02); border-radius: 6px; overflow: hidden;
+}
+.analyst-body th, .analyst-body td {
+  padding: 10px 14px; border: 1px solid rgba(255,255,255,0.06); text-align: left;
+}
+.analyst-body th { background: rgba(0, 255, 136, 0.08); color: #00ff88; font-weight: 600; }
+.analyst-body ul, .analyst-body ol { margin-left: 20px; margin-bottom: 16px; }
+.analyst-body li { margin-bottom: 6px; }
+.analyst-body strong { color: #fff; }
+.analyst-body blockquote {
+  border-left: 3px solid #00ff88; padding-left: 14px; margin: 16px 0; color: var(--t2); font-style: italic; background: rgba(0,255,136,0.02); padding: 8px 14px;
+}
+.analyst-footer {
+  padding: 14px 24px; border-top: 1px solid rgba(0, 255, 136, 0.2); display: flex; justify-content: flex-end; gap: 10px; background: rgba(0,255,136,0.01);
+}
 
 .settings-box, .install-box{
   background:rgba(15,23,42,0.8) !important;
@@ -1605,6 +1681,27 @@ html[data-tier="ultra"] #ops-picture{display:block}
   </div>
 </div>
 
+<!-- STOCK ANALYST MODAL -->
+<div id="analyst-modal">
+  <div class="analyst-box">
+    <div class="analyst-hdr">
+      <h2 class="analyst-title" id="analyst-modal-title">EQUITY INTELLIGENCE REPORT</h2>
+      <button class="install-close" onclick="closeAnalystModal()" style="margin:0;padding:2px 8px;font-size:10px">Close</button>
+    </div>
+    <div class="analyst-body" id="analyst-modal-body">
+      <div id="analyst-loading" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;height:100%;color:var(--t3);font-size:12px">
+        <div style="width:32px;height:32px;border:2px solid rgba(0,255,136,.15);border-top-color:#00ff88;border-radius:50%;animation:spin .8s linear infinite"></div>
+        <span>Autogenerating equity analyst report via Fred AI research stack...</span>
+      </div>
+      <div id="analyst-report-content" style="display:none"></div>
+    </div>
+    <div class="analyst-footer">
+      <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
+      <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- FRED DRAWER -->
 <div id="fred-drawer"></div>
 
@@ -2369,7 +2466,7 @@ function renderPositions(positions, cid) {
   function posRow(p){
     const currency=quotesCache[p.symbol]?.currency||(isAsx(p.symbol)?'AUD':'USD');
     const cTag=currency==='AUD'?`<span style="font-size:7px;color:#f5a623;margin-left:3px">AUD</span>`:'';
-    return `<div class="pos-row"><div><div class="ps">${p.symbol.replace('-USD','').replace('.AX','')}${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}</div><div class="pn">${p.name||p.symbol}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
+    return `<div class="pos-row"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${p.symbol.replace('-USD','').replace('.AX','')}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}</div><div class="pn">${p.name||p.symbol}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -2536,7 +2633,7 @@ function renderWatchlist(items,interests){
     const interest=im[sym]||1,pct_bar=Math.min(interest/20*100,100);
     const sentCls=getSentClass(sym);
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
-    return `<tr class="wl-row"><td>${sym.replace('-USD','').replace('.AX','')}<span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${q.name||sym}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${sym.replace('-USD','').replace('.AX','')}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${q.name||sym}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -2707,7 +2804,7 @@ function appendMsg(role,text,imageUrl){
   if (imageUrl) {
     imgHtml = `<div style="margin-top:6px;"><img src="${imageUrl}" style="max-width:200px;max-height:150px;border-radius:4px;border:1px solid var(--border)"></div>`;
   }
-  d.innerHTML=`<div class="cr">${role==='user'?'You':'Fred'}</div><div class="cb">${esc(text)}${imgHtml}</div>`;
+  d.innerHTML=`<div class="cr">${role==='user'?'You':'Fred'}</div><div class="cb">${linkifyTickers(esc(text))}${imgHtml}</div>`;
   g('fred-drawer').appendChild(d);g('fred-drawer').scrollTop=1e9;
 }
 function appendThinking(){
@@ -3270,6 +3367,83 @@ function initTranslationObserver() {
     document.querySelectorAll('.' + cls).forEach(el => {
       autoTranslateElement(el);
     });
+  });
+}
+
+
+// ── STOCK TICKER LINKIFICATION & AI REPORT OVERLAY ────────────────────────
+let currentAnalystReportText = '';
+
+async function openAnalystReport(ticker) {
+  ticker = ticker.replace(/[\$\[\]]/g, '').trim().toUpperCase();
+  if (!ticker) return;
+
+  const modal = g('analyst-modal');
+  const title = g('analyst-modal-title');
+  const loading = g('analyst-loading');
+  const content = g('analyst-report-content');
+
+  title.textContent = `EQUITY RESEARCH: ${ticker}`;
+  loading.style.display = 'flex';
+  content.style.display = 'none';
+  modal.classList.add('open');
+
+  try {
+    const r = await fetch(`/api/analyst/report/${ticker}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+    content.style.display = 'block';
+
+    if (r.ok && d.report) {
+      currentAnalystReportText = d.report;
+      if (window.marked && window.marked.parse) {
+        content.innerHTML = window.marked.parse(d.report);
+      } else {
+        content.innerHTML = `<pre style="white-space:pre-wrap;font-family:monospace">${esc(d.report)}</pre>`;
+      }
+    } else {
+      content.innerHTML = `<div class="warn">Error: ${esc(d.error || 'Failed to generate report.')}</div>`;
+    }
+  } catch (e) {
+    loading.style.display = 'none';
+    content.style.display = 'block';
+    content.innerHTML = `<div class="warn">Network error requesting Fred AI research stack.</div>`;
+  }
+}
+
+function closeAnalystModal() {
+  g('analyst-modal').classList.remove('open');
+}
+
+function printAnalystReport() {
+  const win = window.open('', '_blank');
+  win.document.write(`
+    <html>
+      <head>
+        <title>FredAI Equity Report</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+          h1, h2, h3 { color: #111; margin-top: 24px; border-bottom: 1px solid #eee; padding-bottom: 6px; }
+          table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+          th, td { padding: 10px 14px; border: 1px solid #ddd; text-align: left; }
+          th { background: #f5f5f5; }
+        </style>
+      </head>
+      <body>
+        \${window.marked && window.marked.parse ? window.marked.parse(currentAnalystReportText) : '<pre>' + esc(currentAnalystReportText) + '</pre>'}
+        <script>window.onload = function() { window.print(); }<\/script>
+      </body>
+    </html>
+  `);
+  win.document.close();
+}
+
+function linkifyTickers(text) {
+  if (!text) return '';
+  const tickerRegex = /\b\$([A-Z]{2,5})\b|\[([A-Z]{2,5})\]/g;
+  return text.replace(tickerRegex, (match, p1, p2) => {
+    const sym = p1 || p2;
+    return `<span class="ticker-link" onclick="event.stopPropagation(); openAnalystReport('${sym}')">${match}</span>`;
   });
 }
 </script>

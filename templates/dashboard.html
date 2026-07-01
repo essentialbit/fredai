@@ -12,6 +12,9 @@
 <link rel="apple-touch-icon" href="/static/icons/ios-180.png">
 <link rel="manifest" href="/static/manifest.json">
 <title>FredAI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
@@ -70,16 +73,17 @@ if ('serviceWorker' in navigator) {
 <style>
 /* ══ DESIGN TOKENS — tier-adaptive custom properties ══════════════════════ */
 :root {
-  /* Colors */
-  --bg0:#03080f; --bg1:#060f1c; --bg2:#0a1628; --bg3:#0d1e35;
-  --border:#162840; --border2:#1e3d5c;
+  /* Colors - Rich, futuristic dark theme inspired by Google AI Studio */
+  --bg0:#05080e; --bg1:#080d19; --bg2:#0f172a; --bg3:#16223e;
+  --border:rgba(30, 48, 77, 0.5); --border2:rgba(0, 180, 255, 0.25);
   --green:#00ff88; --red:#ff3b5c; --blue:#00b4ff;
   --yellow:#ffd166; --purple:#9b59ff; --orange:#ff8c42;
-  --t1:#e8f4fd; --t2:#7a9bbf; --t3:#3d5a73;
+  --t1:#f1f5f9; --t2:#94a3b8; --t3:#475569;
   --mono:'JetBrains Mono',monospace;
-  --glow-g:0 0 16px rgba(0,255,136,.35);
-  --glow-r:0 0 16px rgba(255,59,92,.35);
-  --glow-b:0 0 16px rgba(0,180,255,.3);
+  --font-sans: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
+  --glow-g:0 0 20px rgba(0,255,136,.4);
+  --glow-r:0 0 20px rgba(255,59,92,.4);
+  --glow-b:0 0 20px rgba(0,180,255,.45);
 
   /* Tier-adaptive sizing — defaults = full (desktop) */
   --font-base: 13px;
@@ -158,7 +162,7 @@ html[data-tier="ultra"] {
 html{height:100%;-webkit-text-size-adjust:100%}
 body{
   height:100%;background:var(--bg0);color:var(--t1);
-  font-family:'Inter',sans-serif;font-size:var(--font-base);
+  font-family:var(--font-sans);font-size:var(--font-base);
   overflow:hidden;
   /* Safe area insets for notch/home-indicator devices */
   padding-top: env(safe-area-inset-top);
@@ -166,40 +170,53 @@ body{
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
 }
-::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar{width:4px;height:4px}
 ::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+::-webkit-scrollbar-thumb{background:rgba(0,180,255,0.25);border-radius:4px;transition:all 0.2s}
+::-webkit-scrollbar-thumb:hover{background:rgba(0,180,255,0.45)}
 
 /* ══ LOGIN SCREEN ════════════════════════════════════════════════════════ */
 #login-screen{
   position:fixed;inset:0;background:var(--bg0);z-index:1000;
   display:flex;align-items:center;justify-content:center;
   padding:var(--pad);
+  background-image: radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.8) 0%, var(--bg0) 100%);
 }
 .login-box{
-  width:min(380px,100%);background:var(--bg2);border:1px solid var(--border2);
-  border-radius:12px;padding:clamp(20px,5vw,36px);
-  box-shadow:0 20px 60px rgba(0,0,0,.8);
+  width:min(380px,100%);
+  background: rgba(15, 23, 42, 0.75) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 180, 255, 0.2) !important;
+  border-radius: 12px;
+  padding: clamp(24px,5vw,36px);
+  box-shadow: 0 0 40px rgba(0, 180, 255, 0.15), 0 20px 60px rgba(0,0,0,.6) !important;
+  transition: all 0.3s ease;
+}
+.login-box:hover {
+  box-shadow: 0 0 50px rgba(0, 180, 255, 0.25), 0 20px 60px rgba(0,0,0,.7) !important;
+  border-color: rgba(0, 180, 255, 0.35) !important;
 }
 .fred-hex{
   width:clamp(40px,8vw,56px);height:clamp(40px,8vw,56px);margin:0 auto 12px;
-  background:linear-gradient(135deg,#00b4ff,#00ff88);
+  background:linear-gradient(135deg,#00f2fe,#9b59ff);
   clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
   display:flex;align-items:center;justify-content:center;
   font-size:clamp(14px,3vw,22px);font-weight:700;color:#03080f;
+  box-shadow: 0 0 15px rgba(0, 180, 255, 0.5);
 }
-.login-title{font-size:clamp(16px,4vw,22px);font-weight:700;letter-spacing:3px;text-align:center}
+.login-title{font-size:clamp(16px,4vw,22px);font-weight:700;letter-spacing:3px;text-align:center;color:var(--t1)}
 .login-sub{font-size:var(--font-xs);letter-spacing:2px;color:var(--t2);margin-top:4px;text-align:center}
 .login-logo{text-align:center;margin-bottom:24px}
 .login-tabs{display:flex;margin-bottom:16px;border-bottom:1px solid var(--border)}
-.ltab{flex:1;padding:7px;background:none;border:none;cursor:pointer;font-size:var(--font-sm);font-weight:600;letter-spacing:1px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;min-height:var(--touch)}
-.ltab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.ltab{flex:1;padding:7px;background:none;border:none;cursor:pointer;font-size:var(--font-sm);font-weight:600;letter-spacing:1px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:.2s;min-height:var(--touch)}
+.ltab.active{color:var(--blue);border-bottom-color:var(--blue);text-shadow: 0 0 8px rgba(0, 180, 255, 0.4)}
 .form-group{margin-bottom:12px}
 .form-group label{display:block;font-size:var(--font-xs);letter-spacing:1px;color:var(--t2);margin-bottom:4px;text-transform:uppercase}
-.form-group input{width:100%;padding:9px 12px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);color:var(--t1);font-size:var(--font-base);outline:none;transition:.15s;min-height:var(--touch)}
-.form-group input:focus{border-color:var(--blue)}
-.login-btn{width:100%;padding:10px;background:linear-gradient(135deg,rgba(0,180,255,.2),rgba(0,255,136,.15));border:1px solid rgba(0,180,255,.4);border-radius:var(--radius);color:var(--blue);font-size:var(--font-sm);font-weight:700;letter-spacing:2px;cursor:pointer;transition:.15s;min-height:var(--touch)}
-.login-btn:hover,.login-btn:active{background:linear-gradient(135deg,rgba(0,180,255,.3),rgba(0,255,136,.25))}
+.form-group input{width:100%;padding:9px 12px;background:rgba(8,13,25,0.6);border:1px solid rgba(0, 180, 255, 0.2);border-radius:var(--radius);color:var(--t1);font-size:var(--font-base);outline:none;transition:all .2s ease-in-out;min-height:var(--touch)}
+.form-group input:focus{border-color:var(--blue);box-shadow: 0 0 10px rgba(0, 180, 255, 0.35)}
+.login-btn{width:100%;padding:10px;background:linear-gradient(135deg,rgba(0,180,255,.25),rgba(91,89,255,.15));border:1px solid rgba(0,180,255,.45);border-radius:var(--radius);color:var(--t1);font-size:var(--font-sm);font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s ease;min-height:var(--touch);box-shadow:0 4px 12px rgba(0,180,255,0.15)}
+.login-btn:hover,.login-btn:active{background:linear-gradient(135deg,rgba(0,180,255,.35),rgba(91,89,255,.25));box-shadow:0 4px 20px rgba(0,180,255,0.3), 0 0 10px rgba(0,255,136,0.15);transform:translateY(-1px)}
 .login-err{color:var(--red);font-size:var(--font-xs);text-align:center;margin-top:8px;min-height:16px}
 .login-footer{text-align:center;margin-top:16px;font-size:var(--font-xs);color:var(--t3)}
 
@@ -294,29 +311,41 @@ html[data-tier="nano"] #disc-footer-bar { display:none }
 .install-btn:hover{background:rgba(0,255,136,.18)}
 html[data-tier="nano"] .install-btn{display:none!important}
 
-/* ══ INSTALL MODAL ══════════════════════════════════════════════════════════ */
-#install-modal{position:fixed;inset:0;background:rgba(3,8,15,.88);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+/* ══ INSTALL & SETTINGS MODALS ════════════════════════════════════════════════ */
+#install-modal, #settings-modal{
+  position:fixed;inset:0;background:rgba(3,8,15,.88);
+  display:none;align-items:center;justify-content:center;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  z-index:9000;
+}
+#settings-modal{z-index:9100}
+#install-modal.open, #settings-modal.open{display:flex}
 
-/* ══ SETTINGS MODAL ══════════════════════════════════════════════════════════ */
-#settings-modal{position:fixed;inset:0;background:rgba(3,8,15,.88);z-index:9100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
-#settings-modal.open{display:flex}
-.settings-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:24px;max-width:440px;width:90%;box-shadow:0 0 40px rgba(0,180,255,.1)}
+.settings-box, .install-box{
+  background:rgba(15,23,42,0.8) !important;
+  border:1px solid rgba(0,180,255,0.25) !important;
+  border-radius:12px;padding:24px;width:90%;
+  box-shadow:0 0 50px rgba(0,180,255,.15), 0 20px 50px rgba(0,0,0,0.5) !important;
+}
+.settings-box{max-width:440px}
+.install-box{max-width:480px;padding:28px 32px}
+
 .settings-tabs{display:flex;gap:8px;border-bottom:1px solid var(--border);margin-bottom:16px}
-.settings-tab{background:none;border:none;color:var(--t3);padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500}
-.settings-tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.settings-tab{background:none;border:none;color:var(--t3);padding:8px 12px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;font-weight:500;transition:all 0.2s}
+.settings-tab.active{color:var(--blue);border-bottom-color:var(--blue);text-shadow:0 0 8px rgba(0,180,255,0.3)}
+.settings-tab:hover{color:var(--t2)}
 .settings-content{min-height:220px}
 .settings-content p{margin:0 0 16px 0;line-height:1.4;font-size:11px;color:var(--t2)}
 .settings-footer{display:flex;justify-content:space-between;border-top:1px solid var(--border);padding-top:12px;margin-top:16px}
-#install-modal.open{display:flex}
-.install-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(0,255,136,.1)}
+
 .install-box h2{margin:0 0 6px;font-size:18px;color:var(--t1);font-weight:600}
 .install-box .install-device{font-size:11px;color:var(--t3);margin-bottom:20px;font-family:var(--mono)}
 .install-actions{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
 .install-action-btn{padding:11px 18px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid;transition:all .15s;text-align:left;display:flex;align-items:center;gap:10px}
-.install-action-btn.primary{background:rgba(0,255,136,.1);border-color:rgba(0,255,136,.4);color:var(--green)}
-.install-action-btn.primary:hover{background:rgba(0,255,136,.2)}
-.install-action-btn.secondary{background:rgba(0,180,255,.07);border-color:rgba(0,180,255,.3);color:var(--blue)}
-.install-action-btn.secondary:hover{background:rgba(0,180,255,.15)}
+.install-action-btn.primary{background:rgba(0,255,136,.08);border-color:rgba(0,255,136,.3);color:var(--green)}
+.install-action-btn.primary:hover{background:rgba(0,255,136,.18);box-shadow:0 0 15px rgba(0,255,136,0.15)}
+.install-action-btn.secondary{background:rgba(0,180,255,.07);border-color:rgba(0,180,255,.25);color:var(--blue)}
+.install-action-btn.secondary:hover{background:rgba(0,180,255,.15);box-shadow:0 0 15px rgba(0,180,255,0.15)}
 .install-action-btn:disabled{opacity:.4;cursor:not-allowed}
 .install-result{font-size:11px;color:var(--t2);background:var(--bg3);border-radius:4px;padding:10px;font-family:var(--mono);max-height:120px;overflow-y:auto;display:none}
 .install-result.show{display:block}
@@ -465,7 +494,18 @@ html[data-tier="micro"] #ov-signals,
 html[data-tier="micro"] #ov-bottom { display:none }
 
 /* ══ PANEL BASE ═══════════════════════════════════════════════════════════ */
-.panel{background:var(--bg2);overflow:hidden;display:flex;flex-direction:column}
+.panel{
+  background:rgba(15, 23, 42, 0.55) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05) !important;
+  overflow:hidden;display:flex;flex-direction:column;
+  box-shadow: 0 4px 24px 0 rgba(0, 0, 0, 0.2);
+  transition: border-color 0.2s ease-in-out;
+}
+.panel:hover {
+  border-color: rgba(0, 180, 255, 0.15) !important;
+}
 .ph{
   padding:clamp(6px,1vw,9px) var(--pad);border-bottom:1px solid var(--border);
   font-size:var(--font-xs);letter-spacing:2px;text-transform:uppercase;color:var(--t3);

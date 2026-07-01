@@ -24,28 +24,20 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.2.0 — Community Engagement + CI Fix
-- **Autonomous community engagement:** Fred monitors GitHub Issues, Discussions, and PRs every 6h. Classifies and responds to bug reports, feature requests, questions, and contributions. Silently ignores spam and unproductive content.
-- **CI/CD fixed:** Fixed YAML syntax error (unquoted colon in step name) that was breaking all CI runs since v1.1.0
-- **CI permissions:** `rnd` job now has `issues: write`, `discussions: write`, `pull-requests: write` so community responses post correctly in CI
-- **README:** Community engagement section expanded with response behavior table
-- **config.py:** `GITHUB_TOKEN` and `GITHUB_REPO` env vars documented
+### FredAI v1.2.8
+- Update Twitter API keys in .env file
 
-### FredAI v1.1.0 — Security Hardening + CI/CD Automation
-- OWASP top-10 hardening: brute-force rate limiting, session fixation prevention, Content Security Policy, SocketIO CORS lockdown, XSS escaping
-- Admin password randomisation on first run (printed once to console if unset)
-- Multi-arch Docker builds (linux/amd64 + linux/arm64 for Raspberry Pi)
-- GitHub Actions: validate → docker → auto-tag → release → deploy pipeline
-- HMAC-SHA256 deploy webhook for CI-push updates to running instances
-- Interactive 3D Signal Globe (globe.gl) on News page and Dashboard
+### FredAI v1.2.7
+- fix: Yahoo Finance rate-limit resilience + Nasdaq/CoinGecko primary sources
 
-### FredAI v1.0.0 — Intelligence Dashboard
-- D3.js force-directed stock relationship neural map
-- World map view with company HQ pins (100+ companies, lat/lng)
-- 60+ typed relationship edges: competitor, partner, supplier, customer, subsidiary, government, regulatory
-- Node click → Buy/Sell/Hold assessment panel
-- Forward-propagates major price events through the relationship graph
-- NVDA drops 4.5% → automatically identifies 13 downstream-affected companies ranked by impact severity
+### FredAI v1.2.6
+- fix: prices showing \$0.00 in Fred chat responses
+
+### FredAI v1.2.5
+- fix: Ollama chat compatibility for reasoning models (qwen3, gemma3, deepseek-r1)
+
+### FredAI v1.2.4
+- docs: add Android self-hosting guide via Termux
 
 <!-- CHANGELOG_END -->
 

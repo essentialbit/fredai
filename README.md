@@ -12,7 +12,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Discussions](https://img.shields.io/badge/community-discussions-purple)](https://github.com/essentialbit/fredai/discussions)
 
-[Quick Start](#-one-command-start) · [Features](#-what-fred-does) · [Install Guide](#-installation) · [User Guide](#-using-fred) · [Contribute](#-contributing)
+[Quick Start](#-one-command-start) · [Features](#-what-fred-does) · [Install Guide](#-installation) · [User Guide](#-using-fred) · [Security](#-security) · [Contribute](#-contributing)
 
 </div>
 
@@ -357,7 +357,7 @@ Fred uses several external APIs. Here's exactly what you need and where to get e
 
 | Key | Where to get | Free tier |
 |-----|-------------|-----------|
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Pay-per-use (very low cost for personal use) |
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Pay-per-use (~$0.25/1M tokens on Haiku) |
 
 ### Highly Recommended
 
@@ -374,14 +374,32 @@ Fred uses several external APIs. Here's exactly what you need and where to get e
 | Key | What it unlocks | Where to get |
 |-----|----------------|-------------|
 | `NASDAQ_API_KEY` | Nasdaq Data Link (fundamentals, economic data) | [data.nasdaq.com](https://data.nasdaq.com) — free |
-| `SECRET_KEY` | Flask session signing key | Any random string (auto-generated if omitted) |
+
+### Security keys (generate before exposing to a network)
+
+| Key | Purpose | How to generate |
+|-----|---------|----------------|
+| `SECRET_KEY` | Flask session signing — prevents cookie tampering | `python3 -c "import secrets; print(secrets.token_hex(32))"` |
+| `FREDAI_ADMIN_PASSWORD` | Pins the initial admin password on first run | Any strong password — remove from `.env` after first login |
+| `FREDAI_DEPLOY_SECRET` | Authenticates CI webhook pushes (`POST /api/update/apply`) | `python3 -c "import secrets; print(secrets.token_hex(32))"` — also add to GitHub Actions Secrets |
+
+> **Without `SECRET_KEY`:** Fred auto-generates a random key at startup. Sessions work but don't survive a restart — users have to log in again. Fine for local use; set a permanent key for server installs.
+
+> **Without `FREDAI_DEPLOY_SECRET`:** CI webhook-push updates are disabled. Fred still polls GitHub every 6 hours and shows an update badge.
 
 **Without X/Twitter keys:** Fred still works fully — news, market data, portfolio, Fred chat, and the globe all function. You lose X signal analysis and trending data.
 
 **Without Anthropic key:** Fred's conversational advisor, 4-hour briefings, and AI-generated summaries are disabled. All other features (live prices, charts, news, portfolio) still work.
 
-**.env file template:**
+**.env file template (copy from `.env.example`):**
 ```env
+# Generate strong keys first:
+# python3 -c "import secrets; print(secrets.token_hex(32))"
+
+SECRET_KEY=<64-char-hex>
+FREDAI_ADMIN_PASSWORD=<strong-password>   # remove after first login
+FREDAI_DEPLOY_SECRET=<64-char-hex>        # also add to GitHub Actions Secrets
+
 ANTHROPIC_API_KEY=sk-ant-...
 X_BEARER_TOKEN=AAAA...
 X_CONSUMER_KEY=...
@@ -389,9 +407,8 @@ X_CONSUMER_SECRET=...
 X_ACCESS_TOKEN=...
 X_ACCESS_TOKEN_SECRET=...
 NASDAQ_API_KEY=...           # optional
-SECRET_KEY=change_me_to_random_string
 PORT=8080
-AUTO_UPDATE=notify           # notify | auto | off
+AUTO_UPDATE=notify
 ```
 
 ---
@@ -555,29 +572,42 @@ fredai/
 All configuration is via environment variables in `.env`:
 
 ```env
-# Core
-PORT=8080                     # Port to listen on (default 8080)
-SECRET_KEY=...                # Flask session key — change in production
+# ── Core ─────────────────────────────────────────────────────────────────────
+PORT=8080
 AUTO_UPDATE=notify            # notify | auto | off
 
-# AI
+# ── Security (important — set before exposing to network) ────────────────────
+# Generate: python3 -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY=                   # Flask session signing key — auto-generated if unset (sessions don't survive restarts)
+
+# Initial admin account password (only used on first run, when DB is empty)
+# If unset, a random password is printed to the console once.
+# Remove from .env after first login.
+FREDAI_ADMIN_PASSWORD=
+
+# Deploy webhook secret — CI sends this as X-FredAI-Deploy header (HMAC-verified)
+# Set the same value in GitHub Actions → Settings → Secrets → FREDAI_DEPLOY_SECRET
+# If unset, CI-push updates are disabled (6h poll still works)
+FREDAI_DEPLOY_SECRET=
+
+# ── AI ───────────────────────────────────────────────────────────────────────
 ANTHROPIC_API_KEY=...         # Required for Fred chat + briefings
-ANTHROPIC_MODEL=claude-sonnet-4-6   # Model for main conversations
-ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001  # Model for fast summaries
+ANTHROPIC_MODEL=claude-sonnet-4-6
+ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001
 
-# Market data
-NASDAQ_API_KEY=...            # Optional — Nasdaq Data Link
+# ── Market data ──────────────────────────────────────────────────────────────
+NASDAQ_API_KEY=               # Optional — Nasdaq Data Link
 
-# Social signals
-X_BEARER_TOKEN=...
-X_CONSUMER_KEY=...
-X_CONSUMER_SECRET=...
-X_ACCESS_TOKEN=...
-X_ACCESS_TOKEN_SECRET=...
+# ── Social signals ───────────────────────────────────────────────────────────
+X_BEARER_TOKEN=
+X_CONSUMER_KEY=
+X_CONSUMER_SECRET=
+X_ACCESS_TOKEN=
+X_ACCESS_TOKEN_SECRET=
 
-# Scheduler intervals (seconds)
-MARKET_REFRESH_SECONDS=60     # How often to refresh live prices
-SCAN_INTERVAL_HOURS=4         # Full AI scan cycle interval
+# ── Scheduler ────────────────────────────────────────────────────────────────
+MARKET_REFRESH_SECONDS=60     # Live price refresh interval
+SCAN_INTERVAL_HOURS=4         # Full AI scan cycle
 ```
 
 ---
@@ -637,6 +667,64 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 | [GitHub Issues](https://github.com/essentialbit/fredai/issues) | Bug reports, confirmed problems |
 | [GitHub Discussions](https://github.com/essentialbit/fredai/discussions) | Ideas, questions, show & tell, general chat |
 | [Feature Requests](https://github.com/essentialbit/fredai/discussions/new?category=ideas) | Suggest what Fred should do next |
+
+---
+
+## Security
+
+Fred has been hardened against the OWASP top 10 attack classes. The following protections are active out of the box:
+
+### What's protected
+
+| Class | Protection |
+|-------|-----------|
+| **Brute-force login** | 10-attempt / 5-minute / per-IP rate limiter — returns HTTP 429 on lockout |
+| **Session fixation** | Session ID rotated on every login (`session.clear()` before new session) |
+| **Session persistence** | 30-day persistent cookies with `HttpOnly`, `SameSite=Lax`; `Secure` flag auto-set in HTTPS deployments |
+| **Weak `SECRET_KEY`** | Auto-generates a cryptographically random ephemeral key if `SECRET_KEY` is not set in `.env` — warns on console. Sessions don't survive restarts until you set a permanent key. |
+| **Default admin password** | No hardcoded password. On first run (empty DB), a random password is generated and printed to the console **once**. Set `FREDAI_ADMIN_PASSWORD` in `.env` to pin it. |
+| **Unauthenticated deploy webhook** | `POST /api/update/apply` requires `HMAC-SHA256` verification of `X-FredAI-Deploy` header against `FREDAI_DEPLOY_SECRET`. If the secret is not configured, CI-push updates are disabled entirely. |
+| **XSS** | All server-derived strings escaped via `esc()` before DOM insertion. No raw `innerHTML` with untrusted data. |
+| **SocketIO CORS** | `cors_allowed_origins=[]` — same-origin only, no wildcard. |
+| **Security headers** | Every response includes: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()`, and a Content Security Policy covering script/style/font/image/frame/connect sources. |
+| **Admin-only routes** | `/api/rnd/run` and `/api/user/reset-password` check `is_admin` — non-admins get HTTP 403. |
+| **Parameter bounds** | `hours`, `limit`, `page`, `days` are clamped to sane ranges server-side. `period` and `interval` for chart data are whitelisted to valid yfinance values. |
+| **Error message disclosure** | Exception details stripped from all user-facing API error responses — internal errors logged to console only. |
+| **SQL injection** | All DB queries use parameterised statements throughout `memory_store.py` — no string concatenation in SQL. |
+
+### Production hardening checklist
+
+Before exposing Fred to the internet:
+
+```bash
+# 1. Set a strong, permanent secret key
+python3 -c "import secrets; print(secrets.token_hex(32))"
+# → paste output as SECRET_KEY in .env
+
+# 2. Set a deploy secret (if using CI webhook push)
+python3 -c "import secrets; print(secrets.token_hex(32))"
+# → paste as FREDAI_DEPLOY_SECRET in .env
+# → add the same value as FREDAI_DEPLOY_SECRET in GitHub Actions Secrets
+
+# 3. Set initial admin password (before first run)
+# → set FREDAI_ADMIN_PASSWORD in .env
+# → remove after first login and change via the UI
+
+# 4. Put Fred behind a reverse proxy with TLS
+#    deploy/nginx.conf has a ready-to-use template
+#    Or use Caddy: caddy reverse-proxy --from yourdomain.com --to localhost:8080
+
+# 5. Set AUTO_UPDATE=notify (default) or review what auto applies
+```
+
+### Responsible disclosure
+
+Found a security issue? Please **do not open a public GitHub issue**. Instead:
+
+1. Open a **private** issue with the label `conduct` (only maintainers see it)
+2. Or email the maintainer directly via the GitHub profile contact
+
+We aim to acknowledge within 48 hours and patch within 7 days for critical issues.
 
 ---
 

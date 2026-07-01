@@ -23,6 +23,7 @@ from config import (
     ANTHROPIC_API_KEY, AI_PROVIDER,
     OLLAMA_URL, OLLAMA_MODEL,
     ANTHROPIC_MODEL_SUMMARY, ANTHROPIC_MODEL_CHAT, ANTHROPIC_MODEL_RND,
+    GEMINI_API_KEY, GEMINI_MODEL_SUMMARY, GEMINI_MODEL_CHAT, GEMINI_MODEL_RND,
     PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI,
 )
 from memory_store import get_signals, get_latest_summary, get_recent_alerts, get_trending_assets
@@ -48,9 +49,14 @@ def _resolve_provider() -> str:
         return "ollama"
     if AI_PROVIDER == "anthropic":
         return "anthropic" if _key_is_valid(ANTHROPIC_API_KEY) else "none"
-    # auto: prefer Anthropic API, fall back to Ollama, then none
+    if AI_PROVIDER == "gemini":
+        return "gemini" if _key_is_valid(GEMINI_API_KEY) else "none"
+    
+    # auto: prefer Anthropic API, fall back to Gemini API, then Ollama, then none
     if _key_is_valid(ANTHROPIC_API_KEY):
         return "anthropic"
+    if _key_is_valid(GEMINI_API_KEY):
+        return "gemini"
     if _ollama_available():
         return "ollama"
     return "none"
@@ -65,8 +71,9 @@ class _FredProvider:
         self._provider: str = _resolve_provider()
         print(f"[FredAI] AI provider: {self._provider}"
               + (f" | model: {ANTHROPIC_MODEL_CHAT}" if self._provider == "anthropic" else
+                 f" | model: {GEMINI_MODEL_CHAT}" if self._provider == "gemini" else
                  f" | model: {OLLAMA_MODEL}@{OLLAMA_URL}" if self._provider == "ollama" else
-                 " | No AI provider — set ANTHROPIC_API_KEY or start Ollama"))
+                 " | No AI provider — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or start Ollama"))
 
     @property
     def provider(self) -> str:
@@ -80,31 +87,103 @@ class _FredProvider:
         return self._anthropic_client
 
     def complete(self, messages: list, system: str, *,
-                 tier: str = "chat", max_tokens: int = 1024) -> str:
+                  tier: str = "chat", max_tokens: int = 1024) -> str:
         """
-        tier: "summary" → haiku | "chat" → sonnet | "rnd" → opus
-        Falls back to Ollama if Anthropic fails (quota, network, etc.)
+        tier: "summary" → haiku/flash | "chat" → sonnet/flash | "rnd" → opus/pro
+        Falls back through available providers (Anthropic -> Gemini -> Ollama) in case of errors.
         """
+        providers_to_try = []
         if self._provider == "anthropic":
-            result = self._anthropic_complete(messages, system, tier, max_tokens)
-            if not result.startswith("[Fred error"):
-                return result
-            # Hard API error — try Ollama if available
-            if _ollama_available():
-                print("[FredAI] Anthropic failed, falling back to Ollama")
-                return self._ollama_complete(messages, system, max_tokens)
-            return result
+            providers_to_try = ["anthropic", "gemini", "ollama"]
+        elif self._provider == "gemini":
+            providers_to_try = ["gemini", "anthropic", "ollama"]
+        elif self._provider == "ollama":
+            providers_to_try = ["ollama", "anthropic", "gemini"]
+        else:
+            providers_to_try = ["anthropic", "gemini", "ollama"]
 
-        if self._provider == "ollama":
-            return self._ollama_complete(messages, system, max_tokens)
+        errors = []
+        for p in providers_to_try:
+            if p == "anthropic" and _key_is_valid(ANTHROPIC_API_KEY):
+                result = self._anthropic_complete(messages, system, tier, max_tokens)
+                if not result.startswith("[Fred error"):
+                    return result
+                errors.append(f"Anthropic error: {result}")
+            elif p == "gemini" and _key_is_valid(GEMINI_API_KEY):
+                result = self._gemini_complete(messages, system, tier, max_tokens)
+                if not result.startswith("[Fred Gemini error"):
+                    return result
+                errors.append(f"Gemini error: {result}")
+            elif p == "ollama" and _ollama_available():
+                result = self._ollama_complete(messages, system, max_tokens)
+                if not result.startswith("[Ollama error"):
+                    return result
+                errors.append(f"Ollama error: {result}")
+
+        if errors:
+            return f"[FredAI Routing failure] All attempted providers failed:\n" + "\n".join(errors)
 
         return (
-            "[FredAI offline] No AI provider configured.\n"
+            "[FredAI offline] No AI provider configured or available.\n"
             "Options:\n"
             "  1. Add ANTHROPIC_API_KEY to .env for cloud inference\n"
-            "  2. Install Ollama (ollama.com) and run: ollama pull llama3.2\n"
+            "  2. Add GEMINI_API_KEY to .env for cloud inference\n"
+            "  3. Install Ollama (ollama.com) and run: ollama pull llama3.2\n"
             "     Then set AI_PROVIDER=ollama in .env"
         )
+
+    def _map_messages_for_anthropic(self, messages: list) -> list:
+        mapped = []
+        for msg in messages:
+            content = msg.get("content", "")
+            image = msg.get("image")
+            if image:
+                mapped.append({
+                    "role": msg["role"],
+                    "content": [
+                        {"type": "text", "text": content},
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": image["mime_type"],
+                                "data": image["base64_data"]
+                            }
+                        }
+                    ]
+                })
+            else:
+                mapped.append({"role": msg["role"], "content": content})
+        return mapped
+
+    def _map_messages_for_gemini(self, messages: list) -> list:
+        mapped = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "model"
+            content = msg.get("content", "")
+            image = msg.get("image")
+            parts = [{"text": content}]
+            if image:
+                parts.append({
+                    "inlineData": {
+                        "mimeType": image["mime_type"],
+                        "data": image["base64_data"]
+                    }
+                })
+            mapped.append({"role": role, "parts": parts})
+        return mapped
+
+    def _map_messages_for_ollama(self, messages: list) -> list:
+        mapped = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "assistant"
+            content = msg.get("content", "")
+            image = msg.get("image")
+            item = {"role": role, "content": content}
+            if image:
+                item["images"] = [image["base64_data"]]
+            mapped.append(item)
+        return mapped
 
     def _anthropic_complete(self, messages, system, tier, max_tokens) -> str:
         model_map = {
@@ -115,30 +194,57 @@ class _FredProvider:
         model = model_map.get(tier, ANTHROPIC_MODEL_CHAT)
         try:
             client = self._get_anthropic()
+            mapped = self._map_messages_for_anthropic(messages)
             resp = client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
                 system=system,
-                messages=messages,
+                messages=mapped,
             )
             return resp.content[0].text
         except Exception as e:
             return f"[Fred error: {e}]"
 
+    def _gemini_complete(self, messages, system, tier, max_tokens) -> str:
+        model_map = {
+            "summary": GEMINI_MODEL_SUMMARY,
+            "chat": GEMINI_MODEL_CHAT,
+            "rnd": GEMINI_MODEL_RND,
+        }
+        model = model_map.get(tier, GEMINI_MODEL_CHAT)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+        mapped_msgs = self._map_messages_for_gemini(messages)
+        payload = {
+            "contents": mapped_msgs,
+            "systemInstruction": {"parts": [{"text": system}]},
+            "generationConfig": {
+                "maxOutputTokens": max_tokens
+            }
+        }
+        try:
+            import requests as _req
+            r = _req.post(url, json=payload, timeout=60)
+            if r.status_code == 200:
+                data = r.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"]
+            return f"[Fred Gemini error: Status {r.status_code} - {r.text[:200]}]"
+        except Exception as e:
+            return f"[Fred Gemini error: {e}]"
+
     def _ollama_complete(self, messages, system, max_tokens) -> str:
         import re as _re, requests as _req
+        mapped = self._map_messages_for_ollama(messages)
         payload = {
             "model": OLLAMA_MODEL,
-            "messages": [{"role": "system", "content": system}] + messages,
+            "messages": [{"role": "system", "content": system}] + mapped,
             "stream": False,
-            "think": False,          # disable chain-of-thought for reasoning models (qwen3, deepseek-r1)
-            "options": {"num_predict": max_tokens + 512},  # headroom above max_tokens
+            "think": False,
+            "options": {"num_predict": max_tokens + 512},
         }
         try:
             r = _req.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
             r.raise_for_status()
             content = r.json()["message"]["content"]
-            # Belt-and-suspenders: strip any <think>...</think> blocks that leak through
             content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
             return content
         except Exception as e:
@@ -150,6 +256,7 @@ class _FredProvider:
             "provider": self._provider,
             "model": (
                 ANTHROPIC_MODEL_CHAT if self._provider == "anthropic"
+                else GEMINI_MODEL_CHAT if self._provider == "gemini"
                 else OLLAMA_MODEL if self._provider == "ollama"
                 else None
             ),
@@ -334,9 +441,20 @@ def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None) -> str:
     context = build_context_block(quotes, user_interests, portfolio)
     messages = []
-    for h in history[-8:]:
-        messages.append({"role": h["role"], "content": h["content"]})
-    messages.append({"role": "user", "content": f"{context}\n\nUSER: {user_message}"})
+    # Copy previous history items and retain image payloads
+    for h in history[:-1][-7:]:
+        item = {"role": h["role"], "content": h.get("content", "")}
+        if "image" in h:
+            item["image"] = h["image"]
+        messages.append(item)
+        
+    # Append the last user message, injecting the context into the text, and retaining image payload if present
+    last_item = history[-1] if history else {"role": "user"}
+    user_item = {"role": "user", "content": f"{context}\n\nUSER: {user_message}"}
+    if "image" in last_item:
+        user_item["image"] = last_item["image"]
+    messages.append(user_item)
+
     response = _provider.complete(messages, FRED_SYSTEM, tier="chat", max_tokens=1024)
 
     # Append disclaimer if response doesn't already contain one

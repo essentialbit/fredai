@@ -46,6 +46,11 @@ ANTHROPIC_MODEL_SUMMARY = os.getenv("ANTHROPIC_MODEL_SUMMARY", "claude-haiku-4-5
 ANTHROPIC_MODEL_CHAT = os.getenv("ANTHROPIC_MODEL_CHAT", "claude-sonnet-4-6")               # user chat
 ANTHROPIC_MODEL_RND = os.getenv("ANTHROPIC_MODEL_RND", "claude-opus-4-8")                   # R&D agent
 
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL_SUMMARY = os.getenv("GEMINI_MODEL_SUMMARY", "gemini-2.5-flash")
+GEMINI_MODEL_CHAT = os.getenv("GEMINI_MODEL_CHAT", "gemini-2.5-flash")
+GEMINI_MODEL_RND = os.getenv("GEMINI_MODEL_RND", "gemini-2.5-pro")
+
 # ── PRIVACY & DATA GOVERNANCE ─────────────────────────────────────────────────
 # GDPR (EU) · Australian Privacy Act · US CCPA compliance
 # All user data lives in SQLite on this device. Nothing is transmitted to

@@ -1592,10 +1592,27 @@ def on_connect():
 def on_chat(data):
     user_id = session.get("user_id", 0)
     user_msg = data.get("message", "").strip()
-    if not user_msg:
+    image_url = data.get("image_data")
+    if not user_msg and not image_url:
         return
+
+    image_obj = None
+    if image_url and ";base64," in image_url:
+        try:
+            header, base64_data = image_url.split(";base64,", 1)
+            mime_type = header.split("data:", 1)[1]
+            image_obj = {
+                "mime_type": mime_type,
+                "base64_data": base64_data
+            }
+        except Exception as e:
+            print(f"[Chat Multimodal] Image parse error: {e}")
+
     history = _chat_histories.setdefault(user_id, [])
-    history.append({"role": "user", "content": user_msg})
+    history_item = {"role": "user", "content": user_msg}
+    if image_obj:
+        history_item["image"] = image_obj
+    history.append(history_item)
 
     interests = get_user_interests(user_id, limit=5) if user_id else []
     # Pass portfolio for context — values anonymized per privacy settings in agent.py

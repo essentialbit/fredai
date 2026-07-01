@@ -663,6 +663,20 @@ html[data-tier="micro"] .wl-table td:nth-child(6) { display:none }
 html[data-tier="full"] #fred-reply,
 html[data-tier="ultra"] #fred-reply { display:block }
 
+.chat-upload-btn{
+  background:none;border:none;color:var(--t2);cursor:pointer;font-size:16px;padding:4px 8px;display:flex;align-items:center;justify-content:center;transition:color 0.2s;
+}
+.chat-upload-btn:hover{color:var(--cyan)}
+.image-preview-container{
+  display:none;align-items:center;position:relative;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:4px;padding:2px;margin-right:6px;
+}
+.image-preview-thumbnail{
+  height:24px;width:auto;border-radius:2px;
+}
+.image-preview-remove{
+  position:absolute;top:-6px;right:-6px;background:var(--red);color:white;border-radius:50%;width:12px;height:12px;font-size:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1;
+}
+
 /* ══ FRED CHAT DRAWER ════════════════════════════════════════════════════ */
 #fred-drawer{
   position:fixed;z-index:500;
@@ -1471,8 +1485,15 @@ html[data-tier="ultra"] #ops-picture{display:block}
   <!-- FRED CHAT BAR (all non-nano tiers) -->
   <div id="fred-bar">
     <span class="fred-icon">◈</span>
+    <!-- Image preview container -->
+    <div class="image-preview-container" id="fred-image-preview">
+      <img class="image-preview-thumbnail" id="fred-image-thumb" src="">
+      <button class="image-preview-remove" onclick="clearImageUpload()">×</button>
+    </div>
     <input id="fred-input" placeholder="Ask Fred... (What's driving NVDA? / Risk summary / Watchlist outlook)" onkeydown="if(event.key==='Enter')sendFred()">
     <div id="fred-reply">Ready.</div>
+    <input type="file" id="fred-image-file" style="display:none" accept="image/*" onchange="previewImage(this)">
+    <button class="chat-upload-btn" onclick="document.getElementById('fred-image-file').click()" title="Upload Image (Multimodal)">📷</button>
     <button class="btn btn-p" onclick="toggleDrawer()" style="white-space:nowrap">HISTORY</button>
     <button class="btn btn-p" onclick="sendFred()" style="white-space:nowrap">ASK →</button>
   </div>
@@ -2459,16 +2480,48 @@ async function nanoAsk(){
 }
 
 // ── FRED CHAT ─────────────────────────────────────────────────────────────
+let currentUploadedImage = null;
+
+function previewImage(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    currentUploadedImage = e.target.result;
+    g('fred-image-thumb').src = currentUploadedImage;
+    g('fred-image-preview').style.display = 'flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearImageUpload() {
+  currentUploadedImage = null;
+  g('fred-image-file').value = '';
+  g('fred-image-preview').style.display = 'none';
+  g('fred-image-thumb').src = '';
+}
+
 function sendFred(){
-  const inp=g('fred-input'),msg=inp.value.trim(); if(!msg) return;
-  inp.value=''; appendMsg('user',msg); appendThinking();
+  const inp=g('fred-input'),msg=inp.value.trim();
+  if(!msg && !currentUploadedImage) return;
+  inp.value='';
+  appendMsg('user', msg, currentUploadedImage);
+  appendThinking();
   const fr=g('fred-reply'); if(fr) fr.textContent='Fred thinking...';
   g('fred-drawer').classList.add('open');
-  socket.emit('chat_message',{message:msg});
+  socket.emit('chat_message', {
+    message: msg,
+    image_data: currentUploadedImage
+  });
+  clearImageUpload();
 }
-function appendMsg(role,text){
+function appendMsg(role,text,imageUrl){
   const d=document.createElement('div');d.className=`cm ${role}`;
-  d.innerHTML=`<div class="cr">${role==='user'?'You':'Fred'}</div><div class="cb">${esc(text)}</div>`;
+  let imgHtml = '';
+  if (imageUrl) {
+    imgHtml = `<div style="margin-top:6px;"><img src="${imageUrl}" style="max-width:200px;max-height:150px;border-radius:4px;border:1px solid var(--border)"></div>`;
+  }
+  d.innerHTML=`<div class="cr">${role==='user'?'You':'Fred'}</div><div class="cb">${esc(text)}${imgHtml}</div>`;
   g('fred-drawer').appendChild(d);g('fred-drawer').scrollTop=1e9;
 }
 function appendThinking(){

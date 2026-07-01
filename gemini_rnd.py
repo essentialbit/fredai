@@ -104,30 +104,46 @@ def run_gemini_rnd_cycle(implement: bool = True) -> dict:
     # Step 1: Discover
     proposals = run_gemini_discovery()
     if proposals:
+        from github_sync import sync_proposal_to_issue
         for p in proposals:
-            insert_feature_proposal(
-                title=f"[Gemini] {p.get('title', 'Untitled')}",
-                description=(
-                    f"[FSI L{p.get('fsi_level','?')}] {p.get('description','')}\n\n"
-                    f"Compounds with: {', '.join(p.get('compounds_with', []))}\n"
-                    f"Free tools: {', '.join(p.get('free_tools', []))}"
-                ),
-                category=p.get("category", "general"),
-                implementation_spec=p.get("implementation_spec", ""),
-                estimated_hours=p.get("estimated_hours", 2),
-                impact_score=p.get("impact_score", 5.0),
-                priority=p.get("priority", 3),
+            description = (
+                f"[FSI L{p.get('fsi_level','?')}] {p.get('description','')}\n\n"
+                f"Compounds with: {', '.join(p.get('compounds_with', []))}\n"
+                f"Free tools: {', '.join(p.get('free_tools', []))}"
             )
+            category = p.get("category", "general")
+            estimated_hours = p.get("estimated_hours", 2)
+            impact_score = p.get("impact_score", 5.0)
+            proposal_id = insert_feature_proposal(
+                title=p.get("title", "Untitled"),
+                description=description,
+                category=category,
+                implementation_spec=p.get("implementation_spec", ""),
+                estimated_hours=estimated_hours,
+                impact_score=impact_score,
+                priority=p.get("priority", 3),
+                proposed_by="gemini",
+            )
+            try:
+                sync_proposal_to_issue({
+                    "id": proposal_id, "title": p.get("title", "Untitled"),
+                    "description": description, "category": category,
+                    "implementation_spec": p.get("implementation_spec", ""),
+                    "estimated_hours": estimated_hours, "impact_score": impact_score,
+                    "proposed_by": "gemini",
+                })
+            except Exception as e:
+                print(f"[Gemini RnD] Issue sync failed for '{p.get('title')}': {e}")
         results["discovered"] = len(proposals)
         results["fsi_levels"] = [p.get("fsi_level") for p in proposals]
 
     # Step 2: Pick and implement top proposal
     if implement:
-        # We fetch proposals created by Gemini
-        # Since titles are prefixed with '[Gemini] ', we can search specifically or pick the top proposed
+        # proposed_by is now set reliably at insertion time (no more relying
+        # on a "[Gemini] " title-prefix hack to tell agents' proposals apart).
         top = get_top_proposals(status="proposed", limit=10)
-        gemini_proposals = [p for p in top if p["title"].startswith("[Gemini]")]
-        
+        gemini_proposals = [p for p in top if p.get("proposed_by") == "gemini"]
+
         if gemini_proposals:
             proposal = gemini_proposals[0]
             print(f"\n[Gemini RnD] Implementing: {proposal['title']}")

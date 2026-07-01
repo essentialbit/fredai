@@ -1,6 +1,7 @@
 import sqlite3
 import json
 import hashlib
+import re
 from datetime import datetime, timedelta
 from contextlib import contextmanager
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -186,6 +187,13 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS agent_track_record (
+            agent TEXT PRIMARY KEY,
+            proposals_implemented INTEGER DEFAULT 0,
+            proposals_succeeded INTEGER DEFAULT 0,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
@@ -201,6 +209,7 @@ def init_db():
         # Lightweight migrations for columns added after initial release —
         # CREATE TABLE IF NOT EXISTS above only covers fresh databases.
         for ddl in (
+            "ALTER TABLE feature_backlog ADD COLUMN github_issue_number INTEGER",
             "ALTER TABLE users ADD COLUMN oauth_github_id TEXT",
             "ALTER TABLE users ADD COLUMN oauth_google_sub TEXT",
         ):
@@ -519,20 +528,101 @@ def insert_alert(level, title, message, asset=None):
 
 # ── FEATURE BACKLOG ───────────────────────────────────────────────────────────
 
+_DEDUP_STOPWORDS = {
+    "the", "a", "an", "of", "to", "for", "and", "or", "in", "on", "with",
+    "is", "are", "this", "that", "implement", "add", "integrate", "upgrade",
+    "new", "support", "via", "using", "into",
+    "gemini", "claude",  # provenance markers (e.g. the "[Gemini] " title prefix), not semantic content
+}
+
+
+def _tokenize(text: str) -> set[str]:
+    words = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {w for w in words if w not in _DEDUP_STOPWORDS and len(w) > 2}
+
+
+def _find_similar_proposal(conn, title: str, description: str, category: str, threshold: float = 0.3):
+    """Cheap keyword-overlap dedup across agents — catches e.g. Gemini's
+    '[Gemini] FinBERT integration' matching Claude's 'FinBERT sentiment
+    upgrade' even though the titles don't match exactly. Deliberately a
+    Jaccard word-overlap check rather than embeddings, so it stays safe to
+    run on constrained hardware (Raspberry Pi Zero, per MISSION.md)."""
+    target = _tokenize(title) | _tokenize(description)
+    if not target:
+        return None
+    candidates = conn.execute(
+        "SELECT id, title, description FROM feature_backlog "
+        "WHERE status IN ('proposed','in_progress') AND category=?",
+        (category,)
+    ).fetchall()
+    for row in candidates:
+        other = _tokenize(row["title"]) | _tokenize(row["description"])
+        if not other:
+            continue
+        overlap = len(target & other) / len(target | other)
+        if overlap >= threshold:
+            return row["id"]
+    return None
+
+
 def insert_feature_proposal(title, description, category, implementation_spec="",
                              estimated_hours=2, impact_score=5.0, priority=3,
-                             proposed_by="rnd_cycle"):
+                             proposed_by="rnd_cycle") -> int:
     with get_conn() as conn:
         # Avoid exact duplicates
         existing = conn.execute("SELECT id FROM feature_backlog WHERE title=?", (title,)).fetchone()
         if existing:
             return existing["id"]
-        conn.execute(
+
+        dupe_id = _find_similar_proposal(conn, title, description, category)
+        if dupe_id:
+            return dupe_id
+
+        cur = conn.execute(
             """INSERT INTO feature_backlog
                (title, description, category, implementation_spec, estimated_hours, impact_score, priority, proposed_by)
                VALUES (?,?,?,?,?,?,?,?)""",
             (title, description, category, implementation_spec, estimated_hours, impact_score, priority, proposed_by)
         )
+        return cur.lastrowid
+
+
+def set_github_issue_number(proposal_id: int, issue_number: int):
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE feature_backlog SET github_issue_number=? WHERE id=?",
+            (issue_number, proposal_id)
+        )
+
+
+def get_proposal_by_issue_number(issue_number: int) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM feature_backlog WHERE github_issue_number=?", (issue_number,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_track_record(agent: str) -> dict:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM agent_track_record WHERE agent=?", (agent,)
+        ).fetchone()
+    if not row:
+        return {"agent": agent, "proposals_implemented": 0, "proposals_succeeded": 0}
+    return dict(row)
+
+
+def _bump_track_record(conn, agent: str, success: bool):
+    conn.execute(
+        """INSERT INTO agent_track_record (agent, proposals_implemented, proposals_succeeded)
+           VALUES (?, 1, ?)
+           ON CONFLICT(agent) DO UPDATE SET
+             proposals_implemented = proposals_implemented + 1,
+             proposals_succeeded = proposals_succeeded + excluded.proposals_succeeded,
+             updated_at = CURRENT_TIMESTAMP""",
+        (agent, 1 if success else 0)
+    )
 
 
 def get_top_proposals(status="proposed", limit=5) -> list[dict]:
@@ -563,10 +653,13 @@ def mark_proposal_in_progress(proposal_id: int):
 def mark_proposal_done(proposal_id: int, success: bool, notes: str = ""):
     status = "implemented" if success else "failed"
     with get_conn() as conn:
+        row = conn.execute("SELECT proposed_by FROM feature_backlog WHERE id=?", (proposal_id,)).fetchone()
         conn.execute(
             "UPDATE feature_backlog SET status=?, implementation_notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (status, notes, proposal_id)
         )
+        if row and row["proposed_by"] in ("claude", "gemini"):
+            _bump_track_record(conn, row["proposed_by"], success)
 
 
 def get_recent_alerts(limit=20) -> list[dict]:

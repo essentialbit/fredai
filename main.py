@@ -2123,6 +2123,17 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Gemini Community] Error: {e}")
 
+    def job_agent_debate():
+        """Claude and Gemini review each other's open proposal Issues and
+        post a stance + weighted consensus score every 6h."""
+        try:
+            from debate import run_debate_cycle
+            summary = run_debate_cycle()
+            print(f"[Debate] Checked {summary['issues_checked']} issue(s), "
+                  f"posted {summary['stances_posted']} stance(s), {summary['errors']} error(s)")
+        except Exception as e:
+            print(f"[Debate] Error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx")
@@ -2136,6 +2147,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)
     scheduler.add_job(job_gemini_community, "interval", hours=6, id="gemini_community", jitter=2100)
+    scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

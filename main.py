@@ -43,6 +43,8 @@ from cascade_engine import cascade_for_event, run_cascade_check, detect_major_mo
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS
+import installer as _installer
+import updater as _updater
 
 _macro_cache: dict = {}
 
@@ -129,6 +131,8 @@ app = Flask(__name__, template_folder="templates")
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
+
+_updater.init(socketio)
 
 _quotes_cache: dict = {}
 _last_scan: datetime = datetime.min
@@ -365,6 +369,68 @@ def api_rnd_run():
             socketio.emit("rnd_complete", {"error": str(e)})
     socketio.start_background_task(_run)
     return jsonify({"status": "R&D cycle started"})
+
+
+# ── INSTALL / DEVICE / UPDATE ROUTES ─────────────────────────────────────────
+
+@app.route("/api/device")
+def api_device():
+    """Return detected platform info and install capabilities. No auth — used pre-login."""
+    device = _installer.detect_device()
+    os_family = device["os_family"]
+    capabilities = {
+        "pwa": True,
+        "native_shortcut": os_family in ("macos", "windows", "linux"),
+        "dock": os_family == "macos",
+        "start_menu": os_family == "windows",
+        "app_menu": os_family == "linux",
+        "taskbar": os_family in ("windows", "linux"),
+        "ios_pwa": False,
+        "android_pwa": False,
+    }
+    return jsonify({**device, "capabilities": capabilities})
+
+
+@app.route("/api/install", methods=["POST"])
+@login_required
+def api_install():
+    """Autonomously install FredAI shortcuts on the host device."""
+    port = int(request.json.get("port", PORT)) if request.json else PORT
+    try:
+        result = _installer.install(port)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e), "actions": [], "warnings": []}), 500
+
+
+@app.route("/api/update/status")
+@login_required
+def api_update_status():
+    return jsonify(_updater.status())
+
+
+@app.route("/api/update/check", methods=["POST"])
+@login_required
+def api_update_check():
+    """Poll GitHub for new commits (async-safe, returns immediately)."""
+    def _check():
+        _updater.check_for_updates(emit_event=True)
+    socketio.start_background_task(_check)
+    return jsonify({"status": "checking"})
+
+
+@app.route("/api/update/apply", methods=["POST"])
+@login_required
+def api_update_apply():
+    """Pull latest from GitHub and report result."""
+    result = _updater.apply_update()
+    if result["updated"]:
+        socketio.emit("alert", {
+            "title": "FredAI Updated",
+            "message": f"Updated to {result['sha_after'][:8]}. Restart to apply.",
+            "level": "info",
+        })
+    return jsonify(result)
 
 
 # ── PRIVACY / DATA GOVERNANCE ROUTES ──────────────────────────────────────────
@@ -1219,6 +1285,13 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[TechAlerts] Error: {e}")
 
+    def job_update_check():
+        """Poll GitHub every 6h for new FredAI commits."""
+        try:
+            _updater.check_for_updates(emit_event=True)
+        except Exception as e:
+            print(f"[Updater] Check error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx")  # ASX refresh every 2min
@@ -1228,6 +1301,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
+    scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.start()
 
     # Non-blocking startup: fetch market data + scan in background

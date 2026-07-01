@@ -289,6 +289,30 @@ html[data-tier="nano"] #disc-footer-bar { display:none }
 .user-badge{padding:3px 9px;border-radius:20px;background:rgba(155,89,255,.1);border:1px solid rgba(155,89,255,.25);font-size:var(--font-xs);color:var(--purple);cursor:pointer;white-space:nowrap;min-height:var(--touch);display:flex;align-items:center}
 .ws-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0}
 .ws-dot.off{background:var(--red)}
+.install-btn{padding:3px 10px;border-radius:20px;background:rgba(0,255,136,.08);border:1px solid rgba(0,255,136,.3);font-size:var(--font-xs);color:var(--green);cursor:pointer;white-space:nowrap;font-family:var(--mono);letter-spacing:.5px;transition:background .2s}
+.install-btn:hover{background:rgba(0,255,136,.18)}
+html[data-tier="nano"] .install-btn{display:none!important}
+
+/* ══ INSTALL MODAL ══════════════════════════════════════════════════════════ */
+#install-modal{position:fixed;inset:0;background:rgba(3,8,15,.88);z-index:9000;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+#install-modal.open{display:flex}
+.install-box{background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:28px 32px;max-width:480px;width:90%;box-shadow:0 0 40px rgba(0,255,136,.1)}
+.install-box h2{margin:0 0 6px;font-size:18px;color:var(--t1);font-weight:600}
+.install-box .install-device{font-size:11px;color:var(--t3);margin-bottom:20px;font-family:var(--mono)}
+.install-actions{display:flex;flex-direction:column;gap:10px;margin-bottom:20px}
+.install-action-btn{padding:11px 18px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid;transition:all .15s;text-align:left;display:flex;align-items:center;gap:10px}
+.install-action-btn.primary{background:rgba(0,255,136,.1);border-color:rgba(0,255,136,.4);color:var(--green)}
+.install-action-btn.primary:hover{background:rgba(0,255,136,.2)}
+.install-action-btn.secondary{background:rgba(0,180,255,.07);border-color:rgba(0,180,255,.3);color:var(--blue)}
+.install-action-btn.secondary:hover{background:rgba(0,180,255,.15)}
+.install-action-btn:disabled{opacity:.4;cursor:not-allowed}
+.install-result{font-size:11px;color:var(--t2);background:var(--bg3);border-radius:4px;padding:10px;font-family:var(--mono);max-height:120px;overflow-y:auto;display:none}
+.install-result.show{display:block}
+.install-result .ok{color:var(--green)}
+.install-result .warn{color:var(--yellow)}
+.install-close{margin-top:16px;width:100%;padding:8px;background:transparent;border:1px solid var(--border);border-radius:4px;color:var(--t3);cursor:pointer;font-size:12px}
+.install-close:hover{border-color:var(--border2);color:var(--t2)}
+.update-badge{display:none;position:absolute;top:-4px;right:-4px;width:8px;height:8px;border-radius:50%;background:var(--yellow);border:2px solid var(--bg1)}
 
 /* Hide header elements on tiny screens */
 html[data-tier="micro"] #idx-bar,
@@ -1053,6 +1077,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
     </div>
     <div class="hdr-right">
       <div class="scan-timer">NEXT <span id="scan-cdwn">--</span></div>
+      <button id="btn-install" class="install-btn" onclick="openInstallModal()" title="Install FredAI on this device" style="display:none">+ Install</button>
       <div class="user-badge" id="user-badge" onclick="doLogout()">-- ×</div>
       <div class="ws-dot off" id="ws-dot" title="WebSocket"></div>
     </div>
@@ -1355,6 +1380,27 @@ html[data-tier="ultra"] #ops-picture{display:block}
 
 </div><!-- /app-shell -->
 
+<!-- INSTALL MODAL -->
+<div id="install-modal">
+  <div class="install-box">
+    <h2>Install FredAI</h2>
+    <div class="install-device" id="install-device-label">Detecting device...</div>
+    <div class="install-actions" id="install-actions">
+      <button class="install-action-btn primary" id="btn-native-install" onclick="doNativeInstall()" style="display:none">
+        <span id="native-install-icon">+</span>
+        <span id="native-install-label">Install App Shortcut</span>
+      </button>
+      <button class="install-action-btn secondary" id="btn-pwa-install" onclick="doPwaInstall()" style="display:none">
+        <span>↓</span>
+        <span>Add to Home Screen / Browser Install</span>
+      </button>
+      <div id="install-pwa-instructions" style="display:none;font-size:11px;color:var(--t2);padding:10px;background:var(--bg3);border-radius:4px;line-height:1.6"></div>
+    </div>
+    <div class="install-result" id="install-result"></div>
+    <button class="install-close" onclick="closeInstallModal()">Close</button>
+  </div>
+</div>
+
 <!-- FRED DRAWER -->
 <div id="fred-drawer"></div>
 
@@ -1428,6 +1474,148 @@ function enterApp(name) {
   if (IS_ULTRA) g('ultra-trend-mini').style.display='';
   loadInitData();
   checkDisclaimer();
+  initInstaller();
+}
+
+// ── INSTALL / UPDATE ──────────────────────────────────────────────────────
+let _pwaPrompt = null;
+let _deviceInfo = null;
+let _isInstalled = window.matchMedia('(display-mode: standalone)').matches
+                || window.navigator.standalone === true;
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _pwaPrompt = e;
+  if (!_isInstalled) _showInstallBtn();
+});
+
+window.addEventListener('appinstalled', () => {
+  _isInstalled = true;
+  g('btn-install') && (g('btn-install').style.display = 'none');
+});
+
+socket.on('update_available', d => {
+  prependAlert({ title: 'Update Available', message: d.message, level: 'info' });
+  const btn = g('btn-install');
+  if (btn) {
+    const badge = btn.querySelector('.update-badge') || (() => {
+      const b = document.createElement('span');
+      b.className = 'update-badge';
+      btn.style.position = 'relative';
+      btn.appendChild(b);
+      return b;
+    })();
+    badge.style.display = 'block';
+    btn.style.display = '';
+  }
+});
+
+function _showInstallBtn() {
+  const btn = g('btn-install');
+  if (btn) btn.style.display = '';
+}
+
+async function initInstaller() {
+  if (_isInstalled) return;
+  try {
+    const r = await fetch('/api/device');
+    if (!r.ok) return;
+    _deviceInfo = await r.json();
+    const cap = _deviceInfo.capabilities || {};
+    if (cap.native_shortcut || _pwaPrompt) _showInstallBtn();
+  } catch(e) {}
+}
+
+function openInstallModal() {
+  const modal = g('install-modal');
+  modal.classList.add('open');
+  _renderInstallModal();
+}
+
+function closeInstallModal() {
+  g('install-modal').classList.remove('open');
+}
+
+function _renderInstallModal() {
+  const d = _deviceInfo;
+  const lbl = g('install-device-label');
+  const btnNative = g('btn-native-install');
+  const btnPwa = g('btn-pwa-install');
+  const pwaInstr = g('install-pwa-instructions');
+
+  if (d) {
+    lbl.textContent = `${d.device_label || d.device_type} · ${d.os_family}`;
+    const cap = d.capabilities || {};
+
+    if (cap.native_shortcut) {
+      btnNative.style.display = '';
+      let label = 'Install App Shortcut';
+      let icon = '+';
+      if (d.os_family === 'macos') { label = 'Install to Applications + Dock'; icon = ''; }
+      else if (d.os_family === 'windows') { label = 'Add to Desktop + Start Menu'; icon = ''; }
+      else if (d.os_family === 'linux') { label = 'Add to App Menu + Desktop'; icon = ''; }
+      g('native-install-icon').textContent = icon;
+      g('native-install-label').textContent = label;
+    }
+
+    if (_pwaPrompt) {
+      btnPwa.style.display = '';
+    } else if (d.os_family === 'unknown' || !cap.native_shortcut) {
+      pwaInstr.style.display = '';
+      if (/iphone|ipad|ipod/i.test(navigator.userAgent)) {
+        pwaInstr.innerHTML = '<b>iPhone/iPad:</b> Tap the Share button → "Add to Home Screen" → Add';
+      } else if (/android/i.test(navigator.userAgent)) {
+        pwaInstr.innerHTML = '<b>Android:</b> Tap ⋮ menu → "Add to Home screen" or "Install app"';
+      } else {
+        pwaInstr.innerHTML = 'Open in Chrome or Edge → click Install (⊕) in the address bar, or use browser menu → Install FredAI';
+      }
+    }
+  } else {
+    lbl.textContent = 'Detecting device...';
+  }
+}
+
+async function doNativeInstall() {
+  const btn = g('btn-native-install');
+  btn.disabled = true;
+  btn.querySelector('span:last-child').textContent = 'Installing...';
+  try {
+    const r = await fetch('/api/install', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const data = await r.json();
+    _showInstallResult(data);
+  } catch(e) {
+    _showInstallResult({ success: false, actions: [], warnings: [`Error: ${e.message}`], instructions: '' });
+  } finally {
+    btn.disabled = false;
+    btn.querySelector('span:last-child').textContent = g('native-install-label').textContent;
+  }
+}
+
+async function doPwaInstall() {
+  if (_pwaPrompt) {
+    _pwaPrompt.prompt();
+    const { outcome } = await _pwaPrompt.userChoice;
+    if (outcome === 'accepted') {
+      _isInstalled = true;
+      closeInstallModal();
+    }
+    _pwaPrompt = null;
+    g('btn-pwa-install').style.display = 'none';
+  }
+}
+
+function _showInstallResult(data) {
+  const el = g('install-result');
+  let html = '';
+  if (data.actions && data.actions.length) {
+    html += data.actions.map(a => `<div class="ok">✓ ${a}</div>`).join('');
+  }
+  if (data.warnings && data.warnings.length) {
+    html += data.warnings.map(w => `<div class="warn">! ${w}</div>`).join('');
+  }
+  if (data.instructions) html += `<div style="margin-top:6px;color:var(--t2)">${data.instructions}</div>`;
+  el.innerHTML = html;
+  el.classList.add('show');
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────

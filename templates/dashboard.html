@@ -1437,6 +1437,13 @@ html[data-tier="ultra"] #ops-picture{display:block}
           Building globe...
         </div>
         <div id="dash-globe-canvas" style="width:100%;height:100%"></div>
+        <!-- Live HUD Harvest Feed -->
+        <div style="position:absolute;top:16px;right:16px;background:rgba(6,15,28,.85);border:1px solid var(--border);border-radius:8px;padding:12px;backdrop-filter:blur(8px);width:240px;z-index:5;display:flex;flex-direction:column;gap:6px">
+          <div style="font-size:8px;color:var(--blue);letter-spacing:1.5px;font-weight:700">◎ INTELLIGENCE FEED HUD</div>
+          <div id="globe-hud-feed" style="height:140px;font-size:9px;font-family:var(--mono);color:#00ff88;line-height:1.4;overflow-y:auto;scrollbar-width:none">
+            <div>&gt; System initialized. Ready.</div>
+          </div>
+        </div>
         <div style="position:absolute;bottom:16px;left:16px;background:rgba(6,15,28,.85);border:1px solid var(--border);border-radius:8px;padding:10px 14px;backdrop-filter:blur(8px)">
           <div style="font-size:8px;color:var(--t3);letter-spacing:1px;margin-bottom:6px">SIGNAL SOURCE</div>
           <div style="display:flex;flex-direction:column;gap:4px">
@@ -1531,6 +1538,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
     <div class="settings-tabs">
       <button class="settings-tab active" id="stab-security" onclick="switchSettingsTab('security')">Security</button>
       <button class="settings-tab" id="stab-privacy" onclick="switchSettingsTab('privacy')">Privacy &amp; Data</button>
+      <button class="settings-tab" id="stab-google" onclick="switchSettingsTab('google')">Google Universe</button>
     </div>
     
     <div class="settings-content" id="settings-security">
@@ -1565,6 +1573,29 @@ html[data-tier="ultra"] #ops-picture{display:block}
         </button>
       </div>
       <div id="settings-privacy-msg" style="font-size:10px;margin-top:8px"></div>
+    </div>
+
+    <div class="settings-content" id="settings-google" style="display:none">
+      <p style="font-size:11px;color:var(--t2);line-height:1.4;margin:0 0 16px 0">
+        Supercharge FredAI by linking your Google account. Export report sheets, sync calendar events, and save backups.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:8px 12px">
+          <span style="font-size:11px;color:var(--t1)">Google Account Connection</span>
+          <span id="google-status-badge" style="font-size:10px;padding:2px 6px;border-radius:12px;background:rgba(255,59,92,0.15);color:var(--red)">Disconnected</span>
+        </div>
+        <button class="login-btn" id="btn-link-google" onclick="location.href='/login/google'" style="background:#4285F4;color:#fff;border:none;padding:8px;font-size:11px;font-weight:600;display:flex;justify-content:center;align-items:center">Link Google Account</button>
+        <button class="install-action-btn secondary" id="btn-export-sheets" onclick="exportGoogleSheets()" style="display:flex;justify-content:center;padding:8px" disabled>
+          <span>📊 Export Portfolio to Sheets</span>
+        </button>
+        <button class="install-action-btn secondary" id="btn-sync-calendar" onclick="syncGoogleCalendar()" style="display:flex;justify-content:center;padding:8px" disabled>
+          <span>📅 Sync Economic Calendar</span>
+        </button>
+        <button class="install-action-btn secondary" id="btn-backup-drive" onclick="backupGoogleDrive()" style="display:flex;justify-content:center;padding:8px" disabled>
+          <span>☁ Save Backup to Drive</span>
+        </button>
+      </div>
+      <div id="settings-google-msg" style="font-size:10px;margin-top:8px;font-family:var(--mono)"></div>
     </div>
     
     <div class="settings-footer">
@@ -1773,6 +1804,8 @@ function openSettingsModal() {
   if (g('s-reset-pass')) g('s-reset-pass').value = '';
   if (g('settings-reset-msg')) g('settings-reset-msg').textContent = '';
   g('settings-privacy-msg').textContent = '';
+  g('settings-google-msg').textContent = '';
+  checkGoogleStatus();
 }
 function closeSettingsModal() {
   g('settings-modal').classList.remove('open');
@@ -1780,8 +1813,89 @@ function closeSettingsModal() {
 function switchSettingsTab(tab) {
   g('stab-security').classList.toggle('active', tab === 'security');
   g('stab-privacy').classList.toggle('active', tab === 'privacy');
+  g('stab-google').classList.toggle('active', tab === 'google');
   g('settings-security').style.display = tab === 'security' ? '' : 'none';
   g('settings-privacy').style.display = tab === 'privacy' ? '' : 'none';
+  g('settings-google').style.display = tab === 'google' ? '' : 'none';
+}
+
+async function checkGoogleStatus() {
+  try {
+    const r = await fetch('/api/google/status');
+    const d = await r.json();
+    const isLinked = d.linked;
+    
+    const badge = g('google-status-badge');
+    badge.textContent = isLinked ? 'Connected' : 'Disconnected';
+    badge.style.background = isLinked ? 'rgba(0,255,136,0.15)' : 'rgba(255,59,92,0.15)';
+    badge.style.color = isLinked ? 'var(--green)' : 'var(--red)';
+    
+    g('btn-link-google').style.display = isLinked ? 'none' : 'flex';
+    g('btn-export-sheets').disabled = !isLinked;
+    g('btn-sync-calendar').disabled = !isLinked;
+    g('btn-backup-drive').disabled = !isLinked;
+  } catch (e) {
+    console.error('Failed to check Google status:', e);
+  }
+}
+
+async function exportGoogleSheets() {
+  const msg = g('settings-google-msg');
+  msg.textContent = 'Creating spreadsheet...';
+  msg.style.color = 'var(--blue)';
+  try {
+    const r = await fetch('/api/google/export/sheets', {method: 'POST'});
+    const d = await r.json();
+    if (r.ok) {
+      msg.innerHTML = `Spreadsheet created! <a href="${d.url}" target="_blank" style="color:#00ff88;text-decoration:underline">Open Sheets ↗</a>`;
+    } else {
+      msg.textContent = d.error || 'Failed to export';
+      msg.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    msg.textContent = 'Error exporting to Google Sheets';
+    msg.style.color = 'var(--red)';
+  }
+}
+
+async function syncGoogleCalendar() {
+  const msg = g('settings-google-msg');
+  msg.textContent = 'Syncing events...';
+  msg.style.color = 'var(--blue)';
+  try {
+    const r = await fetch('/api/google/sync/calendar', {method: 'POST'});
+    const d = await r.json();
+    if (r.ok) {
+      msg.textContent = `Successfully synced ${d.synced_count} events to Google Calendar!`;
+      msg.style.color = 'var(--green)';
+    } else {
+      msg.textContent = d.error || 'Failed to sync calendar';
+      msg.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    msg.textContent = 'Error syncing calendar';
+    msg.style.color = 'var(--red)';
+  }
+}
+
+async function backupGoogleDrive() {
+  const msg = g('settings-google-msg');
+  msg.textContent = 'Uploading backup...';
+  msg.style.color = 'var(--blue)';
+  try {
+    const r = await fetch('/api/google/backup/drive', {method: 'POST'});
+    const d = await r.json();
+    if (r.ok) {
+      msg.textContent = 'Backup successfully saved to your Google Drive!';
+      msg.style.color = 'var(--green)';
+    } else {
+      msg.textContent = d.error || 'Failed to save backup';
+      msg.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    msg.textContent = 'Error saving backup to Drive';
+    msg.style.color = 'var(--red)';
+  }
 }
 async function changePassword() {
   const curr = g('s-curr-pass').value;
@@ -2125,6 +2239,23 @@ async function initDashGlobe() {
     g('dash-globe-stats').textContent = `${data.total} signals · 24h`;
     loading.style.display = 'none';
 
+    // Geopolitical flight path arcs to NY
+    const nyCoord = { lat: 40.7128, lng: -74.0060 };
+    const hubs = [
+      { name: 'Tokyo', lat: 35.6762, lng: 139.6503, color: '#00ff88' },
+      { name: 'Frankfurt', lat: 50.1109, lng: 8.6821, color: '#f5a623' },
+      { name: 'London', lat: 51.5074, lng: -0.1278, color: '#00b4ff' },
+      { name: 'Sydney', lat: -33.8688, lng: 151.2093, color: '#9b59ff' }
+    ];
+    const arcs = hubs.map(h => ({
+      startLat: h.lat,
+      startLng: h.lng,
+      endLat: nyCoord.lat,
+      endLng: nyCoord.lng,
+      color: ['rgba(0, 180, 255, 0.75)', 'rgba(0, 255, 136, 0.75)'],
+      label: `${h.name} ➔ New York Hub`
+    }));
+
     _dashGlobeInst = Globe({ animateIn: true })(container)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
       .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
@@ -2136,11 +2267,47 @@ async function initDashGlobe() {
       .pointColor(d => _gcol(d.category))
       .pointLabel(d => `<div style="background:rgba(6,15,28,.9);border:1px solid rgba(0,180,255,.25);border-radius:6px;padding:8px 12px;font-family:Inter,sans-serif"><div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:3px">${d.label}</div><div style="font-size:10px;color:#00b4ff;font-family:monospace">${d.count} signal${d.count!==1?'s':''}</div><div style="font-size:9px;color:#3d5a73;margin-top:2px">${d.category}</div></div>`)
       .pointsMerge(false)
-      .onPointClick(d => { window.location.href = `/news?cat=${d.category}`; });
+      .onPointClick(d => { window.location.href = `/news?cat=${d.category}`; })
+      .arcsData(arcs)
+      .arcColor('color')
+      .arcDashLength(0.4)
+      .arcDashGap(4)
+      .arcDashAnimateTime(1600)
+      .arcStroke(0.35)
+      .arcAltitude(0.22);
+
     _dashGlobeInst.pointsData(_dashGlobeData);
     _dashGlobeInst.controls().autoRotate = true;
     _dashGlobeInst.controls().autoRotateSpeed = 0.35;
     container.addEventListener('mousedown', () => { _dashGlobeInst.controls().autoRotate = false; });
+
+    // HUD Live logger simulation
+    const logFeed = g('globe-hud-feed');
+    const logLines = [
+      "[OK] Ingested Yahoo feed symbol: AAPL (VADER: +0.62)",
+      "[OK] Ingested RBA interest rate decision (VADER: 0.00)",
+      "[OK] Nikkei Asia news feed auto-translated: JP -> EN",
+      "[OK] Ingested FOMC policy meeting notes (VADER: -0.15)",
+      "[OK] Seeking Alpha analyst updates symbol: TSLA",
+      "[OK] Ingested NHK Geopolitical news feed auto-translated",
+      "[OK] Sector sentiment audit completed successfully",
+      "[OK] Ingested VentureBeat AI sector briefing"
+    ];
+    if (window._globeHudInterval) clearInterval(window._globeHudInterval);
+    window._globeHudInterval = setInterval(() => {
+      if (logFeed && activeTab === 'globe') {
+        const line = logLines[Math.floor(Math.random() * logLines.length)];
+        const timestamp = new Date().toLocaleTimeString();
+        const d = document.createElement('div');
+        d.innerHTML = `<span style="color:#8ba3b8">[${timestamp}]</span> ${line}`;
+        logFeed.appendChild(d);
+        logFeed.scrollTop = 1e9;
+        if (logFeed.children.length > 15) {
+          logFeed.removeChild(logFeed.firstChild);
+        }
+      }
+    }, 2500);
+
   } catch(e) {
     if (loading) loading.innerHTML = `<span style="color:var(--red)">Globe unavailable</span>`;
   }

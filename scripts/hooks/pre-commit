@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Blocks committing secrets/local data that keep sneaking back in despite .gitignore.
+set -euo pipefail
+
+blocked_pattern='(^|/)\.env$|\.env\.[^.]+$|\.db$|(^|/)__pycache__/'
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+hits=$(echo "$staged" | grep -E "$blocked_pattern" || true)
+
+if [ -n "$hits" ]; then
+    echo "pre-commit: blocked — these files must never be committed:" >&2
+    echo "$hits" | sed 's/^/  /' >&2
+    echo "If this is a false positive, use 'git commit --no-verify'." >&2
+    exit 1
+fi

@@ -46,6 +46,33 @@ from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI
 import installer as _installer
 import updater as _updater
 
+
+def _ensure_git_hooks_path():
+    # Re-asserts the repo-tracked pre-commit hook (blocks .env/*.db from being
+    # committed) on every startup — protects fresh clones and CI checkouts
+    # where core.hooksPath was never set, since .gitignore alone didn't stop
+    # .env from being force-added in the past.
+    import subprocess
+    repo_root = os.path.dirname(os.path.abspath(__file__))
+    hooks_dir = os.path.join(repo_root, "scripts", "hooks")
+    if not os.path.isdir(os.path.join(repo_root, ".git")) or not os.path.isdir(hooks_dir):
+        return
+    try:
+        current = subprocess.run(
+            ["git", "config", "--get", "core.hooksPath"],
+            cwd=repo_root, capture_output=True, text=True, timeout=5,
+        ).stdout.strip()
+        if current != "scripts/hooks":
+            subprocess.run(
+                ["git", "config", "core.hooksPath", "scripts/hooks"],
+                cwd=repo_root, timeout=5,
+            )
+    except Exception:
+        pass  # never block app startup over hook wiring
+
+
+_ensure_git_hooks_path()
+
 _macro_cache: dict = {}
 
 # ── AI UNIVERSE ───────────────────────────────────────────────────────────────

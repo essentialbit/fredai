@@ -1,8 +1,19 @@
 import sqlite3
 import json
+import hashlib
 from datetime import datetime, timedelta
 from contextlib import contextmanager
+from werkzeug.security import generate_password_hash, check_password_hash
 from config import DB_PATH
+
+
+def _legacy_sha256(password: str) -> str:
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def _is_legacy_hash(pw_hash: str) -> bool:
+    # Legacy hashes are raw 64-char hex SHA-256; werkzeug hashes are "method$salt$hash".
+    return "$" not in pw_hash
 
 
 def init_db():
@@ -190,10 +201,10 @@ def init_db():
         # Set FREDAI_ADMIN_PASSWORD in .env to pin a specific initial password.
         existing = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if existing == 0:
-            import hashlib, os, secrets as _sec
+            import os, secrets as _sec
             env_pw = os.getenv("FREDAI_ADMIN_PASSWORD", "")
             initial_pw = env_pw if env_pw else _sec.token_urlsafe(16)
-            pw_hash = hashlib.sha256(initial_pw.encode()).hexdigest()
+            pw_hash = generate_password_hash(initial_pw)
             conn.execute(
                 "INSERT INTO users (username, password_hash, display_name) VALUES (?,?,?)",
                 ("admin", pw_hash, "Admin")
@@ -221,21 +232,29 @@ def get_conn():
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
 def verify_user(username: str, password: str) -> dict | None:
-    import hashlib
-    pw_hash = hashlib.sha256(password.encode()).hexdigest()
     with get_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM users WHERE username=? AND password_hash=?", (username, pw_hash)
-        ).fetchone()
-        if row:
-            conn.execute("UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=?", (row["id"],))
-            return dict(row)
-    return None
+        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        if not row:
+            return None
+
+        stored_hash = row["password_hash"]
+        if _is_legacy_hash(stored_hash):
+            if stored_hash != _legacy_sha256(password):
+                return None
+            # Upgrade to a salted hash now that we have the plaintext password.
+            conn.execute(
+                "UPDATE users SET password_hash=? WHERE id=?",
+                (generate_password_hash(password), row["id"]),
+            )
+        elif not check_password_hash(stored_hash, password):
+            return None
+
+        conn.execute("UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=?", (row["id"],))
+        return dict(row)
 
 
 def create_user(username: str, password: str, display_name: str = None) -> dict | None:
-    import hashlib
-    pw_hash = hashlib.sha256(password.encode()).hexdigest()
+    pw_hash = generate_password_hash(password)
     try:
         with get_conn() as conn:
             conn.execute(

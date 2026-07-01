@@ -377,20 +377,36 @@ def run_rnd_cycle(implement: bool = True) -> dict:
     # Step 1: Discover
     proposals = run_discovery(client)
     if proposals:
+        from github_sync import sync_proposal_to_issue
         for p in proposals:
-            insert_feature_proposal(
-                title=p.get("title", "Untitled"),
-                description=(
-                    f"[FSI L{p.get('fsi_level','?')}] {p.get('description','')}\n\n"
-                    f"Compounds with: {', '.join(p.get('compounds_with', []))}\n"
-                    f"Free tools: {', '.join(p.get('free_tools', []))}"
-                ),
-                category=p.get("category", "general"),
-                implementation_spec=p.get("implementation_spec", ""),
-                estimated_hours=p.get("estimated_hours", 2),
-                impact_score=p.get("impact_score", 5.0),
-                priority=p.get("priority", 3),
+            description = (
+                f"[FSI L{p.get('fsi_level','?')}] {p.get('description','')}\n\n"
+                f"Compounds with: {', '.join(p.get('compounds_with', []))}\n"
+                f"Free tools: {', '.join(p.get('free_tools', []))}"
             )
+            category = p.get("category", "general")
+            estimated_hours = p.get("estimated_hours", 2)
+            impact_score = p.get("impact_score", 5.0)
+            proposal_id = insert_feature_proposal(
+                title=p.get("title", "Untitled"),
+                description=description,
+                category=category,
+                implementation_spec=p.get("implementation_spec", ""),
+                estimated_hours=estimated_hours,
+                impact_score=impact_score,
+                priority=p.get("priority", 3),
+                proposed_by="claude",
+            )
+            try:
+                sync_proposal_to_issue({
+                    "id": proposal_id, "title": p.get("title", "Untitled"),
+                    "description": description, "category": category,
+                    "implementation_spec": p.get("implementation_spec", ""),
+                    "estimated_hours": estimated_hours, "impact_score": impact_score,
+                    "proposed_by": "claude",
+                })
+            except Exception as e:
+                print(f"[RnD] Issue sync failed for '{p.get('title')}': {e}")
         results["discovered"] = len(proposals)
         results["fsi_levels"] = [p.get("fsi_level") for p in proposals]
 

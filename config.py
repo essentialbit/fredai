@@ -26,6 +26,7 @@ FREDAI_DEPLOY_SECRET = os.getenv("FREDAI_DEPLOY_SECRET", "")
 PORT = int(os.getenv("PORT", 8080))
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "sentinel.db")
+os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
 
 # ── AI PROVIDER ───────────────────────────────────────────────────────────────
 # "auto"       → Anthropic API if key set, else Ollama, else degraded mode

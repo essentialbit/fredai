@@ -1138,6 +1138,106 @@ def api_analyst_report(ticker):
     })
 
 
+@app.route("/api/system/refresh", methods=["POST"])
+@login_required
+def api_system_refresh():
+    import subprocess
+    import os
+    import sys
+    import threading
+    
+    # 1. Pull updates from Github repo
+    git_out = ""
+    try:
+        res = subprocess.run(["git", "pull"], capture_output=True, text=True, timeout=15)
+        git_out = res.stdout + "\n" + res.stderr
+    except Exception as e:
+        git_out = f"Git pull failed: {str(e)}"
+        
+    # 2. Refresh database feeds (fetch news in background)
+    try:
+        from news_client import fetch_all_news
+        from memory_store import get_watchlist
+        uid = session.get("user_id")
+        if uid:
+            wl_items = get_watchlist(uid)
+            wl = [w["symbol"] for w in wl_items]
+            threading.Thread(target=fetch_all_news, args=(wl,), daemon=True).start()
+    except Exception as e:
+        print(f"[System Refresh] Feed update trigger failed: {e}")
+        
+    # 3. Trigger re-execution replacement in 800ms
+    def do_restart():
+        print("[System] Replacing process (execv) to restart Fred...")
+        os.execv(sys.executable, [sys.executable] + sys.argv)
+        
+    threading.Timer(0.8, do_restart).start()
+    
+    return jsonify({
+        "status": "restarting",
+        "git": git_out
+    })
+
+
+@app.route("/api/user/keys", methods=["POST"])
+@login_required
+def api_save_user_keys():
+    from memory_store import get_conn, get_user
+    import json
+    uid = session.get("user_id")
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    data = request.json or {}
+    anthropic_key = data.get("anthropic_key", "").strip()
+    gemini_key = data.get("gemini_key", "").strip()
+    
+    prefs = {}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        pass
+        
+    if anthropic_key:
+        prefs["user_anthropic_key"] = anthropic_key
+    elif "user_anthropic_key" in prefs:
+        del prefs["user_anthropic_key"]
+        
+    if gemini_key:
+        prefs["user_gemini_key"] = gemini_key
+    elif "user_gemini_key" in prefs:
+        del prefs["user_gemini_key"]
+        
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), uid))
+        
+    return jsonify({
+        "status": "ok",
+        "has_anthropic": bool(prefs.get("user_anthropic_key")),
+        "has_gemini": bool(prefs.get("user_gemini_key"))
+    })
+
+@app.route("/api/user/keys", methods=["GET"])
+@login_required
+def api_get_user_keys_status():
+    from memory_store import get_user
+    import json
+    uid = session.get("user_id")
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    prefs = {}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        pass
+    return jsonify({
+        "has_anthropic": bool(prefs.get("user_anthropic_key")),
+        "has_gemini": bool(prefs.get("user_gemini_key"))
+    })
+
+
 @app.route("/api/news/globe-data")
 @login_required
 def api_news_globe_data():

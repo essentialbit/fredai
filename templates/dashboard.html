@@ -625,6 +625,13 @@ html[data-touch="1"] .pos-row { min-height:var(--touch) }
 #sym-sel{margin-left:auto;background:var(--bg1);border:1px solid var(--border);border-radius:3px;color:var(--t2);padding:3px 6px;font-size:var(--font-xs);align-self:center}
 #price-chart-wrap{flex:1;position:relative;min-height:0}
 #price-chart{width:100%;height:100%}
+.ind-tab.active{color:var(--purple);border-bottom-color:var(--purple)}
+#ind-chart-wrap{display:none;flex-direction:column;flex-shrink:0;border-top:1px solid var(--border)}
+#ind-chart-wrap.on{display:flex}
+#rsi-chart,#macd-chart{position:relative;width:100%;height:clamp(70px,12vh,120px)}
+#macd-chart{border-top:1px solid var(--border)}
+.ind-label{position:absolute;top:3px;left:6px;z-index:3;font-family:var(--mono);font-size:var(--font-xs);color:var(--t2);pointer-events:none;letter-spacing:.3px}
+.ind-label span{color:var(--t1);font-weight:600}
 #sent-chart-wrap{padding:var(--pad);flex:1;display:none;position:relative;min-height:0}
 
 /* ══ SIGNAL FEED ═════════════════════════════════════════════════════════ */
@@ -1369,6 +1376,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
       <div id="chart-tabs">
         <button class="ctab active" onclick="switchChart('price',this)">Price</button>
         <button class="ctab" onclick="switchChart('sentiment',this)">Sentiment</button>
+        <button class="ctab ind-tab" id="ind-toggle" onclick="toggleIndicators(this)">RSI/MACD</button>
         <select id="sym-sel" onchange="loadPriceChart()">
           <option value="SPY">SPY</option><option value="QQQ">QQQ</option>
           <option value="AAPL">AAPL</option><option value="NVDA">NVDA</option>
@@ -1377,6 +1385,10 @@ html[data-tier="ultra"] #ops-picture{display:block}
         </select>
       </div>
       <div id="price-chart-wrap"><div id="price-chart"></div></div>
+      <div id="ind-chart-wrap">
+        <div id="rsi-chart"><div class="ind-label">RSI(14) <span id="rsi-val"></span></div></div>
+        <div id="macd-chart"><div class="ind-label">MACD(12,26,9) <span id="macd-val"></span></div></div>
+      </div>
       <div id="sent-chart-wrap"><canvas id="sent-chart"></canvas></div>
     </div>
 
@@ -1791,6 +1803,9 @@ let priceChart = null, sentChart = null, portPieChart = null, trendBarChart = nu
 let allSignals = [], quotesCache = {}, trendData = [], portData = {};
 let nextScanISO = null, activeTab = 'overview', activeChart = 'price';
 let _priceChartSeries = null;
+let rsiChart = null, macdChart = null;
+let _rsiSeries = null, _macdHist = null, _macdLine = null, _macdSignal = null;
+let indicatorsOn = false, _lastChartData = null;
 console.log(`[FredAI] Display tier: ${TIER} | Touch: ${IS_TOUCH} | DPR: ${window.FRED_DPR}`);
 
 // ── SOCKET ────────────────────────────────────────────────────────────────
@@ -2510,6 +2525,8 @@ function switchChart(mode, btn) {
   btn.classList.add('active');
   g('price-chart-wrap').style.display = mode==='price' ? '' : 'none';
   g('sent-chart-wrap').style.display = mode==='sentiment' ? 'block' : 'none';
+  const iw = g('ind-chart-wrap');
+  if (iw) iw.classList.toggle('on', mode==='price' && indicatorsOn);
 }
 
 // ── KPIs ──────────────────────────────────────────────────────────────────
@@ -2673,7 +2690,137 @@ async function loadPriceChart() {
     const pts=data.slice(-CHART_CANDLES).map(d=>({time:Math.floor(new Date(d.time).getTime()/1000),open:d.open,high:d.high,low:d.low,close:d.close})).filter(d=>d.time>0&&!isNaN(d.close));
     series.setData(pts);
     priceChart.timeScale().fitContent();
+    _lastChartData = pts;
+    if (indicatorsOn) renderIndicators(pts);
   } catch(e){console.error('Chart:',e)}
+}
+
+// ── TECHNICAL INDICATORS: pure-JS RSI + MACD (Pi-friendly, no deps) ────────
+function _ema(values, period) {
+  const k = 2 / (period + 1), out = new Array(values.length).fill(null);
+  let prev = null;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (v == null || isNaN(v)) { out[i] = prev; continue; }
+    prev = prev == null ? v : v * k + prev * (1 - k);
+    out[i] = prev;
+  }
+  return out;
+}
+
+// Wilder's smoothed RSI
+function computeRSI(closes, period) {
+  const out = new Array(closes.length).fill(null);
+  if (closes.length <= period) return out;
+  let avgGain = 0, avgLoss = 0;
+  for (let i = 1; i <= period; i++) {
+    const ch = closes[i] - closes[i - 1];
+    if (ch >= 0) avgGain += ch; else avgLoss -= ch;
+  }
+  avgGain /= period; avgLoss /= period;
+  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  for (let i = period + 1; i < closes.length; i++) {
+    const ch = closes[i] - closes[i - 1];
+    const gain = ch > 0 ? ch : 0, loss = ch < 0 ? -ch : 0;
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+  return out;
+}
+
+function computeMACD(closes, fast, slow, signal) {
+  const emaFast = _ema(closes, fast), emaSlow = _ema(closes, slow);
+  const macd = closes.map((_, i) =>
+    (emaFast[i] == null || emaSlow[i] == null) ? null : emaFast[i] - emaSlow[i]);
+  const sig = _ema(macd.map(v => v == null ? 0 : v), signal);
+  const hist = macd.map((v, i) => (v == null || sig[i] == null) ? null : v - sig[i]);
+  return { macd, signal: sig, hist };
+}
+
+function initIndicatorCharts() {
+  if (typeof LightweightCharts === 'undefined') return;
+  const opt = (el) => ({
+    layout:{background:{color:'#0a1628'},textColor:'#7a9bbf',fontSize:IS_MOBILE?9:10},
+    grid:{vertLines:{color:'#0f1f33'},horzLines:{color:'#0f1f33'}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
+    rightPriceScale:{borderColor:'#162840',minimumWidth:IS_MOBILE?50:65},
+    timeScale:{borderColor:'#162840',timeVisible:true,secondsVisible:false,visible:false},
+    handleScroll:false, handleScale:false,
+    width:el.clientWidth, height:el.clientHeight,
+  });
+  const rEl = g('rsi-chart'), mEl = g('macd-chart');
+  if (!rsiChart && rEl) {
+    rsiChart = LightweightCharts.createChart(rEl, opt(rEl));
+    _rsiSeries = rsiChart.addLineSeries({color:'#9b59ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+    const ob = rsiChart.addLineSeries({color:'#ff3b5c',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
+    const os = rsiChart.addLineSeries({color:'#00ff88',lineWidth:1,lineStyle:2,priceLineVisible:false,lastValueVisible:false});
+    rsiChart._ob = ob; rsiChart._os = os;
+    new ResizeObserver(()=>{if(rsiChart)rsiChart.applyOptions({width:rEl.clientWidth,height:rEl.clientHeight})}).observe(rEl);
+  }
+  if (!macdChart && mEl) {
+    macdChart = LightweightCharts.createChart(mEl, opt(mEl));
+    _macdHist = macdChart.addHistogramSeries({priceLineVisible:false,lastValueVisible:false});
+    _macdLine = macdChart.addLineSeries({color:'#00b4ff',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+    _macdSignal = macdChart.addLineSeries({color:'#ff8c42',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+    new ResizeObserver(()=>{if(macdChart)macdChart.applyOptions({width:mEl.clientWidth,height:mEl.clientHeight})}).observe(mEl);
+  }
+  // Sync time scale across all three panes
+  if (priceChart && rsiChart && macdChart) {
+    const sync = (src) => src.timeScale().subscribeVisibleLogicalRangeChange(r => {
+      if (!r) return;
+      [priceChart, rsiChart, macdChart].forEach(c => { if (c && c !== src) try{c.timeScale().setVisibleLogicalRange(r)}catch(e){} });
+    });
+    if (!priceChart._synced) { sync(priceChart); sync(rsiChart); sync(macdChart); priceChart._synced = true; }
+  }
+}
+
+function renderIndicators(pts) {
+  if (!pts || !pts.length) return;
+  initIndicatorCharts();
+  if (!rsiChart || !macdChart) return;
+  const times = pts.map(p => p.time), closes = pts.map(p => p.close);
+  const rsi = computeRSI(closes, 14);
+  const rsiData = [], obData = [], osData = [];
+  for (let i = 0; i < times.length; i++) {
+    if (rsi[i] != null) rsiData.push({time:times[i],value:+rsi[i].toFixed(2)});
+    obData.push({time:times[i],value:70}); osData.push({time:times[i],value:30});
+  }
+  _rsiSeries.setData(rsiData);
+  rsiChart._ob.setData(obData); rsiChart._os.setData(osData);
+  try {
+    _rsiSeries.applyOptions({ autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }) });
+    rsiChart.timeScale().fitContent();
+  } catch(e){}
+
+  const { macd, signal, hist } = computeMACD(closes, 12, 26, 9);
+  const macdData = [], sigData = [], histData = [];
+  for (let i = 0; i < times.length; i++) {
+    if (macd[i] != null) macdData.push({time:times[i],value:+macd[i].toFixed(4)});
+    if (signal[i] != null) sigData.push({time:times[i],value:+signal[i].toFixed(4)});
+    if (hist[i] != null) histData.push({time:times[i],value:+hist[i].toFixed(4),color:hist[i]>=0?'rgba(0,255,136,.6)':'rgba(255,59,92,.6)'});
+  }
+  _macdHist.setData(histData); _macdLine.setData(macdData); _macdSignal.setData(sigData);
+  macdChart.timeScale().fitContent();
+
+  const lastRSI = rsi[rsi.length-1], lastHist = hist[hist.length-1];
+  const rv = g('rsi-val'), mv = g('macd-val');
+  if (rv && lastRSI != null) { rv.textContent = lastRSI.toFixed(1); rv.style.color = lastRSI>=70?'var(--red)':lastRSI<=30?'var(--green)':'var(--t1)'; }
+  if (mv && lastHist != null) { mv.textContent = (lastHist>=0?'+':'')+lastHist.toFixed(3); mv.style.color = lastHist>=0?'var(--green)':'var(--red)'; }
+}
+
+function toggleIndicators(btn) {
+  indicatorsOn = !indicatorsOn;
+  btn.classList.toggle('active', indicatorsOn);
+  const wrap = g('ind-chart-wrap');
+  wrap.classList.toggle('on', indicatorsOn);
+  if (indicatorsOn) {
+    if (activeChart !== 'price') { switchChart('price', document.querySelector('.ctab')); }
+    requestAnimationFrame(() => {
+      if (_lastChartData) renderIndicators(_lastChartData); else loadPriceChart();
+      if (priceChart) priceChart.applyOptions({width:g('price-chart').clientWidth,height:g('price-chart').clientHeight});
+    });
+  }
 }
 
 // ── SENTIMENT CHART ───────────────────────────────────────────────────────

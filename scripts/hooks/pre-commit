@@ -2,10 +2,11 @@
 # Blocks committing secrets/local data that keep sneaking back in despite .gitignore.
 set -euo pipefail
 
-blocked_pattern='(^|/)\.env$|\.env\.[^.]+$|\.db$|(^|/)__pycache__/'
+blocked_pattern='(^|/)\.env$|(^|/)\.env\.[^.]+$|\.db$|(^|/)__pycache__/'
+safe_exceptions='(^|/)\.env\.(example|sample)$'
 
 staged=$(git diff --cached --name-only --diff-filter=ACM)
-hits=$(echo "$staged" | grep -E "$blocked_pattern" || true)
+hits=$(echo "$staged" | grep -E "$blocked_pattern" | grep -Ev "$safe_exceptions" || true)
 
 if [ -n "$hits" ]; then
     echo "pre-commit: blocked — these files must never be committed:" >&2

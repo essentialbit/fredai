@@ -72,11 +72,12 @@ def _get_api_keys() -> tuple[str, str]:
     try:
         if "user_id" in session:
             from memory_store import get_user
+            from crypto_utils import decrypt_secret
             user = get_user(session["user_id"])
             if user:
                 prefs = json.loads(user.get("preferences") or "{}")
-                u_a_key = prefs.get("user_anthropic_key")
-                u_g_key = prefs.get("user_gemini_key")
+                u_a_key = decrypt_secret(prefs["user_anthropic_key"]) if prefs.get("user_anthropic_key") else None
+                u_g_key = decrypt_secret(prefs["user_gemini_key"]) if prefs.get("user_gemini_key") else None
                 if u_a_key:
                     a_key = u_a_key
                 if u_g_key:

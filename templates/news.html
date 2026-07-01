@@ -2,302 +2,496 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#03080f">
-<title>FredAI — News</title>
+<title>FredAI — Intelligence Feed</title>
 <link rel="icon" href="/static/icons/favicon.ico" sizes="any">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#03080f;--bg1:#07111c;--bg2:#0d1a2a;
-  --green:#00ff88;--red:#ff3b5c;--blue:#00b4ff;--purple:#9b59ff;--gold:#f5a623;
-  --t1:#e8f4ff;--t2:#8ba3b8;--t3:#4a6380;
-  --border:rgba(0,180,255,.12);
-  --font-xs:11px;--font-sm:13px;--font-md:15px;
+  --bg:#03080f;--bg1:#070d18;--bg2:#0a1420;--bg3:#0d1b2a;
+  --green:#00ff88;--red:#ff3b5c;--blue:#00b4ff;--purple:#9b59ff;
+  --gold:#f5a623;--cyan:#00e5cc;--pink:#ff6b9d;
+  --t1:#e8f4ff;--t2:#8ba3b8;--t3:#3d5a73;--t4:#1e3a52;
+  --border:rgba(0,180,255,.1);--border2:rgba(0,180,255,.2);
+  --glow-b:0 0 20px rgba(0,180,255,.2);
+  --glow-g:0 0 20px rgba(0,255,136,.2);
   --mono:'JetBrains Mono','Fira Code',monospace;
-  --sans:'Inter','SF Pro Display',-apple-system,BlinkMacSystemFont,sans-serif;
+  --sans:'Inter','SF Pro',system-ui,sans-serif;
+  --radius:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:var(--font-sm)}
+html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:14px;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
+button{font-family:var(--sans);cursor:pointer}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg1)}
+::-webkit-scrollbar-thumb{background:var(--t4);border-radius:2px}
 
-/* ── LAYOUT ── */
-#shell{display:flex;flex-direction:column;min-height:100vh}
+/* ══ LAYOUT ════════════════════════════════════════════════════════════════ */
+#shell{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+
+/* TOP BAR */
 #top-bar{
   display:flex;align-items:center;gap:12px;
   padding:10px 20px;border-bottom:1px solid var(--border);
-  background:rgba(7,17,28,.9);backdrop-filter:blur(10px);
-  position:sticky;top:0;z-index:100;
+  background:rgba(7,13,24,.95);backdrop-filter:blur(16px);
+  position:relative;z-index:200;flex-shrink:0;
 }
-.brand{font-size:16px;font-weight:800;letter-spacing:2px;color:var(--blue)}
-.brand span{color:var(--green)}
+.brand{font-size:18px;font-weight:800;letter-spacing:2px;
+  background:linear-gradient(135deg,var(--blue),var(--green));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
 #back-btn{
-  padding:4px 12px;background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.25);
-  border-radius:6px;color:var(--blue);font-size:var(--font-xs);cursor:pointer;
-  font-family:var(--sans);letter-spacing:.5px;
+  padding:5px 14px;background:rgba(0,180,255,.08);border:1px solid rgba(0,180,255,.2);
+  border-radius:20px;color:var(--blue);font-size:11px;letter-spacing:.5px;
+  transition:.15s;white-space:nowrap;
 }
-#back-btn:hover{background:rgba(0,180,255,.2)}
-#top-bar h1{font-size:var(--font-sm);font-weight:700;letter-spacing:1px;color:var(--t1)}
-.badge{
-  font-size:9px;font-weight:700;letter-spacing:1px;padding:2px 7px;
-  border-radius:20px;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.25);
-  color:var(--green);text-transform:uppercase;
+#back-btn:hover{background:rgba(0,180,255,.18);box-shadow:var(--glow-b)}
+.page-title{font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--t1);flex:1}
+.live-badge{
+  display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;
+  letter-spacing:1.5px;color:var(--green);font-family:var(--mono);
 }
+.live-pulse{width:6px;height:6px;border-radius:50%;background:var(--green);
+  animation:livePulse 1.5s infinite}
+@keyframes livePulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.7)}}
 
-#main-layout{display:flex;flex:1;gap:0;overflow:hidden}
+/* PAGE TABS */
+#page-tabs{
+  display:flex;gap:0;border-bottom:1px solid var(--border);
+  background:var(--bg1);flex-shrink:0;padding:0 20px;overflow-x:auto;
+}
+.ptab{
+  padding:11px 20px;font-size:12px;font-weight:600;letter-spacing:.5px;
+  color:var(--t3);border:none;background:transparent;
+  border-bottom:2px solid transparent;transition:.15s;white-space:nowrap;
+  display:flex;align-items:center;gap:7px;
+}
+.ptab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.ptab:hover:not(.active){color:var(--t2);background:rgba(255,255,255,.03)}
+.ptab-icon{font-size:14px}
 
-/* ── SIDEBAR ── */
+/* BODY */
+#page-body{flex:1;display:flex;overflow:hidden}
+
+/* ══ TAB 1: NEWS FEED ═══════════════════════════════════════════════════════ */
+#tab-feed{display:flex;flex:1;overflow:hidden}
+
+/* SIDEBAR */
 #sidebar{
-  width:240px;flex-shrink:0;border-right:1px solid var(--border);
-  background:var(--bg1);padding:16px;overflow-y:auto;
+  width:220px;flex-shrink:0;border-right:1px solid var(--border);
+  background:var(--bg1);padding:16px 12px;overflow-y:auto;display:flex;flex-direction:column;gap:16px;
 }
-.filter-section{margin-bottom:20px}
+.filter-section{}
 .filter-label{
   font-size:9px;font-weight:700;letter-spacing:2px;color:var(--t3);
-  text-transform:uppercase;margin-bottom:8px;
+  text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px;
 }
+.filter-label::after{content:'';flex:1;height:1px;background:var(--t4)}
 .filter-btn{
-  display:block;width:100%;text-align:left;padding:7px 10px;
-  background:none;border:none;color:var(--t2);font-size:var(--font-xs);
-  cursor:pointer;border-radius:6px;margin-bottom:2px;font-family:var(--sans);
-  transition:.15s;
+  display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:7px 10px;
+  background:none;border:none;color:var(--t2);font-size:11px;
+  border-radius:6px;margin-bottom:2px;transition:.12s;letter-spacing:.3px;
 }
 .filter-btn:hover,.filter-btn.active{background:rgba(0,180,255,.1);color:var(--blue)}
-.filter-btn.active{font-weight:600;border-left:2px solid var(--blue)}
-
-#ticker-filter-wrap{position:relative}
-#ticker-input{
-  width:100%;padding:7px 10px;background:var(--bg2);
-  border:1px solid var(--border);border-radius:6px;
-  color:var(--t1);font-size:var(--font-xs);outline:none;font-family:var(--sans);
-}
-#ticker-input:focus{border-color:rgba(0,180,255,.4)}
-#ticker-clear{
-  position:absolute;right:8px;top:50%;transform:translateY(-50%);
-  background:none;border:none;color:var(--t3);cursor:pointer;font-size:12px;
-}
-
+.filter-btn.active{font-weight:600;border-left:2px solid var(--blue);padding-left:8px}
+.filter-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 .time-pill{
-  display:inline-block;padding:4px 10px;border-radius:20px;font-size:9px;
-  font-weight:700;letter-spacing:.5px;cursor:pointer;margin-right:4px;margin-bottom:4px;
-  border:1px solid var(--border);color:var(--t2);background:none;font-family:var(--sans);
+  display:inline-flex;align-items:center;padding:4px 11px;border-radius:20px;font-size:10px;
+  font-weight:600;letter-spacing:.3px;cursor:pointer;margin-right:4px;margin-bottom:4px;
+  border:1px solid var(--t4);color:var(--t2);background:none;transition:.12s;
 }
-.time-pill.active,.time-pill:hover{border-color:var(--blue);color:var(--blue);background:rgba(0,180,255,.1)}
-
-/* Source tags */
-.source-tag{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:5px 8px;border-radius:5px;font-size:10px;cursor:pointer;
-  transition:.15s;margin-bottom:2px;
+.time-pill.active,.time-pill:hover{border-color:var(--blue);color:var(--blue);background:rgba(0,180,255,.08)}
+#ticker-input{
+  width:100%;padding:8px 10px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:6px;color:var(--t1);font-size:11px;outline:none;font-family:var(--sans);
 }
-.source-tag:hover,.source-tag.active{background:rgba(255,255,255,.05)}
-.source-tag input[type=checkbox]{accent-color:var(--blue)}
+#ticker-input:focus{border-color:rgba(0,180,255,.4);box-shadow:0 0 0 2px rgba(0,180,255,.08)}
+.ticker-wrap{position:relative}
+#ticker-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:var(--t3);font-size:12px;padding:2px}
+#ticker-clear:hover{color:var(--t2)}
 
-/* ── FEED ── */
-#feed-area{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:0}
+/* FEED AREA */
+#feed-area{flex:1;overflow-y:auto;display:flex;flex-direction:column}
 #feed-header{
-  display:flex;align-items:center;gap:10px;margin-bottom:12px;
-  flex-wrap:wrap;
+  display:flex;align-items:center;gap:8px;padding:12px 16px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  background:rgba(7,13,24,.8);backdrop-filter:blur(8px);
+  position:sticky;top:0;z-index:10;
 }
-#result-count{font-size:10px;color:var(--t3)}
 #search-box{
-  flex:1;min-width:200px;padding:7px 12px;background:var(--bg1);
-  border:1px solid var(--border);border-radius:8px;
-  color:var(--t1);font-size:var(--font-xs);outline:none;font-family:var(--sans);
+  flex:1;min-width:0;padding:8px 14px;background:var(--bg2);
+  border:1px solid var(--border);border-radius:8px;color:var(--t1);
+  font-size:12px;outline:none;font-family:var(--sans);
+  transition:.15s;
 }
-#search-box:focus{border-color:rgba(0,180,255,.4)}
+#search-box:focus{border-color:rgba(0,180,255,.4);box-shadow:0 0 0 2px rgba(0,180,255,.06)}
+#search-box::placeholder{color:var(--t3)}
 #refresh-btn{
-  padding:6px 14px;background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.25);
-  border-radius:6px;color:var(--blue);font-size:var(--font-xs);cursor:pointer;
-  font-family:var(--sans);white-space:nowrap;
+  padding:7px 16px;background:rgba(0,180,255,.08);border:1px solid rgba(0,180,255,.2);
+  border-radius:6px;color:var(--blue);font-size:11px;white-space:nowrap;transition:.15s;
 }
-#refresh-btn:hover{background:rgba(0,180,255,.2)}
+#refresh-btn:hover{background:rgba(0,180,255,.18)}
+#result-count{font-size:10px;color:var(--t3);white-space:nowrap;font-family:var(--mono)}
 
 /* News card */
 .news-card{
-  display:flex;gap:12px;padding:14px;border-bottom:1px solid rgba(255,255,255,.04);
-  transition:background .15s;cursor:pointer;
+  display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.035);
+  transition:background .12s;cursor:pointer;
 }
-.news-card:hover{background:rgba(255,255,255,.025)}
-.news-card:last-child{border-bottom:none}
-
+.news-card:hover{background:rgba(0,180,255,.04)}
 .nc-left{flex:1;min-width:0}
 .nc-meta{display:flex;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap}
-.nc-source{
+.nc-cat{
   font-size:9px;font-weight:700;letter-spacing:.5px;
-  padding:2px 7px;border-radius:20px;text-transform:uppercase;
+  padding:2px 8px;border-radius:20px;text-transform:uppercase;
 }
-.nc-source.market{color:var(--blue);background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.2)}
-.nc-source.central_bank{color:var(--gold);background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.2)}
-.nc-source.macro{color:var(--purple);background:rgba(155,89,255,.1);border:1px solid rgba(155,89,255,.2)}
-.nc-source.geopolitical{color:var(--red);background:rgba(255,59,92,.1);border:1px solid rgba(255,59,92,.2)}
-.nc-source.ai{color:var(--green);background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.2)}
-.nc-source.ticker{color:var(--t2);background:rgba(255,255,255,.05);border:1px solid var(--border)}
-.nc-source.australia{color:#f5a623;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.2)}
-
-.nc-tickers{display:flex;gap:4px;flex-wrap:wrap}
+.nc-cat.market{color:var(--blue);background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.15)}
+.nc-cat.central_bank{color:var(--gold);background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.15)}
+.nc-cat.macro{color:var(--purple);background:rgba(155,89,255,.1);border:1px solid rgba(155,89,255,.15)}
+.nc-cat.geopolitical{color:var(--red);background:rgba(255,59,92,.1);border:1px solid rgba(255,59,92,.15)}
+.nc-cat.ai{color:var(--green);background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.15)}
+.nc-cat.ticker{color:var(--t2);background:rgba(255,255,255,.05);border:1px solid var(--border)}
+.nc-src{font-size:9px;color:var(--t3);letter-spacing:.3px}
 .nc-ticker{
   font-size:8px;font-weight:700;font-family:var(--mono);
-  padding:1px 5px;border-radius:3px;background:rgba(0,180,255,.08);
-  border:1px solid rgba(0,180,255,.15);color:var(--blue);
+  padding:1px 6px;border-radius:3px;background:rgba(0,180,255,.07);
+  border:1px solid rgba(0,180,255,.12);color:var(--blue);
 }
-.nc-title{font-size:var(--font-sm);font-weight:600;color:var(--t1);line-height:1.4;margin-bottom:5px}
+.nc-title{font-size:13px;font-weight:600;color:var(--t1);line-height:1.4;margin-bottom:4px}
 .nc-title a:hover{color:var(--blue)}
-.nc-summary{font-size:10px;color:var(--t2);line-height:1.55;margin-bottom:6px;
+.nc-summary{font-size:11px;color:var(--t2);line-height:1.55;margin-bottom:5px;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .nc-footer{display:flex;align-items:center;gap:8px}
-.nc-time{font-size:9px;color:var(--t3)}
-.nc-src-name{font-size:9px;color:var(--t3)}
-.nc-sent{font-size:10px;font-family:var(--mono);font-weight:700}
-.nc-sent.pos{color:var(--green)}
-.nc-sent.neg{color:var(--red)}
-.nc-sent.neu{color:var(--t3)}
-
-.nc-right{
-  width:60px;flex-shrink:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;
-}
-.nc-sent-bar{
-  width:4px;border-radius:2px;
-  background:linear-gradient(to top, var(--red) 0%, var(--t3) 50%, var(--green) 100%);
-  height:40px;position:relative;
-}
-.nc-sent-dot{
-  position:absolute;left:50%;transform:translateX(-50%);
-  width:8px;height:8px;border-radius:50%;
-  border:1px solid var(--bg);
-}
-
-/* Pagination */
-#pagination{
-  display:flex;align-items:center;justify-content:center;gap:8px;
-  padding:20px;border-top:1px solid var(--border);
-}
-.page-btn{
-  padding:5px 12px;background:var(--bg1);border:1px solid var(--border);
-  border-radius:6px;color:var(--t2);font-size:var(--font-xs);cursor:pointer;font-family:var(--sans);
-}
-.page-btn:hover{border-color:var(--blue);color:var(--blue)}
-.page-btn.active{background:rgba(0,180,255,.15);border-color:var(--blue);color:var(--blue)}
-.page-btn:disabled{opacity:.4;cursor:default}
-#page-info{font-size:10px;color:var(--t3)}
-
-/* Loading */
-#feed-loading{
-  display:flex;align-items:center;justify-content:center;gap:10px;
-  padding:60px;color:var(--t3);
-}
-.spin{width:16px;height:16px;border:2px solid rgba(0,180,255,.2);border-top-color:var(--blue);border-radius:50%;animation:rot .8s linear infinite}
+.nc-time{font-size:9px;color:var(--t3);font-family:var(--mono)}
+.nc-sent{font-size:10px;font-family:var(--mono);font-weight:600}
+.nc-sent.pos{color:var(--green)}.nc-sent.neg{color:var(--red)}.nc-sent.neu{color:var(--t3)}
+.nc-right{width:50px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.nc-sent-bar{width:3px;height:36px;border-radius:2px;
+  background:linear-gradient(to top,var(--red),var(--t4),var(--green));position:relative}
+.nc-sent-dot{position:absolute;left:50%;transform:translateX(-50%);
+  width:7px;height:7px;border-radius:50%;border:1px solid var(--bg)}
+#feed-loading{display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:60px;color:var(--t3);font-size:13px}
+.spin{width:16px;height:16px;border:2px solid rgba(0,180,255,.15);
+  border-top-color:var(--blue);border-radius:50%;animation:rot .8s linear infinite}
 @keyframes rot{to{transform:rotate(360deg)}}
-#feed-empty{padding:60px;text-align:center;color:var(--t3);display:none}
+#feed-empty{padding:60px;text-align:center;color:var(--t3);display:none;font-size:13px}
+#pagination{display:flex;align-items:center;justify-content:center;gap:6px;
+  padding:20px;border-top:1px solid var(--border);flex-shrink:0}
+.page-btn{padding:5px 12px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:6px;color:var(--t2);font-size:11px;transition:.12s}
+.page-btn:hover{border-color:var(--blue);color:var(--blue)}
+.page-btn.active{background:rgba(0,180,255,.12);border-color:var(--blue);color:var(--blue);font-weight:600}
+.page-btn:disabled{opacity:.3;cursor:default}
 
-/* Disclaimer footer */
+/* ══ TAB 2: SIGNAL GLOBE ════════════════════════════════════════════════════ */
+#tab-globe{flex:1;display:none;flex-direction:column;overflow:hidden}
+#globe-controls{
+  display:flex;align-items:center;gap:10px;padding:12px 20px;
+  border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap;
+  background:var(--bg1);
+}
+.globe-ctrl-label{font-size:10px;color:var(--t3);font-family:var(--mono);letter-spacing:1px}
+.globe-filter-btn{
+  padding:4px 12px;border-radius:20px;font-size:10px;font-weight:600;
+  border:1px solid;cursor:pointer;background:none;transition:.12s;letter-spacing:.3px;
+}
+.globe-filter-btn.market{color:var(--blue);border-color:rgba(0,180,255,.3)}
+.globe-filter-btn.market.active,.globe-filter-btn.market:hover{background:rgba(0,180,255,.12)}
+.globe-filter-btn.ai{color:var(--green);border-color:rgba(0,255,136,.3)}
+.globe-filter-btn.ai.active,.globe-filter-btn.ai:hover{background:rgba(0,255,136,.12)}
+.globe-filter-btn.geopolitical{color:var(--red);border-color:rgba(255,59,92,.3)}
+.globe-filter-btn.geopolitical.active,.globe-filter-btn.geopolitical:hover{background:rgba(255,59,92,.12)}
+.globe-filter-btn.central_bank{color:var(--gold);border-color:rgba(245,166,35,.3)}
+.globe-filter-btn.central_bank.active,.globe-filter-btn.central_bank:hover{background:rgba(245,166,35,.12)}
+.globe-filter-btn.macro{color:var(--purple);border-color:rgba(155,89,255,.3)}
+.globe-filter-btn.macro.active,.globe-filter-btn.macro:hover{background:rgba(155,89,255,.12)}
+.globe-filter-btn.all{color:var(--t2);border-color:var(--t4)}
+.globe-filter-btn.all.active,.globe-filter-btn.all:hover{background:rgba(255,255,255,.06);color:var(--t1)}
+#globe-stats{font-size:10px;color:var(--t3);font-family:var(--mono);margin-left:auto}
+#globe-container{flex:1;position:relative;overflow:hidden;background:var(--bg)}
+#globe-canvas{width:100%;height:100%}
+#globe-tooltip{
+  position:absolute;pointer-events:none;display:none;
+  background:rgba(7,13,24,.92);border:1px solid var(--border2);
+  border-radius:8px;padding:10px 14px;min-width:160px;
+  backdrop-filter:blur(8px);z-index:100;
+}
+.gt-region{font-size:12px;font-weight:600;color:var(--t1);margin-bottom:4px}
+.gt-count{font-size:11px;font-family:var(--mono);color:var(--blue)}
+.gt-cat{font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-top:3px}
+#globe-legend{
+  position:absolute;bottom:20px;left:20px;
+  background:rgba(7,13,24,.85);border:1px solid var(--border);
+  border-radius:8px;padding:12px 16px;backdrop-filter:blur(8px);
+}
+.legend-item{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--t2);margin-bottom:5px}
+.legend-item:last-child{margin-bottom:0}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+#globe-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--t3);font-size:13px}
+.globe-spin{width:32px;height:32px;border:2px solid rgba(0,180,255,.15);border-top-color:var(--blue);border-radius:50%;animation:rot .8s linear infinite}
+
+/* ══ TAB 3: VIDEO INTELLIGENCE ═══════════════════════════════════════════════ */
+#tab-video{flex:1;display:none;flex-direction:column;overflow:hidden}
+#video-header{
+  display:flex;align-items:center;gap:10px;padding:12px 20px;
+  border-bottom:1px solid var(--border);flex-shrink:0;
+  background:var(--bg1);flex-wrap:wrap;
+}
+.video-header-title{font-size:13px;font-weight:700;color:var(--t1);letter-spacing:.5px;flex:1}
+.video-header-sub{font-size:10px;color:var(--t3)}
+#video-body{flex:1;display:flex;gap:0;overflow:hidden}
+#video-sidebar{
+  width:280px;flex-shrink:0;border-right:1px solid var(--border);
+  overflow-y:auto;background:var(--bg1);
+}
+#video-player-area{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.channel-tab{
+  display:flex;align-items:center;gap:10px;padding:12px 16px;
+  border-bottom:1px solid var(--border);cursor:pointer;transition:.12s;
+}
+.channel-tab.active{background:rgba(0,180,255,.08);border-left:2px solid var(--blue)}
+.channel-tab:hover:not(.active){background:rgba(255,255,255,.03)}
+.ch-icon{width:32px;height:32px;border-radius:50%;background:var(--bg2);
+  display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.ch-name{font-size:12px;font-weight:600;color:var(--t1)}
+.ch-sub{font-size:10px;color:var(--t3)}
+.video-thumb-list{padding:12px}
+.video-thumb{
+  display:flex;gap:10px;padding:10px;border-radius:8px;cursor:pointer;
+  transition:.12s;margin-bottom:8px;background:var(--bg2);border:1px solid var(--border);
+}
+.video-thumb:hover{border-color:var(--blue);background:rgba(0,180,255,.06)}
+.video-thumb.active{border-color:var(--blue);background:rgba(0,180,255,.1)}
+.thumb-img{width:100px;height:56px;border-radius:5px;object-fit:cover;
+  background:var(--bg3);flex-shrink:0;border:1px solid var(--border)}
+.thumb-title{font-size:11px;font-weight:500;color:var(--t1);line-height:1.4;flex:1;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.thumb-time{font-size:9px;color:var(--t3);margin-top:4px;font-family:var(--mono)}
+#player-embed{flex:1;background:var(--bg);overflow:hidden;position:relative}
+#player-embed iframe{width:100%;height:100%;border:none}
+#player-empty{display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;height:100%;color:var(--t3);font-size:13px;text-align:center;padding:30px}
+.player-empty-icon{font-size:48px;opacity:.3}
+#player-now-playing{
+  padding:10px 16px;border-top:1px solid var(--border);flex-shrink:0;
+  display:flex;align-items:center;gap:10px;background:var(--bg1);display:none;
+}
+.np-label{font-size:9px;color:var(--t3);letter-spacing:1px;font-family:var(--mono)}
+.np-title{font-size:11px;color:var(--t1);font-weight:500;flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.channel-section-header{
+  padding:10px 14px 6px;font-size:9px;font-weight:700;letter-spacing:2px;
+  color:var(--t3);text-transform:uppercase;border-bottom:1px solid var(--border);
+}
+#video-loading{display:flex;align-items:center;justify-content:center;gap:8px;
+  padding:30px;color:var(--t3);font-size:12px;flex-direction:column}
+
+/* ══ DISCLAIMER BAR ═════════════════════════════════════════════════════════ */
 #disc-bar{
-  padding:6px 16px;background:rgba(245,166,35,.05);border-top:1px solid rgba(245,166,35,.15);
-  font-size:9px;color:var(--t3);text-align:center;
+  padding:6px 20px;background:rgba(245,166,35,.04);
+  border-top:1px solid rgba(245,166,35,.12);
+  font-size:9px;color:var(--t3);text-align:center;flex-shrink:0;letter-spacing:.3px;
+}
+
+/* ══ RESPONSIVE ═════════════════════════════════════════════════════════════ */
+@media(max-width:768px){
+  #sidebar{display:none}
+  #video-sidebar{width:200px}
+}
+@media(max-width:540px){
+  #video-sidebar{display:none}
+  .ptab{padding:10px 14px;font-size:11px}
 }
 </style>
 </head>
 <body>
 <div id="shell">
 
+  <!-- TOP BAR -->
   <div id="top-bar">
     <button id="back-btn" onclick="history.back()">← Dashboard</button>
-    <div class="brand">Fred<span>AI</span></div>
-    <h1>Financial Intelligence Feed</h1>
-    <span class="badge" id="total-badge">Loading...</span>
+    <div class="brand">FredAI</div>
+    <div class="page-title">Global Intelligence Feed</div>
+    <div class="live-badge"><div class="live-pulse"></div>LIVE</div>
+    <span id="total-badge" style="font-size:10px;color:var(--t3);font-family:var(--mono)">—</span>
   </div>
 
-  <div id="main-layout">
+  <!-- PAGE TABS -->
+  <div id="page-tabs">
+    <button class="ptab active" onclick="switchPageTab('feed',this)"><span class="ptab-icon">◈</span>News Feed</button>
+    <button class="ptab" onclick="switchPageTab('globe',this)"><span class="ptab-icon">◎</span>Signal Globe</button>
+    <button class="ptab" onclick="switchPageTab('video',this)"><span class="ptab-icon">▶</span>Video Intel</button>
+  </div>
 
-    <!-- ── SIDEBAR FILTERS ── -->
-    <div id="sidebar">
+  <!-- BODY -->
+  <div id="page-body">
 
-      <div class="filter-section">
-        <div class="filter-label">Category</div>
-        <button class="filter-btn active" data-cat="all" onclick="setCategory(this,'all')">All News</button>
-        <button class="filter-btn" data-cat="market" onclick="setCategory(this,'market')">Markets</button>
-        <button class="filter-btn" data-cat="ai" onclick="setCategory(this,'ai')">AI & Tech</button>
-        <button class="filter-btn" data-cat="central_bank" onclick="setCategory(this,'central_bank')">Central Banks</button>
-        <button class="filter-btn" data-cat="macro" onclick="setCategory(this,'macro')">Macro & Economy</button>
-        <button class="filter-btn" data-cat="geopolitical" onclick="setCategory(this,'geopolitical')">Geopolitical</button>
-        <button class="filter-btn" data-cat="australia" onclick="setCategory(this,'australia')">Australia</button>
-        <button class="filter-btn" data-cat="ticker" onclick="setCategory(this,'ticker')">Ticker-Specific</button>
-      </div>
-
-      <div class="filter-section">
-        <div class="filter-label">Time Window</div>
-        <button class="time-pill active" onclick="setHours(this,4)">4h</button>
-        <button class="time-pill" onclick="setHours(this,12)">12h</button>
-        <button class="time-pill" onclick="setHours(this,24)">24h</button>
-        <button class="time-pill" onclick="setHours(this,72)">3d</button>
-        <button class="time-pill" onclick="setHours(this,168)">7d</button>
-      </div>
-
-      <div class="filter-section">
-        <div class="filter-label">Filter by Ticker</div>
-        <div id="ticker-filter-wrap">
-          <input id="ticker-input" placeholder="e.g. NVDA" oninput="setTicker(this.value)">
-          <button id="ticker-clear" onclick="clearTicker()">✕</button>
+    <!-- ══ TAB 1: NEWS FEED ══ -->
+    <div id="tab-feed">
+      <!-- SIDEBAR FILTERS -->
+      <div id="sidebar">
+        <div class="filter-section">
+          <div class="filter-label">Category</div>
+          <button class="filter-btn active" data-cat="all" onclick="setCategory(this,'all')"><span class="filter-dot" style="background:var(--t2)"></span>All Global News</button>
+          <button class="filter-btn" data-cat="market" onclick="setCategory(this,'market')"><span class="filter-dot" style="background:var(--blue)"></span>Markets</button>
+          <button class="filter-btn" data-cat="ai" onclick="setCategory(this,'ai')"><span class="filter-dot" style="background:var(--green)"></span>AI & Tech</button>
+          <button class="filter-btn" data-cat="central_bank" onclick="setCategory(this,'central_bank')"><span class="filter-dot" style="background:var(--gold)"></span>Central Banks</button>
+          <button class="filter-btn" data-cat="macro" onclick="setCategory(this,'macro')"><span class="filter-dot" style="background:var(--purple)"></span>Macro & Economy</button>
+          <button class="filter-btn" data-cat="geopolitical" onclick="setCategory(this,'geopolitical')"><span class="filter-dot" style="background:var(--red)"></span>Geopolitical</button>
+          <button class="filter-btn" data-cat="ticker" onclick="setCategory(this,'ticker')"><span class="filter-dot" style="background:var(--t3)"></span>Ticker-Specific</button>
+        </div>
+        <div class="filter-section">
+          <div class="filter-label">Time Window</div>
+          <div>
+            <button class="time-pill" onclick="setHours(this,4)">4h</button>
+            <button class="time-pill active" onclick="setHours(this,24)">24h</button>
+            <button class="time-pill" onclick="setHours(this,72)">3d</button>
+            <button class="time-pill" onclick="setHours(this,168)">7d</button>
+          </div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-label">Ticker Filter</div>
+          <div class="ticker-wrap">
+            <input id="ticker-input" placeholder="e.g. NVDA, AAPL..." oninput="setTicker(this.value)">
+            <button id="ticker-clear" onclick="clearTicker()">✕</button>
+          </div>
+        </div>
+        <div class="filter-section">
+          <div class="filter-label">Sentiment</div>
+          <button class="filter-btn" onclick="setSentiment(this,'all')">All</button>
+          <button class="filter-btn" onclick="setSentiment(this,'bullish')">Bullish only</button>
+          <button class="filter-btn" onclick="setSentiment(this,'bearish')">Bearish only</button>
+          <button class="filter-btn" onclick="setSentiment(this,'neutral')">Neutral only</button>
         </div>
       </div>
 
-      <div class="filter-section">
-        <div class="filter-label">Sentiment</div>
-        <button class="filter-btn" onclick="setSentiment('all')">All</button>
-        <button class="filter-btn" onclick="setSentiment('bullish')">Bullish only</button>
-        <button class="filter-btn" onclick="setSentiment('bearish')">Bearish only</button>
-        <button class="filter-btn" onclick="setSentiment('neutral')">Neutral only</button>
+      <!-- MAIN FEED -->
+      <div id="feed-area">
+        <div id="feed-header">
+          <input id="search-box" placeholder="Search global headlines..." oninput="onSearch(this.value)">
+          <button id="refresh-btn" onclick="loadNews(1,true)">↻ Refresh</button>
+          <span id="result-count"></span>
+        </div>
+        <div id="feed-loading"><div class="spin"></div>Loading global intelligence feed...</div>
+        <div id="feed-empty">No articles found for current filters.</div>
+        <div id="news-feed" style="flex:1"></div>
+        <div id="pagination"></div>
       </div>
+    </div>
 
-    </div><!-- /sidebar -->
-
-    <!-- ── MAIN FEED ── -->
-    <div id="feed-area">
-
-      <div id="feed-header">
-        <input id="search-box" placeholder="Search headlines..." oninput="onSearch(this.value)">
-        <button id="refresh-btn" onclick="loadNews(1,true)">↻ Refresh</button>
-        <span id="result-count"></span>
+    <!-- ══ TAB 2: SIGNAL GLOBE ══ -->
+    <div id="tab-globe">
+      <div id="globe-controls">
+        <span class="globe-ctrl-label">SIGNAL FILTER</span>
+        <button class="globe-filter-btn all active" data-gcat="all" onclick="setGlobeFilter(this,'all')">All Signals</button>
+        <button class="globe-filter-btn market" data-gcat="market" onclick="setGlobeFilter(this,'market')">Markets</button>
+        <button class="globe-filter-btn ai" data-gcat="ai" onclick="setGlobeFilter(this,'ai')">AI & Tech</button>
+        <button class="globe-filter-btn geopolitical" data-gcat="geopolitical" onclick="setGlobeFilter(this,'geopolitical')">Geopolitical</button>
+        <button class="globe-filter-btn central_bank" data-gcat="central_bank" onclick="setGlobeFilter(this,'central_bank')">Central Banks</button>
+        <button class="globe-filter-btn macro" data-gcat="macro" onclick="setGlobeFilter(this,'macro')">Macro</button>
+        <span id="globe-stats"></span>
       </div>
+      <div id="globe-container">
+        <div id="globe-loading"><div class="globe-spin"></div>Building signal globe...</div>
+        <div id="globe-canvas"></div>
+        <div id="globe-tooltip">
+          <div class="gt-region" id="gt-region">—</div>
+          <div class="gt-count" id="gt-count">0 signals</div>
+          <div class="gt-cat" id="gt-cat">—</div>
+        </div>
+        <div id="globe-legend">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--blue)"></div>Markets</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>AI & Tech</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Geopolitical</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--gold)"></div>Central Banks</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--purple)"></div>Macro</div>
+        </div>
+      </div>
+    </div>
 
-      <div id="feed-loading"><div class="spin"></div>Loading news...</div>
-      <div id="feed-empty">No articles found for current filters.</div>
-      <div id="news-feed"></div>
-      <div id="pagination"></div>
+    <!-- ══ TAB 3: VIDEO INTELLIGENCE ══ -->
+    <div id="tab-video">
+      <div id="video-header">
+        <div>
+          <div class="video-header-title">Financial News Video Intelligence</div>
+          <div class="video-header-sub">Bloomberg · Yahoo Finance · CNBC — live in FredAI</div>
+        </div>
+      </div>
+      <div id="video-body">
+        <div id="video-sidebar">
+          <div id="video-loading"><div class="spin"></div>Loading channels...</div>
+        </div>
+        <div id="video-player-area">
+          <div id="player-embed">
+            <div id="player-empty">
+              <div class="player-empty-icon">▶</div>
+              <div>Select a video from the sidebar to watch</div>
+              <div style="font-size:10px;color:var(--t3);margin-top:4px">Latest financial news from Bloomberg, Yahoo Finance & CNBC</div>
+            </div>
+          </div>
+          <div id="player-now-playing">
+            <span class="np-label">NOW PLAYING</span>
+            <span class="np-title" id="np-title">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
 
-    </div><!-- /feed-area -->
-
-  </div><!-- /main-layout -->
+  </div><!-- /page-body -->
 
   <div id="disc-bar">
-    Financial news aggregated from public sources for informational purposes only. Not financial advice. All investment risk is yours.
+    FredAI aggregates public global financial news for informational purposes only — not financial advice. All investment risk is yours.
   </div>
 </div><!-- /shell -->
 
+<!-- globe.gl CDN -->
+<script src="//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js"></script>
+
 <script>
+// ── STATE ───────────────────────────────────────────────────────────────────
 let _cat = 'all', _hours = 24, _ticker = '', _sentiment = 'all', _page = 1, _search = '';
 let _searchTimer = null;
-let _totalItems = 0;
+let _globeInstance = null, _globeData = [], _globeFilter = 'all';
+let _videoData = {}, _activeChannel = null, _activeVideoId = null;
 
+// ── TAB SWITCHING ────────────────────────────────────────────────────────────
+function switchPageTab(tab, btn) {
+  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-feed').style.display = tab === 'feed' ? 'flex' : 'none';
+  document.getElementById('tab-globe').style.display = tab === 'globe' ? 'flex' : 'none';
+  document.getElementById('tab-video').style.display = tab === 'video' ? 'flex' : 'none';
+  if (tab === 'globe' && !_globeInstance) initGlobe();
+  if (tab === 'video' && Object.keys(_videoData).length === 0) loadVideoChannels();
+}
+
+// ── NEWS FEED ────────────────────────────────────────────────────────────────
 function setCategory(btn, cat) {
-  document.querySelectorAll('.filter-btn[data-cat]').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.filter-btn[data-cat]').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _cat = cat; _page = 1; loadNews(1);
 }
 function setHours(btn, h) {
-  document.querySelectorAll('.time-pill').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.time-pill').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _hours = h; _page = 1; loadNews(1);
 }
 function setTicker(val) { _ticker = val.trim().toUpperCase(); _page = 1; loadNews(1); }
-function clearTicker() { document.getElementById('ticker-input').value=''; setTicker(''); }
-function setSentiment(s) { _sentiment = s; _page = 1; loadNews(1); }
+function clearTicker() { document.getElementById('ticker-input').value = ''; setTicker(''); }
+function setSentiment(btn, s) {
+  document.querySelectorAll('.filter-btn:not([data-cat])').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _sentiment = s; _page = 1; loadNews(1);
+}
 function onSearch(val) {
   clearTimeout(_searchTimer);
-  _searchTimer = setTimeout(()=>{ _search = val.trim(); _page = 1; loadNews(1); }, 350);
+  _searchTimer = setTimeout(() => { _search = val.trim(); _page = 1; loadNews(1); }, 350);
 }
 
-async function loadNews(page=1, forceRefresh=false) {
+async function loadNews(page = 1, forceRefresh = false) {
   _page = page;
   const loading = document.getElementById('feed-loading');
   const feed = document.getElementById('news-feed');
@@ -305,30 +499,19 @@ async function loadNews(page=1, forceRefresh=false) {
   loading.style.display = 'flex';
   feed.innerHTML = '';
   empty.style.display = 'none';
-
-  const params = new URLSearchParams({
-    category: _cat, hours: _hours, page, limit: 30,
-    ticker: _ticker,
-  });
-
+  const params = new URLSearchParams({ category: _cat, hours: _hours, page, limit: 30, ticker: _ticker });
   try {
     const r = await fetch('/api/news?' + params);
     const d = await r.json();
-    _totalItems = d.total || 0;
-    document.getElementById('total-badge').textContent = _totalItems + ' articles';
-    document.getElementById('result-count').textContent = `${_totalItems} results`;
+    const total = d.total || 0;
+    document.getElementById('total-badge').textContent = total + ' articles';
+    document.getElementById('result-count').textContent = total + ' results';
     loading.style.display = 'none';
-
     let items = d.items || [];
-
-    // Client-side search filter
     if (_search) {
       const q = _search.toLowerCase();
-      items = items.filter(i => (i.title||'').toLowerCase().includes(q) ||
-                                (i.summary||'').toLowerCase().includes(q));
+      items = items.filter(i => (i.title || '').toLowerCase().includes(q) || (i.summary || '').toLowerCase().includes(q));
     }
-
-    // Client-side sentiment filter
     if (_sentiment !== 'all') {
       items = items.filter(i => {
         const s = i.sentiment_score || 0;
@@ -337,14 +520,11 @@ async function loadNews(page=1, forceRefresh=false) {
         return s >= -0.1 && s <= 0.1;
       });
     }
-
     if (!items.length) { empty.style.display = 'block'; return; }
-
-    feed.innerHTML = items.map(item => renderCard(item)).join('');
-    renderPagination(d.total, page, 30);
-  } catch(e) {
-    loading.innerHTML = '<span style="color:var(--t3)">Failed to load news — retrying...</span>';
-    console.error(e);
+    feed.innerHTML = items.map(renderCard).join('');
+    renderPagination(total, page, 30);
+  } catch (e) {
+    loading.innerHTML = '<span style="color:var(--t3)">Failed to load — retrying...</span>';
   }
 }
 
@@ -352,26 +532,22 @@ function renderCard(item) {
   const sent = item.sentiment_score || 0;
   const sentClass = sent > 0.1 ? 'pos' : sent < -0.1 ? 'neg' : 'neu';
   const sentText = sent > 0.1 ? `▲ ${sent.toFixed(2)}` : sent < -0.1 ? `▼ ${sent.toFixed(2)}` : `— ${sent.toFixed(2)}`;
-
   const cat = esc(item.category || 'market');
   const tickers = (item.tickers || '').split(',').filter(Boolean);
   const tickerTags = tickers.map(t => `<span class="nc-ticker">${esc(t)}</span>`).join('');
-  const pub = formatDate(item.published_at);
-  const dotColor = sent > 0.1 ? '#00ff88' : sent < -0.1 ? '#ff3b5c' : '#4a6380';
+  const dotColor = sent > 0.1 ? '#00ff88' : sent < -0.1 ? '#ff3b5c' : '#3d5a73';
   const dotPos = Math.round(50 - sent * 40);
-
-  return `
-  <div class="news-card" onclick="openArticle('${esc(item.url)}')">
+  return `<div class="news-card" onclick="openArticle('${esc(item.url)}')">
     <div class="nc-left">
       <div class="nc-meta">
-        <span class="nc-source ${cat}">${esc(item.category||'market')}</span>
-        <span class="nc-src-name">${esc(item.source||'')}</span>
+        <span class="nc-cat ${cat}">${esc(item.category || 'market')}</span>
+        <span class="nc-src">${esc(item.source || '')}</span>
         ${tickerTags}
       </div>
       <div class="nc-title"><a href="${esc(item.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(item.title)}</a></div>
-      <div class="nc-summary">${esc(item.summary||'')}</div>
+      <div class="nc-summary">${esc(item.summary || '')}</div>
       <div class="nc-footer">
-        <span class="nc-time">${pub}</span>
+        <span class="nc-time">${formatDate(item.published_at)}</span>
         <span class="nc-sent ${sentClass}">${sentText}</span>
       </div>
     </div>
@@ -383,43 +559,192 @@ function renderCard(item) {
   </div>`;
 }
 
-function openArticle(url) {
-  if (url) window.open(url, '_blank', 'noopener,noreferrer');
-}
+function openArticle(url) { if (url) window.open(url, '_blank', 'noopener,noreferrer'); }
 
 function renderPagination(total, page, limit) {
   const pages = Math.ceil(total / limit);
-  if (pages <= 1) { document.getElementById('pagination').innerHTML=''; return; }
+  if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
   const el = document.getElementById('pagination');
-  let html = `<button class="page-btn" onclick="loadNews(${page-1})" ${page===1?'disabled':''}>← Prev</button>`;
-  const start = Math.max(1, page-2), end = Math.min(pages, page+2);
+  let html = `<button class="page-btn" onclick="loadNews(${page - 1})" ${page === 1 ? 'disabled' : ''}>← Prev</button>`;
+  const start = Math.max(1, page - 2), end = Math.min(pages, page + 2);
   for (let p = start; p <= end; p++) {
-    html += `<button class="page-btn ${p===page?'active':''}" onclick="loadNews(${p})">${p}</button>`;
+    html += `<button class="page-btn ${p === page ? 'active' : ''}" onclick="loadNews(${p})">${p}</button>`;
   }
-  html += `<button class="page-btn" onclick="loadNews(${page+1})" ${page>=pages?'disabled':''}>Next →</button>`;
-  html += `<span id="page-info">${page} / ${pages}</span>`;
+  html += `<button class="page-btn" onclick="loadNews(${page + 1})" ${page >= pages ? 'disabled' : ''}>Next →</button>`;
   el.innerHTML = html;
 }
 
+// ── SIGNAL GLOBE ─────────────────────────────────────────────────────────────
+const CAT_COLORS = {
+  market: '#00b4ff', ai: '#00ff88', geopolitical: '#ff3b5c',
+  central_bank: '#f5a623', macro: '#9b59ff', ticker: '#8ba3b8',
+};
+function catColor(cat) { return CAT_COLORS[cat] || '#8ba3b8'; }
+
+function setGlobeFilter(btn, cat) {
+  document.querySelectorAll('.globe-filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _globeFilter = cat;
+  renderGlobePoints();
+}
+
+async function initGlobe() {
+  const container = document.getElementById('globe-canvas');
+  const loading = document.getElementById('globe-loading');
+  try {
+    const r = await fetch('/api/news/globe-data?hours=24');
+    const data = await r.json();
+    _globeData = data.points || [];
+    document.getElementById('globe-stats').textContent = `${data.total} signals · 24h`;
+    loading.style.display = 'none';
+
+    _globeInstance = Globe({ animateIn: true })(container)
+      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+      .atmosphereColor('rgba(0,180,255,0.15)')
+      .atmosphereAltitude(0.18)
+      .backgroundColor('#03080f')
+      .pointAltitude(d => Math.min(0.06 + d.count * 0.015, 0.25))
+      .pointRadius(d => Math.min(0.4 + d.count * 0.08, 1.2))
+      .pointColor(d => catColor(d.category))
+      .pointLabel(d => `
+        <div style="background:rgba(7,13,24,.92);border:1px solid rgba(0,180,255,.25);border-radius:8px;padding:10px 14px;font-family:Inter,sans-serif">
+          <div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:4px">${d.label}</div>
+          <div style="font-size:11px;color:var(--blue);font-family:monospace">${d.count} signal${d.count !== 1 ? 's' : ''}</div>
+          <div style="font-size:9px;color:#3d5a73;text-transform:uppercase;letter-spacing:.5px;margin-top:3px">${d.category}</div>
+        </div>`)
+      .pointsMerge(false)
+      .onPointClick(d => {
+        _cat = d.category !== 'all' ? d.category : 'all';
+        switchPageTab('feed', document.querySelectorAll('.ptab')[0]);
+        loadNews(1);
+      });
+
+    renderGlobePoints();
+
+    // Auto-rotate
+    _globeInstance.controls().autoRotate = true;
+    _globeInstance.controls().autoRotateSpeed = 0.4;
+    _globeInstance.controls().enableZoom = true;
+
+    // Stop rotation on user interaction
+    container.addEventListener('mousedown', () => { _globeInstance.controls().autoRotate = false; });
+    container.addEventListener('touchstart', () => { _globeInstance.controls().autoRotate = false; });
+  } catch (e) {
+    loading.innerHTML = `<span style="color:var(--red)">Globe load failed: ${e.message}</span>`;
+  }
+}
+
+function renderGlobePoints() {
+  if (!_globeInstance) return;
+  const pts = _globeFilter === 'all' ? _globeData : _globeData.filter(d => d.category === _globeFilter);
+  _globeInstance.pointsData(pts);
+}
+
+// ── VIDEO INTELLIGENCE ────────────────────────────────────────────────────────
+const CHANNEL_META = {
+  'Bloomberg': { icon: '📊', color: '#00b4ff', desc: 'Bloomberg Markets & Finance' },
+  'Yahoo Finance': { icon: '📈', color: '#7b68ee', desc: 'Yahoo Finance Live' },
+  'CNBC': { icon: '📡', color: '#f5a623', desc: 'CNBC Financial News' },
+};
+
+async function loadVideoChannels() {
+  const sidebar = document.getElementById('video-sidebar');
+  try {
+    const r = await fetch('/api/news/youtube-channels');
+    _videoData = await r.json();
+    sidebar.innerHTML = '';
+    for (const [chName, chData] of Object.entries(_videoData)) {
+      const meta = CHANNEL_META[chName] || { icon: '▶', color: '#8ba3b8', desc: chName };
+      const videos = chData.videos || [];
+      const tab = document.createElement('div');
+      tab.className = 'channel-tab' + (!_activeChannel ? ' active' : '');
+      tab.innerHTML = `
+        <div class="ch-icon" style="background:rgba(${hexToRgb(meta.color)},.15);color:${meta.color}">${meta.icon}</div>
+        <div>
+          <div class="ch-name">${chName}</div>
+          <div class="ch-sub">${videos.length} videos available</div>
+        </div>`;
+      tab.onclick = () => selectChannel(tab, chName);
+      sidebar.appendChild(tab);
+
+      const thumbList = document.createElement('div');
+      thumbList.className = 'video-thumb-list';
+      thumbList.id = `ch-list-${chName.replace(/\s/g, '-')}`;
+      thumbList.style.display = !_activeChannel ? '' : 'none';
+
+      if (!videos.length) {
+        thumbList.innerHTML = `<div style="font-size:11px;color:var(--t3);text-align:center;padding:16px">No videos available</div>`;
+      } else {
+        thumbList.innerHTML = videos.map(v => `
+          <div class="video-thumb" id="thumb-${v.id}" onclick="playVideo('${v.id}','${esc(v.title)}','${chName}')">
+            <img class="thumb-img" src="${esc(v.thumbnail)}" alt="" loading="lazy" onerror="this.style.background='var(--bg3)'">
+            <div>
+              <div class="thumb-title">${esc(v.title)}</div>
+              <div class="thumb-time">${formatDate(v.published)}</div>
+            </div>
+          </div>`).join('');
+      }
+      sidebar.appendChild(thumbList);
+
+      if (!_activeChannel) {
+        _activeChannel = chName;
+        // Auto-play first video if available
+        if (videos.length) playVideo(videos[0].id, videos[0].title, chName);
+      }
+    }
+  } catch (e) {
+    sidebar.innerHTML = `<div style="padding:20px;color:var(--t3);font-size:11px">Failed to load channels: ${e.message}</div>`;
+  }
+}
+
+function selectChannel(tab, chName) {
+  document.querySelectorAll('.channel-tab').forEach(t => t.classList.remove('active'));
+  tab.classList.add('active');
+  // Toggle visibility of video lists
+  document.querySelectorAll('.video-thumb-list').forEach(el => el.style.display = 'none');
+  const list = document.getElementById(`ch-list-${chName.replace(/\s/g, '-')}`);
+  if (list) list.style.display = '';
+  _activeChannel = chName;
+}
+
+function playVideo(videoId, title, channel) {
+  const playerArea = document.getElementById('player-embed');
+  const nowPlaying = document.getElementById('player-now-playing');
+  document.querySelectorAll('.video-thumb').forEach(t => t.classList.remove('active'));
+  const thumb = document.getElementById(`thumb-${videoId}`);
+  if (thumb) thumb.classList.add('active');
+  _activeVideoId = videoId;
+  playerArea.innerHTML = `<iframe
+    src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&color=white"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen style="width:100%;height:100%;border:none"></iframe>`;
+  document.getElementById('np-title').textContent = title;
+  nowPlaying.style.display = 'flex';
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+// ── UTILS ────────────────────────────────────────────────────────────────────
 function formatDate(dt) {
   if (!dt) return '';
   try {
-    const d = new Date(dt + (dt.includes('Z')?'':' UTC'));
+    const d = new Date(dt + (dt.includes('Z') ? '' : dt.includes('T') ? 'Z' : ' UTC'));
     const diff = Math.round((Date.now() - d.getTime()) / 60000);
     if (diff < 1) return 'just now';
     if (diff < 60) return diff + 'm ago';
-    if (diff < 1440) return Math.round(diff/60) + 'h ago';
-    return Math.round(diff/1440) + 'd ago';
+    if (diff < 1440) return Math.round(diff / 60) + 'h ago';
+    return Math.round(diff / 1440) + 'd ago';
   } catch { return dt; }
 }
-
 function esc(s) {
-  const d = document.createElement('div');
-  d.textContent = s || '';
-  return d.innerHTML;
+  const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML;
 }
 
-// Load on start
+// ── INIT ─────────────────────────────────────────────────────────────────────
 loadNews(1);
 </script>
 </body>

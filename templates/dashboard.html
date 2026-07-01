@@ -64,6 +64,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<script src="//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js" defer></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
 <style>
@@ -1093,6 +1094,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
     <button class="nav-tab" onclick="switchTab('portfolio',this)">Portfolio</button>
     <button class="nav-tab" onclick="switchTab('trending',this)">Trending</button>
     <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
+    <button class="nav-tab" onclick="switchTab('globe',this)">◎ Globe</button>
     <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
     <button class="nav-tab" onclick="window.location='/graph'" style="color:var(--purple)">Graph ↗</button>
   </div>
@@ -1334,6 +1336,37 @@ html[data-tier="ultra"] #ops-picture{display:block}
         <div id="ai-loading" style="font-size:9px;color:var(--t3);margin-left:auto">Loading...</div>
       </div>
       <div id="ai-sectors" style="overflow-y:auto;max-height:calc(100vh - 200px)"></div>
+    </div>
+
+    <!-- SIGNAL GLOBE TAB -->
+    <div class="panel" id="tab-globe-panel" style="display:none;grid-column:1/-1;padding:0;overflow:hidden;height:calc(100vh - 200px)">
+      <div style="padding:10px 16px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--blue);text-transform:uppercase">◎ Global Signal Intelligence</div>
+        <div style="font-size:10px;color:var(--t3)">Live news signals by geographic source — spin to explore</div>
+        <div id="dash-globe-stats" style="font-size:9px;color:var(--t3);margin-left:auto;font-family:var(--mono)">Loading...</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <button class="dash-gflt active" data-gc="all" onclick="dashGlobeFilter(this,'all')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid var(--t4);color:var(--t2);background:none;cursor:pointer;transition:.12s">All</button>
+          <button class="dash-gflt" data-gc="market" onclick="dashGlobeFilter(this,'market')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(0,180,255,.3);color:var(--blue);background:none;cursor:pointer">Markets</button>
+          <button class="dash-gflt" data-gc="ai" onclick="dashGlobeFilter(this,'ai')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(0,255,136,.3);color:var(--green);background:none;cursor:pointer">AI</button>
+          <button class="dash-gflt" data-gc="geopolitical" onclick="dashGlobeFilter(this,'geopolitical')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(255,59,92,.3);color:var(--red);background:none;cursor:pointer">Geopolitical</button>
+        </div>
+      </div>
+      <div id="dash-globe-wrap" style="flex:1;height:100%;position:relative;background:var(--bg0)">
+        <div id="dash-globe-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--t3);font-size:12px;z-index:10">
+          <div style="width:28px;height:28px;border:2px solid rgba(0,180,255,.15);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite"></div>
+          Building globe...
+        </div>
+        <div id="dash-globe-canvas" style="width:100%;height:100%"></div>
+        <div style="position:absolute;bottom:16px;left:16px;background:rgba(6,15,28,.85);border:1px solid var(--border);border-radius:8px;padding:10px 14px;backdrop-filter:blur(8px)">
+          <div style="font-size:8px;color:var(--t3);letter-spacing:1px;margin-bottom:6px">SIGNAL SOURCE</div>
+          <div style="display:flex;flex-direction:column;gap:4px">
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--blue)"></div>Markets</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>AI & Tech</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--red)"></div>Geopolitical</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--gold)"></div>Central Banks</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- TRENDING TAB -->
@@ -1683,13 +1716,14 @@ const WL=['tab-watchlist'];
 const PF=['tab-portfolio-left','tab-portfolio-chart'];
 const TR=['tab-trending-list','tab-trending-chart'];
 const AI=['tab-ai'];
-const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI];
+const GB=['tab-globe-panel'];
+const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI,...GB];
+
+let _dashGlobeInst = null, _dashGlobeData = [], _dashGlobeFilter = 'all';
 
 function switchTab(tab, btn) {
   activeTab = tab;
-  // Update nav tabs (desktop)
   document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
-  // Update mobile nav
   document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
   if (btn) { btn.classList.add('active'); }
 
@@ -1707,7 +1741,6 @@ function switchTab(tab, btn) {
   } else if (tab==='portfolio') {
     content.className='tab-portfolio';
     PF.forEach(id=>{const el=g(id);if(el)el.style.display=''});
-    // On standard tier, hide chart (single column)
     if (TIER==='standard') { const pc=g('tab-portfolio-chart'); if(pc) pc.style.display='none'; }
     loadPortfolio();
   } else if (tab==='trending') {
@@ -1719,7 +1752,55 @@ function switchTab(tab, btn) {
     content.className='tab-overview';
     g('tab-ai').style.display='';
     loadAIUniverse();
+  } else if (tab==='globe') {
+    content.className='tab-overview';
+    g('tab-globe-panel').style.display='';
+    if (!_dashGlobeInst) initDashGlobe();
   }
+}
+
+const _GCOLS = {market:'#00b4ff',ai:'#00ff88',geopolitical:'#ff3b5c',central_bank:'#f5a623',macro:'#9b59ff',ticker:'#8ba3b8'};
+function _gcol(cat){return _GCOLS[cat]||'#8ba3b8'}
+
+async function initDashGlobe() {
+  if (!window.Globe) return;
+  const container = g('dash-globe-canvas');
+  const loading = g('dash-globe-loading');
+  try {
+    const r = await fetch('/api/news/globe-data?hours=24');
+    const data = await r.json();
+    _dashGlobeData = data.points || [];
+    g('dash-globe-stats').textContent = `${data.total} signals · 24h`;
+    loading.style.display = 'none';
+
+    _dashGlobeInst = Globe({ animateIn: true })(container)
+      .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+      .atmosphereColor('rgba(0,180,255,.12)')
+      .atmosphereAltitude(0.15)
+      .backgroundColor('#03080f')
+      .pointAltitude(d => Math.min(0.05 + d.count * 0.012, 0.22))
+      .pointRadius(d => Math.min(0.35 + d.count * 0.07, 1.1))
+      .pointColor(d => _gcol(d.category))
+      .pointLabel(d => `<div style="background:rgba(6,15,28,.9);border:1px solid rgba(0,180,255,.25);border-radius:6px;padding:8px 12px;font-family:Inter,sans-serif"><div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:3px">${d.label}</div><div style="font-size:10px;color:#00b4ff;font-family:monospace">${d.count} signal${d.count!==1?'s':''}</div><div style="font-size:9px;color:#3d5a73;margin-top:2px">${d.category}</div></div>`)
+      .pointsMerge(false)
+      .onPointClick(d => { window.location.href = `/news?cat=${d.category}`; });
+    _dashGlobeInst.pointsData(_dashGlobeData);
+    _dashGlobeInst.controls().autoRotate = true;
+    _dashGlobeInst.controls().autoRotateSpeed = 0.35;
+    container.addEventListener('mousedown', () => { _dashGlobeInst.controls().autoRotate = false; });
+  } catch(e) {
+    if (loading) loading.innerHTML = `<span style="color:var(--red)">Globe unavailable</span>`;
+  }
+}
+
+function dashGlobeFilter(btn, cat) {
+  document.querySelectorAll('.dash-gflt').forEach(b => b.style.background = 'none');
+  btn.style.background = 'rgba(0,180,255,.12)';
+  _dashGlobeFilter = cat;
+  if (!_dashGlobeInst) return;
+  const pts = cat === 'all' ? _dashGlobeData : _dashGlobeData.filter(d => d.category === cat);
+  _dashGlobeInst.pointsData(pts);
 }
 
 function switchChart(mode, btn) {

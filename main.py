@@ -127,9 +127,13 @@ AI_UNIVERSE = {
     },
 }
 
+from datetime import timedelta as _td
+
 app = Flask(__name__, template_folder="templates")
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["PERMANENT_SESSION_LIFETIME"] = _td(days=30)
 socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
 
 _updater.init(socketio)
@@ -159,6 +163,7 @@ def login_page():
         data = request.json or request.form
         user = verify_user(data.get("username", ""), data.get("password", ""))
         if user:
+            session.permanent = bool(data.get("remember_me", True))
             session["user_id"] = user["id"]
             session["username"] = user["username"]
             session["display_name"] = user.get("display_name") or user["username"]
@@ -420,9 +425,11 @@ def api_update_check():
 
 
 @app.route("/api/update/apply", methods=["POST"])
-@login_required
 def api_update_apply():
-    """Pull latest from GitHub and report result."""
+    """Pull latest from GitHub. Accepts both authenticated users and CI deploy header."""
+    deploy_header = request.headers.get("X-FredAI-Deploy")
+    if not deploy_header and "user_id" not in session:
+        return jsonify({"error": "unauthorized"}), 401
     result = _updater.apply_update()
     if result["updated"]:
         socketio.emit("alert", {
@@ -605,6 +612,126 @@ def api_user_delete():
         session.clear()
         return jsonify({"status": "deleted", "message": "All personal data has been permanently erased."})
     return jsonify({"error": "Deletion failed"}), 500
+
+
+@app.route("/api/user/change-password", methods=["POST"])
+@login_required
+def api_change_password():
+    """Change password with current-password verification."""
+    import hashlib
+    data = request.json or {}
+    uid = session["user_id"]
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    current_hash = hashlib.sha256(data.get("current_password", "").encode()).hexdigest()
+    if current_hash != user["password_hash"]:
+        return jsonify({"error": "Current password incorrect"}), 403
+    new_pw = data.get("new_password", "")
+    if len(new_pw) < 6:
+        return jsonify({"error": "New password must be ≥6 characters"}), 400
+    new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+    from memory_store import get_conn as _gc
+    with _gc() as c:
+        c.execute("UPDATE users SET password_hash=? WHERE id=?", (new_hash, uid))
+    return jsonify({"status": "password_changed"})
+
+
+@app.route("/api/user/reset-password", methods=["POST"])
+@login_required
+def api_reset_password():
+    """Admin-only: reset any user's password. Requires admin username."""
+    import hashlib
+    uid = session["user_id"]
+    user = get_user(uid)
+    if not user or user.get("username") != "admin":
+        return jsonify({"error": "Admin only"}), 403
+    data = request.json or {}
+    target = data.get("username", "").strip().lower()
+    new_pw = data.get("new_password", "")
+    if not target or len(new_pw) < 6:
+        return jsonify({"error": "username and new_password (≥6 chars) required"}), 400
+    new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+    from memory_store import get_conn as _gc
+    with _gc() as c:
+        rows = c.execute("UPDATE users SET password_hash=? WHERE username=?", (new_hash, target)).rowcount
+    if rows:
+        return jsonify({"status": "reset", "username": target})
+    return jsonify({"error": "User not found"}), 404
+
+
+@app.route("/api/news/globe-data")
+@login_required
+def api_news_globe_data():
+    """Aggregate news by geographic source for the globe visualization."""
+    from news_client import SOURCE_COORDINATES
+    hours = int(request.args.get("hours", 24))
+    news = get_news(hours=hours, limit=500)
+    from collections import defaultdict
+    region_counts: dict = defaultdict(lambda: {"count": 0, "sources": set(), "categories": []})
+    for item in news:
+        src = item.get("source", "")
+        coords = SOURCE_COORDINATES.get(src)
+        if coords:
+            key = src
+            region_counts[key]["count"] += 1
+            region_counts[key]["sources"].add(src)
+            region_counts[key]["lat"] = coords[0]
+            region_counts[key]["lng"] = coords[1]
+            region_counts[key]["region"] = coords[2]
+            cat = item.get("category", "market")
+            region_counts[key]["categories"].append(cat)
+    points = []
+    for src, data in region_counts.items():
+        cats = data["categories"]
+        primary = max(set(cats), key=cats.count) if cats else "market"
+        points.append({
+            "lat": data["lat"],
+            "lng": data["lng"],
+            "label": data["region"],
+            "count": data["count"],
+            "category": primary,
+        })
+    return jsonify({"points": points, "total": len(news), "hours": hours})
+
+
+@app.route("/api/news/youtube-channels")
+@login_required
+def api_youtube_channels():
+    """Return latest videos from financial news YouTube channels via RSS."""
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    CHANNELS = {
+        "Bloomberg": "UCIALMKvObZNtJ6AmdCLP7Lg",
+        "Yahoo Finance": "UCDneEQMn4nkAHSX9UPnWtLQ",
+        "CNBC": "UCvJJ_dzjViJCoLf5uKUTwoA",
+    }
+    results = {}
+    for name, cid in CHANNELS.items():
+        try:
+            url = f"https://www.youtube.com/feeds/videos.xml?channel_id={cid}"
+            req = urllib.request.Request(url, headers={"User-Agent": "FredAI/1.0"})
+            with urllib.request.urlopen(req, timeout=8) as r:
+                tree = ET.fromstring(r.read())
+            ns = {"atom": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015", "media": "http://search.yahoo.com/mrss/"}
+            entries = []
+            for entry in tree.findall("atom:entry", ns)[:5]:
+                vid_id = entry.find("yt:videoId", ns)
+                title = entry.find("atom:title", ns)
+                published = entry.find("atom:published", ns)
+                thumb = entry.find(".//media:thumbnail", ns)
+                if vid_id is not None and title is not None:
+                    entries.append({
+                        "id": vid_id.text,
+                        "title": title.text,
+                        "published": published.text if published is not None else "",
+                        "thumbnail": thumb.get("url") if thumb is not None else "",
+                        "embed_url": f"https://www.youtube.com/embed/{vid_id.text}?rel=0&modestbranding=1",
+                    })
+            results[name] = {"channel_id": cid, "videos": entries}
+        except Exception as e:
+            results[name] = {"channel_id": cid, "videos": [], "error": str(e)}
+    return jsonify(results)
 
 
 @app.route("/news")

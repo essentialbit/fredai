@@ -31,27 +31,68 @@ _HEADERS = {
 # ── FEED REGISTRY ─────────────────────────────────────────────────────────────
 
 MACRO_FEEDS = [
-    # Market & finance
+    # ── US Markets ──────────────────────────────────────────────────────────
     {"url": "https://finance.yahoo.com/news/rssindex", "source": "Yahoo Finance", "category": "market"},
     {"url": "https://feeds.marketwatch.com/marketwatch/topstories/", "source": "MarketWatch", "category": "market"},
     {"url": "https://www.cnbc.com/id/100003114/device/rss/rss.html", "source": "CNBC", "category": "market"},
     {"url": "https://feeds.bloomberg.com/markets/news.rss", "source": "Bloomberg", "category": "market"},
     {"url": "https://www.investing.com/rss/news_301.rss", "source": "Investing.com", "category": "market"},
     {"url": "https://seekingalpha.com/market_currents.xml", "source": "Seeking Alpha", "category": "market"},
-    # Central banks & macro policy
+    {"url": "https://www.wsj.com/xml/rss/3_7085.xml", "source": "WSJ Markets", "category": "market"},
+    {"url": "https://www.ft.com/rss/home", "source": "Financial Times", "category": "market"},
+    # ── Central banks & macro policy ────────────────────────────────────────
     {"url": "https://www.federalreserve.gov/feeds/press_all.xml", "source": "Federal Reserve", "category": "central_bank"},
+    {"url": "https://www.ecb.europa.eu/rss/press.html", "source": "ECB", "category": "central_bank"},
+    {"url": "https://www.bankofengland.co.uk/rss/news", "source": "Bank of England", "category": "central_bank"},
     {"url": "https://www.cnbc.com/id/20910258/device/rss/rss.html", "source": "CNBC Economy", "category": "macro"},
-    # Geopolitics
+    {"url": "https://www.imf.org/en/News/rss", "source": "IMF", "category": "macro"},
+    # ── Global Geopolitics ───────────────────────────────────────────────────
     {"url": "https://feeds.reuters.com/reuters/worldNews", "source": "Reuters World", "category": "geopolitical"},
     {"url": "https://www.cnbc.com/id/100727362/device/rss/rss.html", "source": "CNBC Politics", "category": "geopolitical"},
-    # AI & Tech
+    {"url": "https://feeds.bbci.co.uk/news/business/rss.xml", "source": "BBC Business", "category": "geopolitical"},
+    {"url": "https://www.aljazeera.com/xml/rss/all.xml", "source": "Al Jazeera", "category": "geopolitical"},
+    {"url": "https://www3.nhk.or.jp/rss/news/cat6.xml", "source": "NHK Asia", "category": "geopolitical"},
+    # ── Asia-Pacific ─────────────────────────────────────────────────────────
+    {"url": "https://asia.nikkei.com/rss/feed/nar", "source": "Nikkei Asia", "category": "market"},
+    {"url": "https://www.scmp.com/rss/91/feed", "source": "SCMP Business", "category": "market"},
+    {"url": "https://www.afr.com/rss", "source": "AFR", "category": "market"},
+    # ── AI & Tech (global) ───────────────────────────────────────────────────
     {"url": "https://feeds.feedburner.com/venturebeat/SZYF", "source": "VentureBeat AI", "category": "ai"},
     {"url": "https://techcrunch.com/category/artificial-intelligence/feed/", "source": "TechCrunch AI", "category": "ai"},
     {"url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "source": "The Verge AI", "category": "ai"},
     {"url": "https://www.cnbc.com/id/100084241/device/rss/rss.html", "source": "CNBC Tech", "category": "ai"},
-    # Australian / RBA
-    {"url": "https://www.afr.com/rss", "source": "AFR", "category": "australia"},
+    {"url": "https://www.wired.com/feed/category/business/latest/rss", "source": "Wired Business", "category": "ai"},
 ]
+
+# Geographic coordinates for globe visualization: source → (lat, lng, region_label)
+SOURCE_COORDINATES: dict[str, tuple[float, float, str]] = {
+    "Yahoo Finance":     (40.71, -74.00, "New York, USA"),
+    "MarketWatch":       (40.71, -74.00, "New York, USA"),
+    "CNBC":              (40.71, -74.01, "New York, USA"),
+    "Bloomberg":         (40.75, -73.99, "New York, USA"),
+    "Investing.com":     (32.06, 34.77,  "Tel Aviv, Israel"),
+    "Seeking Alpha":     (37.77, -122.42,"San Francisco, USA"),
+    "WSJ Markets":       (40.71, -74.00, "New York, USA"),
+    "Financial Times":   (51.50, -0.12,  "London, UK"),
+    "Federal Reserve":   (38.89, -77.04, "Washington D.C., USA"),
+    "ECB":               (50.11, 8.68,   "Frankfurt, Germany"),
+    "Bank of England":   (51.51, -0.09,  "London, UK"),
+    "CNBC Economy":      (40.71, -74.01, "New York, USA"),
+    "IMF":               (38.89, -77.04, "Washington D.C., USA"),
+    "Reuters World":     (51.50, -0.12,  "London, UK"),
+    "CNBC Politics":     (38.89, -77.04, "Washington D.C., USA"),
+    "BBC Business":      (51.51, -0.13,  "London, UK"),
+    "Al Jazeera":        (25.28, 51.52,  "Doha, Qatar"),
+    "NHK Asia":          (35.68, 139.76, "Tokyo, Japan"),
+    "Nikkei Asia":       (35.68, 139.76, "Tokyo, Japan"),
+    "SCMP Business":     (22.32, 114.17, "Hong Kong"),
+    "AFR":               (-33.87, 151.21,"Sydney, Australia"),
+    "VentureBeat AI":    (37.77, -122.42,"San Francisco, USA"),
+    "TechCrunch AI":     (37.77, -122.42,"San Francisco, USA"),
+    "The Verge AI":      (40.71, -74.00, "New York, USA"),
+    "CNBC Tech":         (37.77, -122.42,"San Francisco, USA"),
+    "Wired Business":    (37.77, -122.42,"San Francisco, USA"),
+}
 
 _FINANCIAL_KEYWORDS = re.compile(
     r'\b(stock|market|invest|trade|earn|revenue|profit|loss|GDP|inflation|rate|bond|'

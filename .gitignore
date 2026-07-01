@@ -13,5 +13,6 @@ dist/
 build/
 *.spec
 *.egg-info/
+*.pid
 
 ._*

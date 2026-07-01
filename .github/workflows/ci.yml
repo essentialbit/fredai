@@ -78,6 +78,35 @@ jobs:
           docker push $IMAGE:latest
           docker push $IMAGE:${{ github.sha }}
 
+  # ── Deploy: notify registered instances ─────────────────────────
+  deploy:
+    name: Deploy to Instances
+    needs: docker
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Notify instances to update
+        # Each instance registers its /api/update/apply endpoint via
+        # the FREDAI_WEBHOOK_URLS secret (comma-separated URLs).
+        # Instances must have AUTO_UPDATE=auto or manually apply.
+        run: |
+          URLS="${{ secrets.FREDAI_WEBHOOK_URLS }}"
+          if [ -z "$URLS" ]; then
+            echo "No FREDAI_WEBHOOK_URLS configured — skipping instance notification"
+            exit 0
+          fi
+          SHA="${{ github.sha }}"
+          IFS=',' read -ra ADDRS <<< "$URLS"
+          for URL in "${ADDRS[@]}"; do
+            URL=$(echo "$URL" | xargs)  # trim whitespace
+            echo "Notifying: $URL"
+            curl -sS -X POST "$URL/api/update/apply" \
+              -H "Content-Type: application/json" \
+              -H "X-FredAI-Deploy: $SHA" \
+              --max-time 30 \
+              --fail-with-body || echo "  Warning: $URL did not respond"
+          done
+
   # ── R&D: every 6h ───────────────────────────────────────────────
   rnd:
     name: R&D Improvement Cycle

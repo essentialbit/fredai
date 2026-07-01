@@ -2121,6 +2121,7 @@ async function loadInitData() {
         if (IS_ULTRA) g('ultra-trend-mini').style.display = '';
         checkDisclaimer();
         initInstaller();
+        if (typeof initTranslationObserver !== 'undefined') initTranslationObserver();
       }
     }
     quotesCache = d.quotes||{};
@@ -3199,6 +3200,78 @@ function fmtD(n){if(n==null)return'$--';return'$'+Math.abs(n).toLocaleString('en
 function fmtPrice(n,currency){if(n==null)return'--';const prefix=currency==='AUD'?'A$':'$';return prefix+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3})}
 function isAsx(sym){return typeof sym==='string'&&sym.endsWith('.AX')}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+
+
+// ── AUTO TRANSLATION ──────────────────────────────────────────────────────
+const translationCache = new Map();
+const nonEnglishRegex = /[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uff9f\u4e00-\u9faf\u3400-\u4dbf\u0400-\u04ff\u0600-\u06ff\uac00-\ud7af]/;
+
+async function autoTranslateElement(element) {
+  if (!element || element.dataset.translated === 'true') return;
+  const text = (element.textContent || '').trim();
+  if (!text || text.length < 3) return;
+  if (!nonEnglishRegex.test(text)) return;
+
+  element.dataset.translated = 'true';
+  
+  if (translationCache.has(text)) {
+    applyTranslation(element, translationCache.get(text));
+    return;
+  }
+
+  try {
+    const r = await fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text })
+    });
+    if (r.ok) {
+      const d = await r.json();
+      if (d.was_translated && d.translated_text) {
+        translationCache.set(text, d.translated_text);
+        applyTranslation(element, d.translated_text);
+      }
+    }
+  } catch (e) {
+    console.error('[Translation] Error:', e);
+  }
+}
+
+function applyTranslation(element, translatedText) {
+  element.innerHTML = `${esc(translatedText)} <span style="font-size:8px;color:#00ff88;background:rgba(0,255,136,0.12);border:1px solid rgba(0,255,136,0.25);padding:1px 4px;border-radius:3px;margin-left:4px;font-family:monospace;display:inline-block;vertical-align:middle">Translated</span>`;
+}
+
+function initTranslationObserver() {
+  const targetClasses = ['sig-text', 'ni-title', 'cb', 'ops-msg', 'tr-title', 'ni-summary', 'ops-event-title'];
+  
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          targetClasses.forEach(cls => {
+            if (node.classList.contains(cls)) {
+              autoTranslateElement(node);
+            }
+            node.querySelectorAll('.' + cls).forEach(el => {
+              autoTranslateElement(el);
+            });
+          });
+        }
+      }
+    }
+  });
+  
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+  
+  targetClasses.forEach(cls => {
+    document.querySelectorAll('.' + cls).forEach(el => {
+      autoTranslateElement(el);
+    });
+  });
+}
 </script>
 
 <!-- ══ DISCLAIMER MODAL (shown on first login, must accept to proceed) ══ -->

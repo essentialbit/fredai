@@ -164,6 +164,11 @@ def _install_macos(port: int = 8080) -> InstallResult:
     exe = app_macos / "fredai"
     exe.write_text(textwrap.dedent(f"""\
         #!/bin/bash
+        if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
+            cd "{BASE_DIR}"
+            ./venv/bin/python3 main.py >/dev/null 2>&1 &
+            sleep 3
+        fi
         open "{url}"
     """))
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -248,26 +253,55 @@ def _install_windows(port: int = 8080) -> InstallResult:
     warnings: list[str] = []
     url = f"http://localhost:{port}"
 
-    url_content = f"[InternetShortcut]\nURL={url}\nIconFile={_icon(256) or ''}\nIconIndex=0\n"
+    startup_script = BASE_DIR / "FredAI-Start.bat"
+    icon_path = _icon(256) or str(ICONS_DIR / "windows-256.ico")
+
+    try:
+        # Write FredAI-Start.bat
+        startup_script.write_text(textwrap.dedent(f"""\
+            @echo off
+            cd /d "{BASE_DIR}"
+            netstat -ano | findstr LISTENING | findstr :{port} >nul
+            if %errorlevel% neq 0 (
+                start "" "venv\\Scripts\\python.exe" main.py
+                timeout /t 3 >nul
+            )
+            start "" "{url}"
+        """))
+        actions.append(f"Created/updated startup script: {startup_script}")
+    except Exception as e:
+        warnings.append(f"Startup script failed: {e}")
 
     # Desktop
-    desktop = Path(os.path.expandvars(r"%USERPROFILE%\Desktop\FredAI.url"))
-    try:
-        desktop.write_text(url_content)
-        actions.append(f"Created Desktop shortcut: {desktop}")
-    except Exception as e:
-        warnings.append(f"Desktop shortcut failed: {e}")
-
+    desktop_lnk = Path(os.path.expandvars(r"%USERPROFILE%\Desktop\FredAI.lnk"))
     # Start Menu
-    start_menu = Path(os.path.expandvars(
-        r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\FredAI.url"
-    ))
+    start_menu_lnk = Path(os.path.expandvars(r"%APPDATA%\Microsoft\Windows\Start Menu\Programs\FredAI.lnk"))
+
     try:
-        start_menu.parent.mkdir(parents=True, exist_ok=True)
-        start_menu.write_text(url_content)
-        actions.append(f"Created Start Menu entry: {start_menu}")
+        ps_cmd = f"""
+        $wsh = New-Object -ComObject WScript.Shell
+        
+        # Desktop
+        $s = $wsh.CreateShortcut('{desktop_lnk}')
+        $s.TargetPath = '{startup_script}'
+        $s.WorkingDirectory = '{BASE_DIR}'
+        $s.Description = 'FredAI Financial Intelligence'
+        if (Test-Path '{icon_path}') {{ $s.IconLocation = '{icon_path}' }}
+        $s.Save()
+        
+        # Start Menu
+        $s2 = $wsh.CreateShortcut('{start_menu_lnk}')
+        $s2.TargetPath = '{startup_script}'
+        $s2.WorkingDirectory = '{BASE_DIR}'
+        $s2.Description = 'FredAI Financial Intelligence'
+        if (Test-Path '{icon_path}') {{ $s2.IconLocation = '{icon_path}' }}
+        $s2.Save()
+        """
+        subprocess.run(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_cmd], check=True)
+        actions.append(f"Created Desktop shortcut: {desktop_lnk}")
+        actions.append(f"Created Start Menu entry: {start_menu_lnk}")
     except Exception as e:
-        warnings.append(f"Start Menu shortcut failed: {e}")
+        warnings.append(f"PowerShell shortcut creation failed: {e}")
 
     # Pin to Taskbar — not reliably automatable without C#/COM; skip
     warnings.append(
@@ -297,10 +331,23 @@ def _install_linux(device: dict, port: int = 8080) -> InstallResult:
 
     icon_path = _icon(256) or _icon(128) or _icon(512) or str(ASSETS_DIR / "fredai-icon.svg")
 
-    # Try to start cmd: use systemd if service exists, else direct python
-    start_cmd = f"xdg-open {url}"
-    if shutil.which("systemctl"):
-        start_cmd = f"bash -c 'systemctl --user start fredai 2>/dev/null || true; xdg-open {url}'"
+    launcher_path = BASE_DIR / "fredai-launcher.sh"
+    try:
+        launcher_path.write_text(textwrap.dedent(f"""\
+            #!/bin/bash
+            if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
+                cd "{BASE_DIR}"
+                ./venv/bin/python3 main.py >/dev/null 2>&1 &
+                sleep 3
+            fi
+            xdg-open "{url}"
+        """))
+        launcher_path.chmod(launcher_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        actions.append(f"Created Linux launcher script: {launcher_path}")
+    except Exception as e:
+        warnings.append(f"Linux launcher script failed: {e}")
+
+    start_cmd = str(launcher_path)
 
     desktop_entry = textwrap.dedent(f"""\
         [Desktop Entry]

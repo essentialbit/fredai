@@ -19,7 +19,7 @@ from memory_store import (
     get_portfolio, upsert_portfolio,
     get_user_interests, bump_interest, decay_interests,
     get_trending_assets,
-    verify_user, create_user, get_user,
+    verify_user, create_user, get_user, get_user_by_username,
     log_consent, has_consent, export_user_data, delete_user_data, prune_old_data,
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
@@ -42,7 +42,7 @@ from graph_engine import build_graph, generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
-from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS
+from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
 
@@ -248,6 +248,201 @@ def register():
 def logout():
     session.clear()
     return jsonify({"status": "ok"})
+
+
+# ── OAUTH ROUTES ──────────────────────────────────────────────────────────────
+import urllib.parse
+import secrets
+
+@app.route("/api/auth/status")
+def api_auth_status():
+    uid = session.get("user_id")
+    providers = []
+    if GOOGLE_CLIENT_ID:
+        providers.append("google")
+    if GITHUB_CLIENT_ID:
+        providers.append("github")
+        
+    status_info = {
+        "status": "anonymous" if not uid else ("accepted" if has_consent(uid, f"disclaimer-{DISCLAIMER_VERSION}") else "pending"),
+        "providers": providers
+    }
+    if uid:
+        status_info.update({
+            "username": session["username"],
+            "display_name": session["display_name"]
+        })
+    return jsonify(status_info)
+
+
+@app.route("/login/github")
+def login_github():
+    if not GITHUB_CLIENT_ID:
+        return "GitHub OAuth is not configured on this server.", 400
+    state = secrets.token_hex(16)
+    session["oauth_state"] = state
+    redirect_uri = request.url_root.rstrip('/') + "/login/github/callback"
+    params = {
+        "client_id": GITHUB_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "scope": "read:user user:email"
+    }
+    url = "https://github.com/login/oauth/authorize?" + urllib.parse.urlencode(params)
+    return redirect(url)
+
+
+@app.route("/login/github/callback")
+def login_github_callback():
+    if not GITHUB_CLIENT_ID or not GITHUB_CLIENT_SECRET:
+        return "GitHub OAuth is not configured on this server.", 400
+        
+    state = request.args.get("state")
+    if not state or state != session.pop("oauth_state", None):
+        return "Invalid OAuth state.", 400
+        
+    code = request.args.get("code")
+    if not code:
+        return "Missing code.", 400
+        
+    token_url = "https://github.com/login/oauth/access_token"
+    redirect_uri = request.url_root.rstrip('/') + "/login/github/callback"
+    headers = {"Accept": "application/json"}
+    data = {
+        "client_id": GITHUB_CLIENT_ID,
+        "client_secret": GITHUB_CLIENT_SECRET,
+        "code": code,
+        "redirect_uri": redirect_uri
+    }
+    
+    import requests as oauth_requests
+    token_res = oauth_requests.post(token_url, headers=headers, data=data, timeout=15)
+    if token_res.status_code != 200:
+        return "Failed to exchange authorization code.", 400
+        
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        return "Could not retrieve access token.", 400
+        
+    user_url = "https://api.github.com/user"
+    user_headers = {
+        "Authorization": f"token {access_token}",
+        "User-Agent": "FredAI-App"
+    }
+    user_res = oauth_requests.get(user_url, headers=user_headers, timeout=15)
+    if user_res.status_code != 200:
+        return "Failed to fetch user profile from GitHub.", 400
+        
+    user_profile = user_res.json()
+    github_login = user_profile.get("login")
+    github_name = user_profile.get("name") or github_login
+    
+    if not github_login:
+        return "Failed to retrieve username from GitHub.", 400
+        
+    username = f"github_{github_login}".lower()
+    
+    import hashlib
+    user = get_user_by_username(username)
+    if not user:
+        rand_pw_hash = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+        user = create_user(username, rand_pw_hash, github_name)
+        if not user:
+            return "Failed to register user.", 500
+            
+    session.clear()
+    session.permanent = True
+    session["user_id"] = user["id"]
+    session["username"] = user["username"]
+    session["display_name"] = user.get("display_name") or user["username"]
+    
+    return redirect("/")
+
+
+@app.route("/login/google")
+def login_google():
+    if not GOOGLE_CLIENT_ID:
+        return "Google OAuth is not configured on this server.", 400
+    state = secrets.token_hex(16)
+    session["oauth_state"] = state
+    redirect_uri = request.url_root.rstrip('/') + "/login/google/callback"
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "response_type": "code",
+        "scope": "openid profile email"
+    }
+    url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
+    return redirect(url)
+
+
+@app.route("/login/google/callback")
+def login_google_callback():
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        return "Google OAuth is not configured on this server.", 400
+        
+    state = request.args.get("state")
+    if not state or state != session.pop("oauth_state", None):
+        return "Invalid OAuth state.", 400
+        
+    code = request.args.get("code")
+    if not code:
+        return "Missing code.", 400
+        
+    token_url = "https://oauth2.googleapis.com/token"
+    redirect_uri = request.url_root.rstrip('/') + "/login/google/callback"
+    data = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "code": code,
+        "grant_type": "authorization_code",
+        "redirect_uri": redirect_uri
+    }
+    
+    import requests as oauth_requests
+    token_res = oauth_requests.post(token_url, data=data, timeout=15)
+    if token_res.status_code != 200:
+        return "Failed to exchange authorization code.", 400
+        
+    token_data = token_res.json()
+    access_token = token_data.get("access_token")
+    if not access_token:
+        return "Could not retrieve access token.", 400
+        
+    user_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+    user_headers = {"Authorization": f"Bearer {access_token}"}
+    user_res = oauth_requests.get(user_url, headers=user_headers, timeout=15)
+    if user_res.status_code != 200:
+        return "Failed to fetch user profile from Google.", 400
+        
+    user_profile = user_res.json()
+    google_sub = user_profile.get("sub")
+    google_name = user_profile.get("name") or user_profile.get("given_name") or "Google User"
+    google_email = user_profile.get("email")
+    
+    if not google_sub:
+        return "Failed to retrieve user ID from Google.", 400
+        
+    local_name = google_email.split('@')[0] if google_email else google_sub[:8]
+    username = f"google_{local_name}".lower()
+    
+    import hashlib
+    user = get_user_by_username(username)
+    if not user:
+        rand_pw_hash = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
+        user = create_user(username, rand_pw_hash, google_name)
+        if not user:
+            return "Failed to register user.", 500
+            
+    session.clear()
+    session.permanent = True
+    session["user_id"] = user["id"]
+    session["username"] = user["username"]
+    session["display_name"] = user.get("display_name") or user["username"]
+    
+    return redirect("/")
 
 
 @app.route("/")
@@ -666,11 +861,13 @@ def api_user_delete():
     user = get_user(uid)
     if not user:
         return jsonify({"error": "User not found"}), 404
-    # Require password re-confirmation before erasure
-    import hashlib
-    pw_hash = hashlib.sha256(data.get("password", "").encode()).hexdigest()
-    if pw_hash != user["password_hash"]:
-        return jsonify({"error": "Password confirmation required"}), 403
+    # Require password re-confirmation unless OAuth user
+    is_oauth = user["username"].startswith("google_") or user["username"].startswith("github_")
+    if not is_oauth:
+        import hashlib
+        pw_hash = hashlib.sha256(data.get("password", "").encode()).hexdigest()
+        if pw_hash != user["password_hash"]:
+            return jsonify({"error": "Password confirmation required"}), 403
     ok = delete_user_data(uid)
     if ok:
         session.clear()

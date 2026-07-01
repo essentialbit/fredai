@@ -3,24 +3,24 @@ name: FredAI CI/CD
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ["v*"]
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 */6 * * *'   # R&D discovery + implementation every 6h
+    - cron: "0 */6 * * *"   # R&D + community cycle every 6h
   workflow_dispatch:
     inputs:
       mode:
-        description: 'Run mode'
-        default: 'ci'
+        description: "Run mode"
+        default: ci
         type: choice
         options: [ci, improve, discover, dry-run, release]
       release_version:
-        description: 'Version for manual release (e.g. v1.2.0) — only used when mode=release'
+        description: "Version for manual release (e.g. v1.2.0) — only when mode=release"
         required: false
 
 jobs:
-  # ── CI: validate on every push ──────────────────────────────────
+  # ── Validate on every push / PR ────────────────────────────────
   validate:
     name: Validate
     runs-on: ubuntu-latest
@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
           cache: pip
       - run: pip install -r requirements.txt -q
       - name: Import check
@@ -45,13 +45,14 @@ jobs:
           from twitter_client import score_text
           from installer import detect_device, is_installed
           from updater import status
+          from community import run_community_cycle
           init_db()
           s, t = score_text('NVDA crushing earnings — massive bull signal')
           assert t in ('bullish','bearish','neutral')
           insert_feature_proposal('Test Feature', 'Test', 'general')
           props = get_top_proposals(limit=1)
           assert len(props) > 0
-          print(f'All imports OK | VADER: {s:.3f}/{t} | Device detect: OK')
+          print(f'All imports OK | VADER: {s:.3f}/{t}')
           "
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'skip' }}
@@ -64,9 +65,9 @@ jobs:
         id: meta
         run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
-  # ── Docker build + push to GHCR ─────────────────────────────────
+  # ── Docker build + push to GHCR ────────────────────────────────
   docker:
-    name: Docker Build & Push
+    name: Docker Build and Push
     needs: validate
     runs-on: ubuntu-latest
     if: |
@@ -76,11 +77,9 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      image: ${{ steps.push.outputs.image }}
     steps:
       - uses: actions/checkout@v4
-      - name: Set up QEMU (for multi-arch ARM builds)
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -93,19 +92,15 @@ jobs:
       - name: Determine image tags
         id: tags
         run: |
-          IMAGE=ghcr.io/${{ github.repository_owner }}/fredai
-          SHA=${{ github.sha }}
-          SHORT=${{ needs.validate.outputs.short_sha }}
+          IMAGE="ghcr.io/${{ github.repository_owner }}/fredai"
+          SHORT="${{ needs.validate.outputs.short_sha }}"
           TAGS="$IMAGE:latest,$IMAGE:$SHORT"
-          # Add semver tag if this is a tag push or manual release
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
             TAGS="$TAGS,$IMAGE:$VERSION"
           fi
           echo "tags=$TAGS" >> $GITHUB_OUTPUT
-          echo "image=$IMAGE" >> $GITHUB_OUTPUT
-      - name: Build and push (multi-arch: amd64 + arm64)
-        id: push
+      - name: "Build and push (amd64 + arm64)"
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -114,9 +109,39 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          outputs: image=${{ steps.tags.outputs.image }}
 
-  # ── GitHub Release (auto-versioned) ─────────────────────────────
+  # ── Auto-tag every push to main ────────────────────────────────
+  auto-tag:
+    name: Auto-version
+    needs: [validate, docker]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    outputs:
+      new_tag: ${{ steps.bump.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Bump patch version and tag
+        id: bump
+        run: |
+          git config user.name "FredAI"
+          git config user.email "fredai-bot@users.noreply.github.com"
+          LATEST=$(git tag --list 'v*' --sort=-version:refname \
+            | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo "v0.0.0")
+          MAJOR=$(echo $LATEST | cut -d. -f1 | tr -d v)
+          MINOR=$(echo $LATEST | cut -d. -f2)
+          PATCH=$(echo $LATEST | cut -d. -f3)
+          NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH+1))"
+          echo "Previous: $LATEST → New: $NEW_TAG"
+          git tag -a "$NEW_TAG" -m "Release $NEW_TAG"
+          git push origin "$NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
+
+  # ── GitHub Release (fires on any v* tag) ───────────────────────
   release:
     name: GitHub Release
     needs: [validate, docker]
@@ -144,10 +169,10 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get commits since last tag
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
-          echo "Changelog since $LAST_TAG:"
-          CHANGES=$(git log $LAST_TAG..HEAD --pretty=format:"- %s" --no-merges | head -40)
+          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null \
+            || git rev-list --max-parents=0 HEAD)
+          CHANGES=$(git log "$LAST_TAG..HEAD" --pretty=format:"- %s" \
+            --no-merges | grep -v '^- auto-improve' | head -40)
           echo "changes<<EOF" >> $GITHUB_OUTPUT
           echo "$CHANGES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
@@ -159,33 +184,35 @@ jobs:
           body: |
             ## FredAI ${{ steps.version.outputs.version }}
 
-            ### What's in this release
+            ### Changes
             ${{ steps.changelog.outputs.changes }}
 
-            ### Docker
+            ### Install / update
+
+            **Docker (any platform):**
             ```bash
             docker pull ghcr.io/essentialbit/fredai:${{ steps.version.outputs.version }}
-            # or always latest:
+            # or always-latest:
             docker pull ghcr.io/essentialbit/fredai:latest
-            ```
-
-            ### One-command update
-            ```bash
-            # Docker Compose
             docker compose pull && docker compose up -d
-
-            # Native install (auto-applies via 6h poller if AUTO_UPDATE=auto)
-            git pull origin main && pip install -r requirements.txt
             ```
 
-            ### Commit
-            `${{ github.sha }}`
+            **Native (macOS / Linux / Pi):**
+            ```bash
+            git pull origin main
+            pip install -r requirements.txt
+            python3 main.py
+            ```
+
+            **Auto-update:** instances with `AUTO_UPDATE=auto` apply this automatically within 6 hours.
+
+            ---
+            Commit: `${{ github.sha }}`
           draft: false
           prerelease: false
-          generate_release_notes: false
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── Deploy: notify all registered instances ──────────────────────
+  # ── Deploy: notify registered instances ────────────────────────
   deploy:
     name: Deploy to Instances
     needs: docker
@@ -195,24 +222,20 @@ jobs:
       startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Notify instances to pull update
-        # FREDAI_WEBHOOK_URLS: comma-separated public URLs of running FredAI instances.
-        # FREDAI_DEPLOY_SECRET: shared secret (same value set in each instance's .env).
-        # Without FREDAI_DEPLOY_SECRET set in GitHub Secrets, webhook notifications are skipped.
         run: |
           URLS="${{ secrets.FREDAI_WEBHOOK_URLS }}"
           SECRET="${{ secrets.FREDAI_DEPLOY_SECRET }}"
+          SHA="${{ github.sha }}"
           if [ -z "$URLS" ]; then
             echo "No FREDAI_WEBHOOK_URLS configured — instances rely on 6h auto-poll"
             exit 0
           fi
           if [ -z "$SECRET" ]; then
-            echo "FREDAI_DEPLOY_SECRET not set in GitHub Secrets — skipping webhook notification"
-            echo "Add FREDAI_DEPLOY_SECRET to GitHub Secrets and to each instance .env to enable CI push"
+            echo "FREDAI_DEPLOY_SECRET not set — skipping webhook (instances will poll)"
             exit 0
           fi
+          NOTIFIED=0; FAILED=0
           IFS=',' read -ra ADDRS <<< "$URLS"
-          NOTIFIED=0
-          FAILED=0
           for URL in "${ADDRS[@]}"; do
             URL=$(echo "$URL" | xargs)
             [ -z "$URL" ] && continue
@@ -223,48 +246,16 @@ jobs:
               -H "X-FredAI-Deploy: $SECRET" \
               --max-time 30 || echo "000")
             if [ "$HTTP" = "200" ] || [ "$HTTP" = "202" ]; then
-              echo "  OK ($HTTP)"
-              NOTIFIED=$((NOTIFIED+1))
+              echo "  OK ($HTTP)"; NOTIFIED=$((NOTIFIED+1))
             else
-              echo "  Warning: got HTTP $HTTP — instance may be offline or unreachable"
-              FAILED=$((FAILED+1))
+              echo "  Warning: HTTP $HTTP"; FAILED=$((FAILED+1))
             fi
           done
-          echo "Notified $NOTIFIED instance(s), $FAILED unreachable"
+          echo "Notified $NOTIFIED, unreachable $FAILED"
 
-  # ── Auto-release: tag and release every push to main ────────────
-  auto-tag:
-    name: Auto-version main branch
-    needs: [validate, docker]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Bump patch version and tag
-        run: |
-          git config user.name "FredAI"
-          git config user.email "fredai-bot@users.noreply.github.com"
-
-          # Get current latest semver tag (default v0.0.0 if none)
-          LATEST=$(git tag --list 'v*' --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || echo "v0.0.0")
-          MAJOR=$(echo $LATEST | cut -d. -f1 | tr -d v)
-          MINOR=$(echo $LATEST | cut -d. -f2)
-          PATCH=$(echo $LATEST | cut -d. -f3)
-          NEW_PATCH=$((PATCH+1))
-          NEW_TAG="v${MAJOR}.${MINOR}.${NEW_PATCH}"
-
-          echo "Previous: $LATEST → New: $NEW_TAG"
-          git tag -a "$NEW_TAG" -m "Release $NEW_TAG — auto-tagged from main"
-          git push origin "$NEW_TAG"
-
-  # ── R&D: every 6h ───────────────────────────────────────────────
+  # ── R&D + community engagement every 6h ────────────────────────
   rnd:
-    name: R&D Improvement Cycle
+    name: "R&D and Community Cycle"
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'schedule' ||
@@ -280,19 +271,17 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: "3.13"
           cache: pip
       - run: pip install -r requirements.txt -q
-      - name: Run improvement + community cycle
+      - name: Run improvement and community cycle
         run: |
           MODE="${{ github.event.inputs.mode || 'improve' }}"
-          if [ "$MODE" = "dry-run" ]; then
-            python3 improve.py --dry-run
-          elif [ "$MODE" = "discover" ]; then
-            python3 improve.py --discover
-          else
-            python3 improve.py
-          fi
+          case "$MODE" in
+            dry-run)  python3 improve.py --dry-run ;;
+            discover) python3 improve.py --discover ;;
+            *)        python3 improve.py ;;
+          esac
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}

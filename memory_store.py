@@ -185,15 +185,27 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_techalerts_user ON tech_alerts(user_id);
         """)
 
-        # Seed a default admin user if none exist
+        # Seed a default admin user if none exist.
+        # Password is randomised on first run — printed to console once.
+        # Set FREDAI_ADMIN_PASSWORD in .env to pin a specific initial password.
         existing = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
         if existing == 0:
-            import hashlib
-            pw = hashlib.sha256("sentinel2024".encode()).hexdigest()
+            import hashlib, os, secrets as _sec
+            env_pw = os.getenv("FREDAI_ADMIN_PASSWORD", "")
+            initial_pw = env_pw if env_pw else _sec.token_urlsafe(16)
+            pw_hash = hashlib.sha256(initial_pw.encode()).hexdigest()
             conn.execute(
                 "INSERT INTO users (username, password_hash, display_name) VALUES (?,?,?)",
-                ("admin", pw, "Admin")
+                ("admin", pw_hash, "Admin")
             )
+            if not env_pw:
+                print(f"\n{'='*60}")
+                print(f"[Security] FredAI admin account created.")
+                print(f"[Security] Username: admin")
+                print(f"[Security] Password: {initial_pw}")
+                print(f"[Security] SAVE THIS — it won't be shown again.")
+                print(f"[Security] Set FREDAI_ADMIN_PASSWORD in .env to control this.")
+                print(f"{'='*60}\n")
 
 
 @contextmanager

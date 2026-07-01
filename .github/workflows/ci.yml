@@ -195,14 +195,19 @@ jobs:
       startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Notify instances to pull update
-        # Instances register their /api/update/apply URL in the FREDAI_WEBHOOK_URLS secret.
-        # Format: comma-separated public URLs, e.g. https://fredai.home.example.com,https://fred.vps.example.com
-        # Instances with AUTO_UPDATE=auto apply immediately; notify shows a badge.
+        # FREDAI_WEBHOOK_URLS: comma-separated public URLs of running FredAI instances.
+        # FREDAI_DEPLOY_SECRET: shared secret (same value set in each instance's .env).
+        # Without FREDAI_DEPLOY_SECRET set in GitHub Secrets, webhook notifications are skipped.
         run: |
           URLS="${{ secrets.FREDAI_WEBHOOK_URLS }}"
-          SHA="${{ github.sha }}"
+          SECRET="${{ secrets.FREDAI_DEPLOY_SECRET }}"
           if [ -z "$URLS" ]; then
             echo "No FREDAI_WEBHOOK_URLS configured — instances rely on 6h auto-poll"
+            exit 0
+          fi
+          if [ -z "$SECRET" ]; then
+            echo "FREDAI_DEPLOY_SECRET not set in GitHub Secrets — skipping webhook notification"
+            echo "Add FREDAI_DEPLOY_SECRET to GitHub Secrets and to each instance .env to enable CI push"
             exit 0
           fi
           IFS=',' read -ra ADDRS <<< "$URLS"
@@ -215,7 +220,7 @@ jobs:
             HTTP=$(curl -sS -o /dev/null -w "%{http_code}" \
               -X POST "$URL/api/update/apply" \
               -H "Content-Type: application/json" \
-              -H "X-FredAI-Deploy: $SHA" \
+              -H "X-FredAI-Deploy: $SECRET" \
               --max-time 30 || echo "000")
             if [ "$HTTP" = "200" ] || [ "$HTTP" = "202" ]; then
               echo "  OK ($HTTP)"

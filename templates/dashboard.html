@@ -1886,10 +1886,11 @@ function renderSigs(filter='') {
 }
 function filterSigs(v){renderSigs(v.toLowerCase())}
 function sigCard(s) {
-  const asset=s.asset?`<span class="sig-tag ${s.signal_type}">${s.asset.replace('-USD','')}</span>`:'';
+  const validType=/^[a-z]+$/.test(s.signal_type||'')?s.signal_type:'neutral';
+  const asset=s.asset?`<span class="sig-tag ${validType}">${esc(s.asset.replace('-USD',''))}</span>`:'';
   const sc=s.sentiment_score||0, cls=sc>.05?'p':sc<-.05?'n':'z';
   const text=(s.content||s.text||'').slice(0,IS_MOBILE?100:150);
-  return `<div class="sig-card"><div class="sig-hdr"><span class="sig-auth">${esc(s.author||'')}</span>${asset}</div><div class="sig-text">${esc(text)}</div><span class="sig-score ${cls}">VADER ${sc>=0?'+':''}${sc.toFixed(3)} · ${(s.signal_type||'neutral').toUpperCase()}</span></div>`;
+  return `<div class="sig-card"><div class="sig-hdr"><span class="sig-auth">${esc(s.author||'')}</span>${asset}</div><div class="sig-text">${esc(text)}</div><span class="sig-score ${cls}">VADER ${sc>=0?'+':''}${sc.toFixed(3)} · ${validType.toUpperCase()}</span></div>`;
 }
 
 // ── HEATMAP ───────────────────────────────────────────────────────────────
@@ -1898,7 +1899,7 @@ function renderHeatmap(sector) {
     const pct=s.change_pct||0,i=Math.min(Math.abs(pct)/5,1);
     const bg=pct>0?`rgba(0,255,136,${.07+i*.35})`:`rgba(255,59,92,${.07+i*.35})`;
     const col=pct>0?'var(--green)':'var(--red)';
-    return `<div class="hc" style="background:${bg};color:${col}" title="${s.name||s.symbol}"><div class="hc-sym">${s.symbol.replace('-USD','')}</div><div class="hc-pct">${pct>=0?'+':''}${pct.toFixed(2)}%</div></div>`;
+    return `<div class="hc" style="background:${bg};color:${col}" title="${esc(s.name||s.symbol)}"><div class="hc-sym">${esc(s.symbol.replace('-USD',''))}</div><div class="hc-pct">${pct>=0?'+':''}${pct.toFixed(2)}%</div></div>`;
   }).join('');
 }
 

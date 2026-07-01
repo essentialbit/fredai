@@ -634,6 +634,12 @@ def get_top_proposals(status="proposed", limit=5) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_proposal(proposal_id: int) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM feature_backlog WHERE id=?", (proposal_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def get_all_proposals(limit=50) -> list[dict]:
     with get_conn() as conn:
         rows = conn.execute(

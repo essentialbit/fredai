@@ -62,6 +62,33 @@ def _resolve_provider() -> str:
     return "none"
 
 
+def _get_api_keys() -> tuple[str, str]:
+    from flask import session
+    import json
+    
+    a_key = ANTHROPIC_API_KEY
+    g_key = GEMINI_API_KEY
+    
+    try:
+        if "user_id" in session:
+            from memory_store import get_user
+            user = get_user(session["user_id"])
+            if user:
+                prefs = json.loads(user.get("preferences") or "{}")
+                u_a_key = prefs.get("user_anthropic_key")
+                u_g_key = prefs.get("user_gemini_key")
+                if u_a_key:
+                    a_key = u_a_key
+                if u_g_key:
+                    g_key = u_g_key
+    except RuntimeError:
+        pass
+    except Exception:
+        pass
+        
+    return a_key, g_key
+
+
 # ── PROVIDER CLASS ────────────────────────────────────────────────────────────
 
 class _FredProvider:
@@ -79,43 +106,35 @@ class _FredProvider:
     def provider(self) -> str:
         return self._provider
 
-    def _get_anthropic(self):
-        with self._lock:
-            if self._anthropic_client is None:
-                import anthropic
-                self._anthropic_client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        return self._anthropic_client
-
     def complete(self, messages: list, system: str, *,
                   tier: str = "chat", max_tokens: int = 1024) -> str:
         """
         tier: "summary" → haiku/flash | "chat" → sonnet/flash | "rnd" → opus/pro
         Falls back through available providers (Anthropic -> Gemini -> Ollama) in case of errors.
         """
-        providers_to_try = []
-        if self._provider == "anthropic":
-            providers_to_try = ["anthropic", "gemini", "ollama"]
-        elif self._provider == "gemini":
-            providers_to_try = ["gemini", "anthropic", "ollama"]
-        elif self._provider == "ollama":
-            providers_to_try = ["ollama", "anthropic", "gemini"]
-        else:
-            providers_to_try = ["anthropic", "gemini", "ollama"]
+        # Default AI backend order: Anthropic Claude first, Gemini as fallback, Ollama last
+        providers_to_try = ["anthropic", "gemini", "ollama"]
 
+        a_key, g_key = _get_api_keys()
         errors = []
+        is_first = True
         for p in providers_to_try:
-            if p == "anthropic" and _key_is_valid(ANTHROPIC_API_KEY):
-                result = self._anthropic_complete(messages, system, tier, max_tokens)
+            # Enforce 2.0s timeout limit on first (preferred) model to trigger immediate fallback if slow
+            timeout = 2.0 if is_first else None
+            is_first = False
+            
+            if p == "anthropic" and _key_is_valid(a_key):
+                result = self._anthropic_complete(messages, system, tier, max_tokens, a_key, timeout=timeout)
                 if not result.startswith("[Fred error"):
                     return result
                 errors.append(f"Anthropic error: {result}")
-            elif p == "gemini" and _key_is_valid(GEMINI_API_KEY):
-                result = self._gemini_complete(messages, system, tier, max_tokens)
+            elif p == "gemini" and _key_is_valid(g_key):
+                result = self._gemini_complete(messages, system, tier, max_tokens, g_key, timeout=timeout)
                 if not result.startswith("[Fred Gemini error"):
                     return result
                 errors.append(f"Gemini error: {result}")
             elif p == "ollama" and _ollama_available():
-                result = self._ollama_complete(messages, system, max_tokens)
+                result = self._ollama_complete(messages, system, max_tokens, timeout=timeout)
                 if not result.startswith("[Ollama error"):
                     return result
                 errors.append(f"Ollama error: {result}")
@@ -185,7 +204,7 @@ class _FredProvider:
             mapped.append(item)
         return mapped
 
-    def _anthropic_complete(self, messages, system, tier, max_tokens) -> str:
+    def _anthropic_complete(self, messages, system, tier, max_tokens, api_key, timeout=None) -> str:
         model_map = {
             "summary": ANTHROPIC_MODEL_SUMMARY,
             "chat": ANTHROPIC_MODEL_CHAT,
@@ -193,26 +212,28 @@ class _FredProvider:
         }
         model = model_map.get(tier, ANTHROPIC_MODEL_CHAT)
         try:
-            client = self._get_anthropic()
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
             mapped = self._map_messages_for_anthropic(messages)
             resp = client.messages.create(
                 model=model,
                 max_tokens=max_tokens,
                 system=system,
                 messages=mapped,
+                timeout=timeout
             )
             return resp.content[0].text
         except Exception as e:
             return f"[Fred error: {e}]"
 
-    def _gemini_complete(self, messages, system, tier, max_tokens) -> str:
+    def _gemini_complete(self, messages, system, tier, max_tokens, api_key, timeout=None) -> str:
         model_map = {
             "summary": GEMINI_MODEL_SUMMARY,
             "chat": GEMINI_MODEL_CHAT,
             "rnd": GEMINI_MODEL_RND,
         }
         model = model_map.get(tier, GEMINI_MODEL_CHAT)
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
         mapped_msgs = self._map_messages_for_gemini(messages)
         payload = {
             "contents": mapped_msgs,
@@ -223,7 +244,7 @@ class _FredProvider:
         }
         try:
             import requests as _req
-            r = _req.post(url, json=payload, timeout=60)
+            r = _req.post(url, json=payload, timeout=timeout or 60)
             if r.status_code == 200:
                 data = r.json()
                 return data["candidates"][0]["content"]["parts"][0]["text"]
@@ -231,7 +252,7 @@ class _FredProvider:
         except Exception as e:
             return f"[Fred Gemini error: {e}]"
 
-    def _ollama_complete(self, messages, system, max_tokens) -> str:
+    def _ollama_complete(self, messages, system, max_tokens, timeout=None) -> str:
         import re as _re, requests as _req
         mapped = self._map_messages_for_ollama(messages)
         payload = {
@@ -242,7 +263,7 @@ class _FredProvider:
             "options": {"num_predict": max_tokens + 512},
         }
         try:
-            r = _req.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
+            r = _req.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=timeout or 120)
             r.raise_for_status()
             content = r.json()["message"]["content"]
             content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()

@@ -1235,6 +1235,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
     <div class="hdr-right">
       <div class="scan-timer">NEXT <span id="scan-cdwn">--</span></div>
       <button id="btn-install" class="install-btn" onclick="openInstallModal()" title="Install FredAI on this device" style="display:none">+ Install</button>
+      <button id="btn-system-refresh" onclick="systemRefresh()" class="install-btn" style="background:rgba(0,180,255,.08);border:1px solid rgba(0,180,255,.3);color:var(--blue);font-weight:600;margin-right:6px" title="Pull updates from Github and restart Fred">↻ Sync</button>
       <div class="user-badge" id="user-badge" onclick="openSettingsModal()">-- ×</div>
       <div class="ws-dot off" id="ws-dot" title="WebSocket"></div>
     </div>
@@ -1615,6 +1616,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
       <button class="settings-tab active" id="stab-security" onclick="switchSettingsTab('security')">Security</button>
       <button class="settings-tab" id="stab-privacy" onclick="switchSettingsTab('privacy')">Privacy &amp; Data</button>
       <button class="settings-tab" id="stab-google" onclick="switchSettingsTab('google')">Google Universe</button>
+      <button class="settings-tab" id="stab-ai" onclick="switchSettingsTab('ai')">AI Credentials</button>
     </div>
     
     <div class="settings-content" id="settings-security">
@@ -1672,6 +1674,26 @@ html[data-tier="ultra"] #ops-picture{display:block}
         </button>
       </div>
       <div id="settings-google-msg" style="font-size:10px;margin-top:8px;font-family:var(--mono)"></div>
+    </div>
+    
+    <div class="settings-content" id="settings-ai" style="display:none">
+      <p style="font-size:11px;color:var(--t2);line-height:1.4;margin:0 0 16px 0">
+        Configure your custom API credentials. Personal keys are stored securely in your profile database, overriding server defaults.
+      </p>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div class="form-group" style="margin-bottom:2px">
+          <label style="font-size:10px;color:var(--t2)">Anthropic Claude API Key</label>
+          <input id="user-anthropic-key" type="password" placeholder="sk-ant-..." style="width:100%;box-sizing:border-box;margin-top:4px">
+          <div id="user-anthropic-status" style="font-size:8px;color:var(--t3);margin-top:2px">Checking key configuration...</div>
+        </div>
+        <div class="form-group" style="margin-bottom:2px">
+          <label style="font-size:10px;color:var(--t2)">Gemini API Key</label>
+          <input id="user-gemini-key" type="password" placeholder="AIzaSy..." style="width:100%;box-sizing:border-box;margin-top:4px">
+          <div id="user-gemini-status" style="font-size:8px;color:var(--t3);margin-top:2px">Checking key configuration...</div>
+        </div>
+        <button class="login-btn" onclick="saveCustomKeys()" style="background:var(--blue);color:#fff;border:none;padding:8px;font-size:11px;font-weight:600;display:flex;justify-content:center;align-items:center;margin-top:8px">Save Credentials</button>
+      </div>
+      <div id="settings-ai-msg" style="font-size:10px;margin-top:8px;font-family:var(--mono)"></div>
     </div>
     
     <div class="settings-footer">
@@ -1911,9 +1933,71 @@ function switchSettingsTab(tab) {
   g('stab-security').classList.toggle('active', tab === 'security');
   g('stab-privacy').classList.toggle('active', tab === 'privacy');
   g('stab-google').classList.toggle('active', tab === 'google');
+  g('stab-ai').classList.toggle('active', tab === 'ai');
   g('settings-security').style.display = tab === 'security' ? '' : 'none';
   g('settings-privacy').style.display = tab === 'privacy' ? '' : 'none';
   g('settings-google').style.display = tab === 'google' ? '' : 'none';
+  g('settings-ai').style.display = tab === 'ai' ? '' : 'none';
+  if (tab === 'ai') loadCustomKeysStatus();
+}
+
+async function loadCustomKeysStatus() {
+  try {
+    const r = await fetch('/api/user/keys');
+    const d = await r.json();
+    
+    const antStatus = g('user-anthropic-status');
+    const gemStatus = g('user-gemini-status');
+    
+    if (d.has_anthropic) {
+      antStatus.innerHTML = '<span style="color:var(--green)">✓ Personal key configured</span>';
+      g('user-anthropic-key').placeholder = '•••••••••••••••• (Saved)';
+    } else {
+      antStatus.innerHTML = '<span style="color:var(--t3)">No personal key (using system defaults)</span>';
+      g('user-anthropic-key').placeholder = 'sk-ant-...';
+    }
+    
+    if (d.has_gemini) {
+      gemStatus.innerHTML = '<span style="color:var(--green)">✓ Personal key configured</span>';
+      g('user-gemini-key').placeholder = '•••••••••••••••• (Saved)';
+    } else {
+      gemStatus.innerHTML = '<span style="color:var(--t3)">No personal key (using system defaults)</span>';
+      g('user-gemini-key').placeholder = 'AIzaSy...';
+    }
+  } catch (e) {
+    console.error('Failed to load custom API key status:', e);
+  }
+}
+
+async function saveCustomKeys() {
+  const antKey = g('user-anthropic-key').value.trim();
+  const gemKey = g('user-gemini-key').value.trim();
+  const msg = g('settings-ai-msg');
+  msg.textContent = 'Saving credentials...';
+  msg.style.color = 'var(--t1)';
+  
+  try {
+    const r = await fetch('/api/user/keys', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ anthropic_key: antKey, gemini_key: gemKey })
+    });
+    const d = await r.json();
+    if (r.ok && d.status === 'ok') {
+      msg.textContent = 'Credentials saved successfully!';
+      msg.style.color = 'var(--green)';
+      g('user-anthropic-key').value = '';
+      g('user-gemini-key').value = '';
+      loadCustomKeysStatus();
+      setTimeout(() => { msg.textContent = ''; }, 3000);
+    } else {
+      msg.textContent = 'Error: ' + (d.error || 'Failed to save credentials.');
+      msg.style.color = 'var(--red)';
+    }
+  } catch (e) {
+    msg.textContent = 'Network error saving credentials.';
+    msg.style.color = 'var(--red)';
+  }
 }
 
 async function checkGoogleStatus() {
@@ -3445,6 +3529,57 @@ function linkifyTickers(text) {
     const sym = p1 || p2;
     return `<span class="ticker-link" onclick="event.stopPropagation(); openAnalystReport('${sym}')">${match}</span>`;
   });
+}
+
+async function systemRefresh() {
+  const btn = g('btn-system-refresh');
+  if (btn) btn.disabled = true;
+  
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(3,8,15,0.92);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;z-index:10000;backdrop-filter:blur(15px);color:#e8f4ff;font-family:Inter,sans-serif';
+  overlay.innerHTML = `
+    <div style="width:36px;height:36px;border:3px solid rgba(0,180,255,0.15);border-top-color:var(--blue);border-radius:50%;animation:spin 1s linear infinite"></div>
+    <div style="font-size:14px;font-weight:600;color:var(--blue);letter-spacing:0.5px">SYSTEM SYNC IN PROGRESS</div>
+    <div id="sync-status" style="font-size:11px;color:var(--t3);max-width:300px;text-align:center;line-height:1.4">Pulling updates from GitHub repository...</div>
+  `;
+  document.body.appendChild(overlay);
+  
+  try {
+    const r = await fetch('/api/system/refresh', { method: 'POST' });
+    const d = await r.json();
+    const statusEl = document.getElementById('sync-status');
+    
+    if (r.ok && d.status === 'restarting') {
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--green)">✓ Git sync successful.</span><br><span style="color:var(--t2)">Restarting Fred backend and reloading environment...</span>`;
+      
+      setTimeout(async () => {
+        let attempts = 0;
+        const checkServer = setInterval(async () => {
+          attempts++;
+          try {
+            const check = await fetch('/api/auth/status');
+            if (check.ok || attempts > 10) {
+              clearInterval(checkServer);
+              window.location.reload(true);
+            }
+          } catch(e) {
+            // not ready
+          }
+        }, 1000);
+      }, 1500);
+      
+    } else {
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Sync Failed:</span> ${esc(d.error || 'Server error')}`;
+      setTimeout(() => overlay.remove(), 4000);
+      if (btn) btn.disabled = false;
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('sync-status');
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--red)">Connection Lost:</span> Server is restarting...`;
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 3500);
+  }
 }
 </script>
 

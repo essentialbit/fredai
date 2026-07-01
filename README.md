@@ -667,6 +667,24 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 | [GitHub Issues](https://github.com/essentialbit/fredai/issues) | Bug reports, confirmed problems |
 | [GitHub Discussions](https://github.com/essentialbit/fredai/discussions) | Ideas, questions, show & tell, general chat |
 | [Feature Requests](https://github.com/essentialbit/fredai/discussions/new?category=ideas) | Suggest what Fred should do next |
+| [Show & Tell](https://github.com/essentialbit/fredai/discussions/new?category=show-and-tell) | Share your setup, screenshots, or custom deployments |
+
+### How Fred responds to community interactions
+
+Fred's CI pipeline runs a community engagement cycle every 6 hours using Claude. It reads Issues, Discussions, and open PRs and responds automatically:
+
+| Interaction type | What Fred does |
+|-----------------|---------------|
+| Bug report | Acknowledges the issue, asks for missing details (OS, Python version, logs), applies `bug` label |
+| Feature request | Thanks the contributor, explains how it fits the roadmap, applies `enhancement` label |
+| New data source suggestion | Asks for RSS URL + geographic coordinates for the Signal Globe, applies `data-source` label |
+| Question | Answers or points to the relevant section of the README / docs |
+| Pull request | Thanks the contributor, notes what the PR covers, invites further discussion |
+| Spam / hostile / off-topic | **No response** — silence is the correct answer; Fred does not engage with unproductive content |
+
+Fred responds only once per item and won't duplicate comments. Responses are friendly and direct — not corporate, not sycophantic.
+
+**To get the best response:** include your OS, Python version, install method, and any error output in bug reports. The more specific the issue, the more useful Fred's initial response will be.
 
 ---
 

@@ -24,6 +24,14 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.0
+- **Google Universe Integration**: Synchronized portfolios sheets generation, calendar event syncs, and secure file backups.
+- **Dynamic Ticker Linkification & On-Demand AI Analyst Modal**: Click any stock symbol anywhere to auto-generate research reports using real-time sentiment and market quotes context.
+- **Real-Time Translation Engine**: Automatically detects and translates foreign news/chat scripts into English with visual badges.
+- **Claude-First Routing & 2s Timeout Fallbacks**: Enforces strict 2s timeouts for preferred models to trigger immediate cloud fallbacks (Anthropic Claude -> Gemini -> Ollama).
+- **Secure Custom Credentials**: Input fields in settings dialog to store custom user keys in DB preferences.
+- **↻ Sync & Restart**: Header button to pull GitHub updates and safely reload the Flask server without socket conflicts.
+
 ### FredAI v1.2.8
 - Update Twitter API keys in .env file
 

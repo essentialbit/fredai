@@ -54,6 +54,8 @@ Unlike Bloomberg Terminal (expensive), Robinhood (limited data), or generic AI c
 
 **Fred thinks like an analyst, not a search engine.** Every 4 hours he scans global signals, weighs sentiment across 26 news sources, monitors your watchlist and portfolio, and produces a briefing — proactively, without you having to ask.
 
+Fred's development is guided by a single overarching mission: become the world's first **Financial Super Intelligence (FSI)** — an AI that doesn't just aggregate market data but builds a deep, causal, self-improving understanding of global financial systems. Every 6-hour improvement cycle pushes Fred one level further along the FSI roadmap: from Signal Intelligence (awareness) → Pattern Intelligence (structure) → Predictive Intelligence (foresight) → Reasoning Intelligence (causation) → World Model (context) → Super Intelligence (edge). See [MISSION.md](MISSION.md) for the full roadmap.
+
 ---
 
 ## What Fred Does
@@ -637,6 +639,23 @@ X_ACCESS_TOKEN_SECRET=
 MARKET_REFRESH_SECONDS=60     # Live price refresh interval
 SCAN_INTERVAL_HOURS=4         # Full AI scan cycle
 ```
+
+---
+
+## Roadmap — Financial Super Intelligence
+
+Fred is on a deliberate path to become the world's most capable financial AI. Each level builds on the last. No level is skipped.
+
+| Level | Name | Status | What it adds |
+|-------|------|--------|-------------|
+| **L1** | Signal Intelligence | ✅ Complete | Real-time sentiment, live prices, 4h briefings, portfolio tracking |
+| **L2** | Pattern Intelligence | 🔄 Active | FinBERT NLP, cross-asset correlation, options flow, insider filings, Fear & Greed |
+| **L3** | Predictive Intelligence | 🔲 Queued | Backtested signal accuracy, macro regime detection, earnings prediction, anomaly detection |
+| **L4** | Reasoning Intelligence | 🔲 Queued | Bull vs Bear multi-agent debate, causal attribution, 10-K analysis, institutional 13F positioning |
+| **L5** | World Model | 🔲 Future | Cross-market contagion, alternative data (satellite, job listings), agent swarms, fine-tuned LLM |
+| **L6** | Super Intelligence | 🔲 Future | Self-directing research, novel edge discovery, autonomous recommendations, edge detection before consensus |
+
+Every 6-hour improvement cycle is evaluated against this roadmap. Contributions that advance a higher level are prioritised over cosmetic improvements. See [MISSION.md](MISSION.md) for the complete specification.
 
 ---
 

@@ -134,6 +134,12 @@ def run_improvement_cycle(dry_run: bool = False, discover_only: bool = False):
         print("\n[DRY RUN] Stopping before implementation.")
         return {"community": community_summary}
 
+    # ── FSI Mission banner ────────────────────────────────────────
+    from pathlib import Path as _Path
+    if (_Path(__file__).parent / "MISSION.md").exists():
+        print("[FSI] North Star: World's First Financial Super Intelligence")
+        print("[FSI] Current level: L1 complete → L2 Pattern Intelligence (active)")
+
     # ── Phase 1: Diagnose ──────────────────────────────────────────
     print("[Phase 1] Analyzing current state...")
     state = analyze_current_state()

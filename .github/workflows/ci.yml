@@ -288,7 +288,14 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: pip install -r requirements.txt -q
+      - name: Configure git
+        run: |
+          git config user.name "FredAI"
+          git config user.email "fredai-bot@users.noreply.github.com"
       - name: Run improvement and community cycle
+        # improve.py now commits + opens a PR itself (main is branch-protected,
+        # direct pushes are rejected) — no separate "commit and push to main"
+        # step needed here anymore.
         run: |
           MODE="${{ github.event.inputs.mode || 'improve' }}"
           case "$MODE" in
@@ -305,11 +312,3 @@ jobs:
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
-      - name: Commit improvements
-        run: |
-          git config user.name "FredAI"
-          git config user.email "fredai-bot@users.noreply.github.com"
-          git add -A
-          git diff --staged --quiet || \
-            git commit -m "auto-improve: $(date -u +'%Y-%m-%d %H:%M UTC')"
-          git push origin main || true

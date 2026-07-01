@@ -1,0 +1,164 @@
+"""
+FredAI Collaboration Board — Cross-Agent Debate Cycle
+=======================================================
+Each agent reviews the OTHER agent's open proposals (GitHub Issues labeled
+agent-proposal) and posts a stance — agree / disagree / escalate — with a
+confidence score and rationale. Combined with each agent's historical
+track record (memory_store.get_track_record), this produces a weighted
+consensus score, posted as a comment + label, that a future auto-merge
+gate can key off (alongside risk_rules.classify_risk — high-risk proposals
+never auto-merge regardless of consensus).
+"""
+
+import json
+import re
+
+from community import _gh_get, _gh_post, GITHUB_REPO
+from github_sync import get_open_proposal_issues, _ensure_label
+from memory_store import get_track_record
+
+_STANCE_MARKER = re.compile(r"<!--fredai:stance:(claude|gemini)-->")
+_IMPACT_RE = re.compile(r"Impact score:\*\*\s*([\d.]+)")
+
+_STANCE_PROMPT = """You are reviewing a proposal from your collaborating AI partner on FredAI's \
+self-improvement board. FredAI's mission is to become the world's first Financial \
+Super Intelligence (FSI levels L1-L6, see MISSION.md).
+
+PROPOSAL:
+{body}
+
+Evaluate: does this genuinely advance the FSI mission, is the scope/estimate \
+realistic, is there a simpler or better approach, any risk worth flagging?
+
+Respond with ONLY a JSON object, no markdown fences:
+{{"stance": "agree"|"disagree"|"escalate", "confidence": 0.0-1.0, "rationale": "1-3 sentences"}}"""
+
+
+def _other_agent(proposed_by: str | None) -> str | None:
+    return {"claude": "gemini", "gemini": "claude"}.get(proposed_by)
+
+
+def _already_reviewed_by(comments: list, agent: str) -> bool:
+    return any(
+        (m := _STANCE_MARKER.search(c.get("body", ""))) and m.group(1) == agent
+        for c in comments
+    )
+
+
+def _parse_stance(text: str) -> dict | None:
+    try:
+        text = text.strip().strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        data = json.loads(text)
+        if data.get("stance") in ("agree", "disagree", "escalate") and "confidence" in data:
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _get_stance_claude(body: str) -> dict | None:
+    import anthropic
+    from config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL_SUMMARY
+    if not ANTHROPIC_API_KEY:
+        return None
+    try:
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model=ANTHROPIC_MODEL_SUMMARY, max_tokens=300,
+            messages=[{"role": "user", "content": _STANCE_PROMPT.format(body=body)}],
+        )
+        return _parse_stance(resp.content[0].text)
+    except Exception as e:
+        print(f"[Debate] Claude stance error: {e}")
+        return None
+
+
+def _get_stance_gemini(body: str) -> dict | None:
+    import requests
+    from config import GEMINI_API_KEY, GEMINI_MODEL_SUMMARY
+    if not GEMINI_API_KEY:
+        return None
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL_SUMMARY}:generateContent?key={GEMINI_API_KEY}"
+        payload = {"contents": [{"role": "user", "parts": [{"text": _STANCE_PROMPT.format(body=body)}]}]}
+        r = requests.post(url, json=payload, timeout=30)
+        if r.status_code != 200:
+            print(f"[Debate] Gemini stance error: {r.status_code} {r.text[:200]}")
+            return None
+        text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+        return _parse_stance(text)
+    except Exception as e:
+        print(f"[Debate] Gemini stance error: {e}")
+        return None
+
+
+def compute_consensus(proposer: str, reviewer: str, impact_score: float, reviewer_stance: dict) -> float:
+    def accuracy(agent: str) -> float:
+        rec = get_track_record(agent)
+        if rec["proposals_implemented"] >= 5:
+            return rec["proposals_succeeded"] / rec["proposals_implemented"]
+        return 0.7  # cold-start default until there's a real track record
+
+    confidence_proposer = max(0.0, min(1.0, (impact_score or 5.0) / 10))
+    confidence_reviewer = max(0.0, min(1.0, float(reviewer_stance.get("confidence", 0.5))))
+
+    consensus = (
+        confidence_proposer * accuracy(proposer) * 0.5
+        + confidence_reviewer * accuracy(reviewer) * 0.5
+    )
+    if reviewer_stance["stance"] == "disagree":
+        consensus *= 0.3
+    elif reviewer_stance["stance"] == "escalate":
+        consensus = 0.0
+    return round(consensus, 3)
+
+
+def run_debate_cycle() -> dict:
+    summary = {"issues_checked": 0, "stances_posted": 0, "errors": 0}
+    issues = get_open_proposal_issues()
+    summary["issues_checked"] = len(issues)
+
+    for issue in issues:
+        labels = [l["name"] for l in issue.get("labels", [])]
+        proposed_by = next(
+            (l.split(":", 1)[1] for l in labels if l.startswith("proposed-by:")), None
+        )
+        reviewer = _other_agent(proposed_by)
+        if not reviewer:
+            continue
+
+        comments = _gh_get(f"repos/{GITHUB_REPO}/issues/{issue['number']}/comments") or []
+        if _already_reviewed_by(comments, reviewer):
+            continue
+
+        body = issue.get("body", "") or ""
+        stance = _get_stance_claude(body) if reviewer == "claude" else _get_stance_gemini(body)
+        if not stance:
+            summary["errors"] += 1
+            continue
+
+        impact_match = _IMPACT_RE.search(body)
+        impact_score = float(impact_match.group(1)) if impact_match else 5.0
+        consensus = compute_consensus(proposed_by, reviewer, impact_score, stance)
+
+        comment_body = "\n".join([
+            f"**Stance ({reviewer}):** {stance['stance']} (confidence {stance['confidence']:.2f})",
+            f"**Rationale:** {stance['rationale']}",
+            f"**Consensus score:** {consensus}",
+            f"<!--fredai:stance:{reviewer}-->",
+        ])
+        _gh_post(f"repos/{GITHUB_REPO}/issues/{issue['number']}/comments", {"body": comment_body})
+
+        consensus_label = f"consensus:{consensus}"
+        _ensure_label(consensus_label, "c5def5")
+        _gh_post(f"repos/{GITHUB_REPO}/issues/{issue['number']}/labels", {"labels": [consensus_label]})
+
+        summary["stances_posted"] += 1
+
+    return summary
+
+
+if __name__ == "__main__":
+    print(run_debate_cycle())

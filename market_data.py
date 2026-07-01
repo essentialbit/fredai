@@ -1,9 +1,14 @@
+import json
+import os
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from config import WATCHLIST, DISPLAY_SYMBOLS
 
 _cache: dict = {}
+
+_DISK_CACHE_PATH = os.path.join(os.path.dirname(__file__), "data", "price_cache.json")
+_DISK_CACHE_MAX_AGE_S = 4 * 3600  # reuse disk cache if < 4h old
 
 _HEADERS = {
     "User-Agent": (
@@ -15,6 +20,108 @@ _HEADERS = {
 
 _BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
 _BASE2 = "https://query2.finance.yahoo.com/v8/finance/chart"
+_BATCH_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
+
+_session: requests.Session | None = None
+_crumb: str | None = None
+_session_ts: float = 0
+_SESSION_TTL = 3600  # refresh cookies+crumb every hour
+
+
+def _get_session() -> tuple[requests.Session, str]:
+    """Return (session_with_cookies, crumb). Refreshes if > 1h old."""
+    global _session, _crumb, _session_ts
+    if _session and _crumb and (time.time() - _session_ts) < _SESSION_TTL:
+        return _session, _crumb
+    s = requests.Session()
+    s.headers.update(_HEADERS)
+    try:
+        s.get("https://finance.yahoo.com/", timeout=10)  # seeds cookies
+        r = s.get("https://query1.finance.yahoo.com/v1/test/getcrumb", timeout=10)
+        if r.status_code == 200 and r.text.strip():
+            _session, _crumb, _session_ts = s, r.text.strip(), time.time()
+            return _session, _crumb
+    except Exception:
+        pass
+    # Fallback: bare session without crumb (still works on unblocked IPs sometimes)
+    _session, _crumb, _session_ts = s, "", time.time()
+    return _session, _crumb
+
+
+def _load_disk_cache() -> dict:
+    try:
+        with open(_DISK_CACHE_PATH) as f:
+            data = json.load(f)
+        saved_at = data.get("_saved_at", 0)
+        age = time.time() - saved_at
+        if age < _DISK_CACHE_MAX_AGE_S:
+            quotes = {k: v for k, v in data.items() if k != "_saved_at"}
+            if quotes:
+                print(f"[Market] Loaded {len(quotes)} prices from disk cache (age {age/60:.0f}m)")
+                return quotes
+    except Exception:
+        pass
+    return {}
+
+
+def _save_disk_cache(quotes: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(_DISK_CACHE_PATH), exist_ok=True)
+        with open(_DISK_CACHE_PATH, "w") as f:
+            json.dump({"_saved_at": time.time(), **quotes}, f)
+    except Exception:
+        pass
+
+
+def _fetch_batch(symbols: list[str]) -> dict:
+    """Single Yahoo Finance v7 batch call for up to 100 symbols. Returns price dict."""
+    sess, crumb = _get_session()
+    chunk_results = {}
+    # Yahoo v7 handles ~100 symbols per request
+    for i in range(0, len(symbols), 100):
+        chunk = symbols[i:i + 100]
+        for attempt in range(3):
+            try:
+                params = {
+                    "symbols": ",".join(chunk),
+                    "fields": "regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose,shortName,currency",
+                }
+                if crumb:
+                    params["crumb"] = crumb
+                r = sess.get(
+                    _BATCH_URL,
+                    params=params,
+                    timeout=20,
+                )
+                if r.status_code == 429:
+                    wait = 15 * (2 ** attempt)
+                    print(f"[Market] 429 rate-limit — waiting {wait}s")
+                    time.sleep(wait)
+                    continue
+                r.raise_for_status()
+                items = r.json().get("quoteResponse", {}).get("result", [])
+                for q in items:
+                    sym = q.get("symbol", "")
+                    price = float(q.get("regularMarketPrice") or 0)
+                    prev = float(q.get("regularMarketPreviousClose") or price)
+                    change_pct = float(q.get("regularMarketChangePercent") or 0)
+                    change = price - prev
+                    currency = "AUD" if sym.endswith(".AX") else q.get("currency", "USD")
+                    chunk_results[sym] = {
+                        "symbol": sym,
+                        "name": DISPLAY_SYMBOLS.get(sym, q.get("shortName", sym)),
+                        "price": round(price, 2),
+                        "change": round(change, 2),
+                        "change_pct": round(change_pct, 2),
+                        "prev_close": round(prev, 2),
+                        "currency": currency,
+                        "updated": datetime.now(timezone.utc).isoformat(),
+                    }
+                break
+            except Exception as e:
+                if attempt == 2:
+                    print(f"[Market] Batch fetch failed: {e}")
+    return chunk_results
 
 SECTORS = {
     "Technology": ["AAPL", "NVDA", "MSFT", "GOOGL", "META", "AMZN"],
@@ -43,32 +150,42 @@ def _chart(symbol: str, interval: str = "1d", period: str = "5d") -> dict | None
     interval = _INTERVAL_MAP.get(interval, interval)
     period = _RANGE_MAP.get(period, period)
     for base in (_BASE, _BASE2):
-        try:
-            r = requests.get(
-                f"{base}/{symbol}?interval={interval}&range={period}",
-                headers=_HEADERS, timeout=12
-            )
-            if r.status_code == 429:
-                time.sleep(2)
+        for attempt in range(3):
+            try:
                 r = requests.get(
                     f"{base}/{symbol}?interval={interval}&range={period}",
-                    headers=_HEADERS, timeout=12
+                    headers=_HEADERS, timeout=12,
                 )
-            r.raise_for_status()
-            result = r.json().get("chart", {}).get("result")
-            if result:
-                return result[0]
-        except Exception:
-            continue
+                if r.status_code == 429:
+                    time.sleep(10 * (2 ** attempt))
+                    continue
+                r.raise_for_status()
+                result = r.json().get("chart", {}).get("result")
+                if result:
+                    return result[0]
+                break
+            except Exception:
+                break
     return None
 
 
 def fetch_quotes(symbols: list[str] = None) -> dict:
-    symbols = symbols or WATCHLIST
-    results = {}
-    for sym in symbols:
+    target = symbols or WATCHLIST
+
+    # For full-watchlist fetches, try disk cache first
+    if not symbols:
+        cached = _load_disk_cache()
+        if cached:
+            return cached
+
+    # Batch fetch (single request for all symbols)
+    results = _fetch_batch(target)
+
+    # Per-symbol chart fallback for anything the batch missed
+    missing = [s for s in target if s not in results]
+    for sym in missing:
         try:
-            time.sleep(0.3)
+            time.sleep(0.5)
             data = _chart(sym, "1d", "5d")
             if not data:
                 continue
@@ -88,10 +205,14 @@ def fetch_quotes(symbols: list[str] = None) -> dict:
                 "change_pct": round(change_pct, 2),
                 "prev_close": round(prev, 2),
                 "currency": currency,
-                "updated": datetime.utcnow().isoformat(),
+                "updated": datetime.now(timezone.utc).isoformat(),
             }
         except Exception as e:
-            print(f"[Market] Quote failed for {sym}: {e}")
+            print(f"[Market] Chart fallback failed for {sym}: {e}")
+
+    if results and not symbols:
+        _save_disk_cache(results)
+
     return results
 
 

@@ -1148,6 +1148,16 @@ Only return valid JSON, no markdown."""
         }
 
     # Augment results with live quote data
+    # Fall back to on-demand yfinance fetch for any symbol the LLM returned
+    # that isn't already in the cache (e.g. LLM suggested a symbol outside watchlist)
+    missing = [r["symbol"] for r in result.get("results", []) if r["symbol"] not in _quotes_cache]
+    if missing:
+        try:
+            fresh = fetch_quotes(missing)
+            _quotes_cache.update(fresh)
+        except Exception:
+            pass
+
     for r in result.get("results", []):
         q = _quotes_cache.get(r["symbol"], {})
         r["price"] = q.get("price", 0)

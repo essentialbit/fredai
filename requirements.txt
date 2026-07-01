@@ -6,8 +6,8 @@ anthropic>=0.113.0
 apscheduler==3.10.4
 vaderSentiment==3.3.2
 python-dotenv==1.0.1
-pandas==2.2.2
-numpy==1.26.4
+pandas>=2.2.2
+numpy>=1.26.4
 requests==2.32.3
 werkzeug==3.0.3
 psutil>=5.9.0

@@ -846,7 +846,19 @@ def api_update_apply():
         if not _hmac.compare_digest(deploy_header, FREDAI_DEPLOY_SECRET):
             return jsonify({"error": "unauthorized"}), 401
     result = _updater.apply_update()
-    if result["updated"]:
+    if result.get("restart_triggered"):
+        socketio.emit("alert", {
+            "title": "FredAI Updated",
+            "message": f"Updated to {result['sha_after'][:8]}. Restarting now...",
+            "level": "info",
+        })
+    elif result.get("rolled_back"):
+        socketio.emit("alert", {
+            "title": "FredAI Update Failed",
+            "message": f"Pulled update failed validation and was rolled back: {result.get('message','')}",
+            "level": "warning",
+        })
+    elif result.get("updated"):
         socketio.emit("alert", {
             "title": "FredAI Updated",
             "message": f"Updated to {result['sha_after'][:8]}. Restart to apply.",
@@ -1168,44 +1180,36 @@ def api_analyst_report(ticker):
 @app.route("/api/system/refresh", methods=["POST"])
 @login_required
 def api_system_refresh():
-    import subprocess
-    import os
-    import sys
     import threading
-    
-    # 1. Pull updates from Github repo
-    git_out = ""
-    try:
-        res = subprocess.run(["git", "pull"], capture_output=True, text=True, timeout=15)
-        git_out = res.stdout + "\n" + res.stderr
-    except Exception as e:
-        git_out = f"Git pull failed: {str(e)}"
-        
-    # 2. Refresh database feeds (fetch news in background)
-    try:
-        from news_client import fetch_all_news
-        from memory_store import get_watchlist
-        uid = session.get("user_id")
-        if uid:
-            wl_items = get_watchlist(uid)
-            wl = [w["symbol"] for w in wl_items]
-            threading.Thread(target=fetch_all_news, args=(wl,), daemon=True).start()
-    except Exception as e:
-        print(f"[System Refresh] Feed update trigger failed: {e}")
-        
-    # 3. Trigger re-execution replacement in 800ms
-    def do_restart():
-        print("[System] Spawning detached restart helper...")
-        cmd = f'sleep 1.2 && "{sys.executable}" main.py'
-        subprocess.Popen(cmd, shell=True, env=os.environ, start_new_session=True)
-        print("[System] Exiting old process to clear port 8080...")
-        os._exit(0)
-        
-    threading.Timer(0.8, do_restart).start()
-    
+
+    # 1. Pull + verify (but don't auto-restart yet — this button restarts
+    # unconditionally below, same as before, but now goes through updater.py's
+    # safe path: verifies the pulled code actually imports before ever
+    # touching the running process, and rolls back instead of restarting
+    # onto broken code (previously this route did its own bare `git pull`
+    # + restart with no verification at all).
+    result = _updater.apply_update(restart=False)
+    if not result.get("rolled_back"):
+        result["restart_triggered"] = _updater.trigger_restart()
+
+    # 2. Refresh database feeds (fetch news in background) — only if we're
+    # not about to restart onto new code anyway.
+    if not result.get("restart_triggered"):
+        try:
+            from news_client import fetch_all_news
+            from memory_store import get_watchlist
+            uid = session.get("user_id")
+            if uid:
+                wl_items = get_watchlist(uid)
+                wl = [w["symbol"] for w in wl_items]
+                threading.Thread(target=fetch_all_news, args=(wl,), daemon=True).start()
+        except Exception as e:
+            print(f"[System Refresh] Feed update trigger failed: {e}")
+
     return jsonify({
-        "status": "restarting",
-        "git": git_out
+        "status": "restarting" if result.get("restart_triggered") else "no_restart",
+        "git": result.get("message", ""),
+        "update": result,
     })
 
 

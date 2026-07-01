@@ -12,7 +12,7 @@ import requests
 from pathlib import Path
 from datetime import datetime
 
-PROJECT_ROOT = Path("/Volumes/Iron 1TBSSD/Claude/FredAI")
+PROJECT_ROOT = Path(__file__).parent
 VENV_PYTHON = PROJECT_ROOT / "venv" / "bin" / "python3"
 
 SYSTEM_PROMPT = """You are the FredAI engineering agent — Gemini Code embedded inside FredAI's self-improvement loop.

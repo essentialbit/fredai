@@ -1988,19 +1988,35 @@ if __name__ == "__main__":
     print("=== SENTINEL FI — Financial Intelligence Dashboard ===")
     init_db()
 
+    # Claude's and Gemini's RnD cycles both write files and run `git add -A`
+    # over the whole working tree, then commit + push. Without this lock,
+    # two cycles firing in the same jitter window could interleave writes
+    # into each other's commits or race on the push.
+    _rnd_lock = threading.Lock()
+
     def job_rnd():
+        if not _rnd_lock.acquire(blocking=False):
+            print("[RnD] Skipped — Gemini RnD cycle already running")
+            return
         try:
             from improve import run_improvement_cycle
             run_improvement_cycle()
         except Exception as e:
             print(f"[RnD] Cycle error: {e}")
+        finally:
+            _rnd_lock.release()
 
     def job_gemini_rnd():
+        if not _rnd_lock.acquire(blocking=False):
+            print("[Gemini RnD] Skipped — Claude RnD cycle already running")
+            return
         try:
             from gemini_improve import run_gemini_improvement_cycle
             run_gemini_improvement_cycle()
         except Exception as e:
             print(f"[Gemini RnD] Cycle error: {e}")
+        finally:
+            _rnd_lock.release()
 
     def job_prune():
         """Data retention enforcement — GDPR Art.5 / APP 11.2 data minimisation."""

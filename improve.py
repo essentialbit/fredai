@@ -94,13 +94,40 @@ def analyze_current_state() -> dict:
 def git_push(message: str):
     try:
         root = Path(__file__).parent
-        r1 = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=root)
-        if not r1.stdout.strip():
-            print("[Git] Nothing to commit")
+
+        # Commit anything still sitting in the working tree. Note this can
+        # legitimately be empty even when there's real work to push — the
+        # code agents (claude_code_agent.py / gemini_code_agent.py) already
+        # commit locally as they go via _auto_commit(), so by the time we
+        # get here the tree may already be clean with commits still unpushed.
+        dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=root).stdout.strip()
+        if dirty:
+            subprocess.run(["git", "add", "-A"], cwd=root)
+            subprocess.run(["git", "commit", "-m", message], cwd=root)
+
+        ahead = subprocess.run(
+            ["git", "rev-list", "--count", "@{u}..HEAD"], capture_output=True, text=True, cwd=root
+        ).stdout.strip()
+        if ahead in ("", "0"):
+            print("[Git] Nothing to push")
             return
-        subprocess.run(["git", "add", "-A"], cwd=root)
-        subprocess.run(["git", "commit", "-m", message], cwd=root)
-        subprocess.run(["git", "push", "origin", "main"], cwd=root)
+
+        push = subprocess.run(["git", "push", "origin", "main"], capture_output=True, text=True, cwd=root)
+        if push.returncode != 0:
+            # Likely a non-fast-forward rejection from a concurrent cycle (Claude/Gemini/CI)
+            # pushing in the same window — rebase onto the new remote tip and retry once.
+            print(f"[Git] Push rejected, retrying after rebase: {push.stderr.strip()[:200]}")
+            subprocess.run(["git", "fetch", "origin", "main"], cwd=root)
+            rebase = subprocess.run(["git", "rebase", "origin/main"], capture_output=True, text=True, cwd=root)
+            if rebase.returncode != 0:
+                subprocess.run(["git", "rebase", "--abort"], cwd=root)
+                print(f"[Git] Rebase failed, giving up this cycle: {rebase.stderr.strip()[:200]}")
+                return
+            retry = subprocess.run(["git", "push", "origin", "main"], capture_output=True, text=True, cwd=root)
+            if retry.returncode != 0:
+                print(f"[Git] Retry push failed: {retry.stderr.strip()[:200]}")
+                return
+
         print(f"[Git] Pushed: {message}")
     except Exception as e:
         print(f"[Git] Error: {e}")

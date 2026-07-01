@@ -26,6 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from memory_store import init_db, get_signals, get_trending_assets, get_summaries, get_recent_alerts, get_all_proposals
 from obsidian_bridge import write_improvement_log
+from community import run_community_cycle
 
 
 def analyze_current_state() -> dict:
@@ -116,6 +117,23 @@ def run_improvement_cycle(dry_run: bool = False, discover_only: bool = False):
 
     init_db()
 
+    # ── Phase 0: Community engagement ─────────────────────────────
+    print("[Phase 0] Checking GitHub community interactions...")
+    community_summary = {}
+    try:
+        community_summary = run_community_cycle()
+        print(f"  Issues: {community_summary.get('issues_checked', 0)} checked | "
+              f"Discussions: {community_summary.get('discussions_checked', 0)} | "
+              f"PRs: {community_summary.get('prs_checked', 0)} | "
+              f"Responses posted: {community_summary.get('responses_posted', 0)}")
+    except Exception as e:
+        print(f"  [Community] Error: {e}")
+        community_summary = {"error": str(e)}
+
+    if dry_run:
+        print("\n[DRY RUN] Stopping before implementation.")
+        return {"community": community_summary}
+
     # ── Phase 1: Diagnose ──────────────────────────────────────────
     print("[Phase 1] Analyzing current state...")
     state = analyze_current_state()
@@ -158,6 +176,9 @@ def run_improvement_cycle(dry_run: bool = False, discover_only: bool = False):
 
     # ── Phase 4: Log to Obsidian ──────────────────────────────────
     report = "\n".join([
+        "## Community",
+        json.dumps(community_summary, indent=2, default=str),
+        "",
         "## Diagnostics",
         *[f"- ⚠ {i}" for i in state["issues"]],
         *[f"- ✓ {f}" for f in state["findings"]],

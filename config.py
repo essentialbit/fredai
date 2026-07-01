@@ -90,6 +90,14 @@ X_SEARCH_QUERIES = [
 
 NASDAQ_API_KEY = os.getenv("NASDAQ_API_KEY", "")
 
+# ── GitHub community engagement ───────────────────────────────────────────────
+# GITHUB_TOKEN: PAT with `repo` scope for posting comments/labels.
+# In GitHub Actions CI this is provided automatically as secrets.GITHUB_TOKEN.
+# For local/server installs: generate a fine-grained PAT at github.com/settings/tokens
+# with permissions: Issues (read+write), Discussions (read+write), Pull Requests (read+write).
+GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
+GITHUB_REPO  = os.getenv("GITHUB_REPO", "essentialbit/fredai")
+
 SCAN_INTERVAL_HOURS = 4
 MARKET_REFRESH_SECONDS = 60
 SIGNAL_FETCH_LIMIT = 100

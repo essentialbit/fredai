@@ -271,6 +271,9 @@ jobs:
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode != 'ci' && github.event.inputs.mode != 'release')
     permissions:
       contents: write
+      issues: write
+      discussions: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -280,7 +283,7 @@ jobs:
           python-version: '3.13'
           cache: pip
       - run: pip install -r requirements.txt -q
-      - name: Run improvement cycle
+      - name: Run improvement + community cycle
         run: |
           MODE="${{ github.event.inputs.mode || 'improve' }}"
           if [ "$MODE" = "dry-run" ]; then
@@ -297,6 +300,8 @@ jobs:
           X_CONSUMER_SECRET: ${{ secrets.X_CONSUMER_SECRET }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPO: ${{ github.repository }}
       - name: Commit improvements
         run: |
           git config user.name "FredAI"

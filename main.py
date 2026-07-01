@@ -1065,6 +1065,79 @@ def api_translate():
     })
 
 
+@app.route("/api/analyst/report/<ticker>")
+@login_required
+def api_analyst_report(ticker):
+    ticker = ticker.upper().strip()
+    if not ticker:
+        return jsonify({"error": "Invalid ticker symbol."}), 400
+        
+    from memory_store import get_news, get_signals
+    from agent import _provider
+    
+    price_info = (_quotes_cache or {}).get(ticker, {})
+    
+    # Get recent news relating to this ticker
+    news = get_news(hours=72, limit=50)
+    ticker_news = []
+    for n in news:
+        tickers_list = [t.strip().upper() for t in (n.get("tickers") or "").split(",") if t.strip()]
+        if ticker in tickers_list or ticker in n.get("title", "").upper() or ticker in n.get("summary", "").upper():
+            ticker_news.append(n)
+            
+    # Get recent signals relating to this ticker
+    sigs = get_signals(hours=72, limit=50)
+    ticker_sigs = []
+    for s in sigs:
+        if s.get("asset") == ticker or ticker in s.get("content", "").upper():
+            ticker_sigs.append(s)
+            
+    system_prompt = (
+        "You are an elite Wall Street equity analyst. Write a professional, comprehensive, and objective "
+        "equity research report for the requested stock ticker/company. Leverage the provided market data, "
+        "recent news items, and technical signals to formulate your report. "
+        "Format the report in clean Markdown using headings, tables, bullet points, and strong bold highlights. "
+        "Sections MUST include: "
+        "1. Executive Summary & Recommendation Rating (Buy/Hold/Sell) "
+        "2. Financial Snapshot (discuss pricing, market cap, and relative performance) "
+        "3. Sentiment Audit (summarize the tone and focus of recent news/signals) "
+        "4. Risk & Catalyst Analysis (identify key competitive headwinds and upcoming upside triggers) "
+        "5. 12-Month Outlook & Forecast. "
+        "Be detailed, precise, and maintain a highly professional analytical tone."
+    )
+    
+    user_prompt = f"Stock Ticker: {ticker}\n"
+    if price_info:
+        user_prompt += f"Current Market Price Context: {price_info}\n"
+    else:
+        user_prompt += f"Note: No real-time quote info cached for symbol {ticker}.\n"
+        
+    if ticker_news:
+        user_prompt += "Recent Feed news:\n"
+        for n in ticker_news[:8]:
+            user_prompt += f"- [{n.get('source', 'Unknown')}] {n.get('title')} (VADER Sentiment Score: {n.get('sentiment_score', 0.0)})\n"
+    else:
+        user_prompt += "No recent news headlines available for this symbol.\n"
+        
+    if ticker_sigs:
+        user_prompt += "Recent Technical & Geopolitical Signals:\n"
+        for s in ticker_sigs[:5]:
+            user_prompt += f"- [{s.get('signal_type', 'signal')}] {s.get('content')[:150]} (Sentiment Score: {s.get('sentiment_score', 0.0)})\n"
+    else:
+        user_prompt += "No recent technical signal entries available for this symbol.\n"
+        
+    try:
+        report_markdown = _provider.complete([{"role": "user", "content": user_prompt}], system_prompt, tier="chat", max_tokens=1500)
+    except Exception as e:
+        report_markdown = f"# Equity Analysis for {ticker}\n\nFailed to autogenerate report: {str(e)}"
+        
+    return jsonify({
+        "status": "ok",
+        "ticker": ticker,
+        "report": report_markdown
+    })
+
+
 @app.route("/api/news/globe-data")
 @login_required
 def api_news_globe_data():

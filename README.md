@@ -108,7 +108,8 @@ Choose the path that matches your device:
 - [Docker (any platform)](#docker-any-platform)
 - [Cloud VM / VPS](#cloud-vm--vps)
 - [iPhone / iPad (PWA)](#iphone--ipad)
-- [Android (PWA)](#android)
+- [Android (PWA — connect to existing server)](#android)
+- [Android (Self-Hosted via Termux)](#android-self-hosted-via-termux)
 
 ---
 
@@ -445,6 +446,118 @@ Your Android phone must be on the same Wi-Fi network as the computer running Fre
 #### Accessing Fred away from home (optional)
 
 Same as iOS — install **Tailscale** on both devices for free remote access without port forwarding.
+
+---
+
+### Android (Self-Hosted via Termux)
+
+Android phones are ARM Linux computers. A modern Android phone (4GB+ RAM) can run Fred as a full server — no other device needed. This is ideal for turning an old Android phone into a dedicated always-on Fred server.
+
+> **iPhone/iPad cannot self-host.** iOS does not allow background network servers. iPhone/iPad users must connect to Fred running on another device (Mac, PC, Pi, Android, or cloud).
+
+#### What you need
+
+- Android phone or tablet, Android 7.0+ (any brand)
+- At least 4GB RAM recommended (2GB works in a pinch)
+- At least 2GB free storage
+- Charger plugged in (Fred runs continuously)
+- [Termux](https://f-droid.org/packages/com.termux/) installed — **download from F-Droid, not the Play Store** (the Play Store version is outdated and broken)
+
+#### Step 1 — Install Termux
+
+1. On your Android device, open this link in Chrome: **f-droid.org/packages/com.termux**
+2. Tap **Download APK**
+3. When prompted, allow "Install from unknown sources" for your browser
+4. Install the APK
+5. Open Termux
+
+#### Step 2 — Install Python and dependencies
+
+In Termux, run these commands one at a time:
+
+```bash
+# Update package list
+pkg update -y && pkg upgrade -y
+
+# Install Python, Git, and build tools
+pkg install python git clang libffi openssl -y
+
+# Install numpy and pandas as pre-compiled packages (much faster than pip)
+pkg install python-numpy python-pandas -y
+
+# Clone Fred
+git clone https://github.com/essentialbit/fredai.git
+cd fredai
+
+# Install remaining Python dependencies
+pip install flask flask-socketio feedparser beautifulsoup4 anthropic \
+    apscheduler vaderSentiment python-dotenv requests werkzeug psutil
+```
+
+> **Why `pkg install python-numpy python-pandas` instead of pip?** Termux ships pre-compiled ARM64 binaries for numpy and pandas. Installing via pip would attempt to compile from source, which takes 30+ minutes and often fails.
+
+#### Step 3 — Configure Fred
+
+```bash
+# Still inside the fredai directory
+cp .env.example .env
+
+# Edit with nano (arrow keys to navigate, Ctrl+O to save, Ctrl+X to exit)
+nano .env
+```
+
+Add your API keys. At minimum, set `ANTHROPIC_API_KEY`. Everything else is optional.
+
+#### Step 4 — Start Fred
+
+```bash
+python main.py
+```
+
+Fred starts on port 8080. Open Chrome on the same phone and go to `http://localhost:8080` to access it. Create your account and you're in.
+
+To install it as a PWA on the same phone, follow the Android PWA steps above using `http://localhost:8080` as the URL.
+
+#### Step 5 — Keep Fred running when the screen locks
+
+Android kills background processes to save battery. Two things to fix this:
+
+**Disable battery optimisation for Termux:**
+1. Open Android Settings → Battery → Battery Optimisation (name varies by manufacturer)
+2. Find Termux → set to **"Don't optimise"** or **"Unrestricted"**
+
+**Acquire a wake lock inside Termux:**
+```bash
+# Run this before starting Fred (keeps CPU awake)
+termux-wake-lock
+python main.py
+```
+
+Or keep Termux in the foreground by enabling the **persistent notification**: swipe down from the top, find the Termux notification, and tap **"Acquire wakelock"**.
+
+#### Step 6 — Access from other devices on your network
+
+Other phones, tablets, and computers on the same Wi-Fi can connect to Fred running on your Android. They need your Android's IP address:
+
+```bash
+# In Termux, run:
+ifconfig wlan0 | grep "inet "
+# or:
+ip addr show wlan0 | grep "inet "
+```
+
+The address shown (e.g. `192.168.1.42`) is what other devices type into their browser: `http://192.168.1.42:8080`
+
+#### Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `pkg install python-numpy` fails | Run `pkg update -y` first, then retry |
+| Fred crashes with a memory error | Close other apps; 2GB RAM is the minimum; consider using a phone with 4GB+ |
+| Fred stops when phone screen locks | Follow Step 5 above — battery optimisation must be disabled |
+| Can't connect from another device | Get Termux's IP (`ifconfig wlan0`) and use that address, not `localhost` |
+| `permission denied` on `.env` | Run `chmod 600 .env` |
+| Port 8080 already in use | Another app is using the port — change `PORT=8081` in `.env` |
 
 ---
 

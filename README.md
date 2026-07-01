@@ -9,7 +9,7 @@
 [![CI](https://github.com/essentialbit/fredai/actions/workflows/ci.yml/badge.svg)](https://github.com/essentialbit/fredai/actions/workflows/ci.yml)
 [![Latest Release](https://img.shields.io/github/v/release/essentialbit/fredai?label=version&color=00ff88)](https://github.com/essentialbit/fredai/releases/latest)
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Fessentialbit%2Ffredai-blue)](https://ghcr.io/essentialbit/fredai)
-[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue)](https://www.python.org/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Discussions](https://img.shields.io/badge/community-discussions-purple)](https://github.com/essentialbit/fredai/discussions)
 
@@ -114,7 +114,7 @@ Choose the path that matches your device:
 
 ### macOS
 
-**Requirements:** macOS 12+, Python 3.13+
+**Requirements:** macOS 12+, Python 3.12+
 
 ```bash
 # 1. Install Python 3.13 (skip if already installed)
@@ -157,7 +157,7 @@ launchctl load ~/Library/LaunchAgents/com.essentialbit.fredai.plist
 
 ### Windows 10 / 11
 
-**Requirements:** Windows 10+, Python 3.13+, Git
+**Requirements:** Windows 10+, Python 3.12+, Git
 
 ```powershell
 # 1. Install Python from https://python.org — check "Add Python to PATH"
@@ -357,25 +357,94 @@ certbot certonly --standalone -d yourdomain.com
 
 ### iPhone / iPad
 
-Fred is a Progressive Web App (PWA) — no App Store required.
+Fred runs as a **Progressive Web App (PWA)** — no App Store, no subscription. It installs like a native app straight from your browser.
 
-1. On your iPhone/iPad, open **Safari**
-2. Navigate to your Fred URL (e.g., `http://192.168.1.x:8080`)
-3. Tap the **Share** button (box with upward arrow)
-4. Tap **"Add to Home Screen"**
-5. Tap **"Add"**
+#### Before you start — Fred must be running somewhere on your network
 
-Fred appears as a full-screen app icon on your home screen and in the dock — indistinguishable from a native app.
+Your iPhone connects to Fred running on another device (your Mac, PC, or Raspberry Pi). Both must be on the **same Wi-Fi network**.
+
+**Step 1 — Find Fred's address on the host computer**
+
+On the computer running Fred, find its local IP address:
+
+| OS | How |
+|----|-----|
+| Mac | System Settings → Network → Wi-Fi → Details → IP Address |
+| Windows | Start → cmd → type `ipconfig` → look for "IPv4 Address" under Wi-Fi |
+| Linux / Pi | Open Terminal → type `hostname -I` → first address shown |
+
+The address looks like `192.168.1.x` or `10.0.0.x`. Write it down.
+
+**Step 2 — Confirm Fred is running**
+
+On the host computer, make sure Fred is started (`python3 main.py` or Docker is running). You should be able to open `http://YOUR_IP:8080` in a browser on that computer and see the Fred login page.
+
+**Step 3 — Install on iPhone/iPad**
+
+> **Important:** You must use **Safari** — Chrome on iOS cannot install PWAs.
+
+1. Open **Safari** on your iPhone or iPad
+2. In the address bar, type: `http://YOUR_IP:8080` (replace YOUR_IP with the address from Step 1)
+3. Log in to Fred
+4. Tap the **Share button** — the box with an arrow pointing up, at the bottom of the screen
+5. Scroll down in the share sheet and tap **"Add to Home Screen"**
+6. Tap **"Add"** in the top-right corner
+
+Fred now appears as a full-screen app on your home screen with its own icon — no browser bar, no address bar, indistinguishable from a native app.
+
+#### Can't connect? Try these
+
+| Problem | Fix |
+|---------|-----|
+| Page won't load | Check both devices are on the same Wi-Fi. Try the IP in a browser on the host computer first |
+| "Add to Home Screen" not visible | Scroll down in the share sheet — it may be below the visible area |
+| Using Chrome on iPhone | Switch to Safari — Apple requires PWA installation through Safari on iOS |
+| Fred stopped working after closing Terminal | See "Keep Fred running" in the macOS section above |
+
+#### Accessing Fred away from home (optional)
+
+If you want to reach Fred from anywhere — not just your home Wi-Fi — the easiest method is **Tailscale** (free):
+
+1. Install Tailscale on the host computer and your phone: [tailscale.com](https://tailscale.com)
+2. Sign in to the same Tailscale account on both
+3. Use the Tailscale IP address (shown in the Tailscale app) instead of your local IP
+
+No port forwarding, no static IP, no router configuration needed.
 
 ---
 
 ### Android
 
+Fred installs as a PWA directly from Chrome.
+
+#### Before you start — same Wi-Fi requirement
+
+Your Android phone must be on the same Wi-Fi network as the computer running Fred. Follow Step 1 and Step 2 from the iPhone section above to find Fred's address and confirm it's running.
+
+**Installing on Android:**
+
 1. Open **Chrome** on your Android device
-2. Navigate to your Fred URL
-3. Tap the **three-dot menu** (⋮)
-4. Tap **"Add to Home screen"** or **"Install app"**
-5. Confirm — Fred icon appears on your home screen
+2. In the address bar, type: `http://YOUR_IP:8080`
+3. Log in to Fred
+4. You will see one of two prompts — use whichever appears:
+   - **Bottom banner:** A bar appears at the bottom of the screen saying "Add Fred to Home screen" → tap **Add**
+   - **Menu option:** If no banner appears, tap the **three-dot menu** (⋮) in the top-right → tap **"Add to Home screen"** or **"Install app"** → tap **Add**
+5. Fred icon appears on your home screen
+
+> **Note:** Firefox on Android does not support PWA installation. Use Chrome.
+
+#### Can't connect? Try these
+
+| Problem | Fix |
+|---------|-----|
+| Page won't load | Confirm both devices are on the same Wi-Fi and Fred is running on the host |
+| No install prompt and no menu option | Load the page, wait 30 seconds, then check the menu again |
+| Using Firefox | Switch to Chrome |
+| Fred stopped after you closed the terminal | Restart Fred on the host computer |
+
+#### Accessing Fred away from home (optional)
+
+Same as iOS — install **Tailscale** on both devices for free remote access without port forwarding.
 
 ---
 

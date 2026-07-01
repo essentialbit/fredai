@@ -10,7 +10,19 @@ X_ACCESS_TOKEN = os.getenv("X_ACCESS_TOKEN")
 X_ACCESS_TOKEN_SECRET = os.getenv("X_ACCESS_TOKEN_SECRET")
 
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-SECRET_KEY = os.getenv("SECRET_KEY", "sentinel_fi_secret")
+
+_raw_secret = os.getenv("SECRET_KEY", "")
+if not _raw_secret:
+    import secrets as _secrets
+    _raw_secret = _secrets.token_hex(32)
+    print(f"[Security] WARNING: SECRET_KEY not set — generated ephemeral key. Sessions will not survive restart. Set SECRET_KEY in .env to persist sessions.")
+SECRET_KEY = _raw_secret
+
+# Deploy secret — required header for CI webhook to /api/update/apply
+# Must match FREDAI_DEPLOY_SECRET in your GitHub Actions secrets.
+# If not set, CI webhook push to /api/update/apply is disabled (manual apply still works via session auth).
+FREDAI_DEPLOY_SECRET = os.getenv("FREDAI_DEPLOY_SECRET", "")
+
 PORT = int(os.getenv("PORT", 8080))
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data", "sentinel.db")

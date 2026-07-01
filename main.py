@@ -11,7 +11,7 @@ import psutil as _psutil
 RAM_GB = _psutil.virtual_memory().total / 1e9
 LITE_MODE = RAM_GB < 1.0  # Raspberry Pi Zero / wearable companion
 
-from config import SECRET_KEY, PORT, SCAN_INTERVAL_HOURS, MARKET_REFRESH_SECONDS, WATCHLIST, DISPLAY_SYMBOLS
+from config import SECRET_KEY, PORT, SCAN_INTERVAL_HOURS, MARKET_REFRESH_SECONDS, WATCHLIST, DISPLAY_SYMBOLS, FREDAI_DEPLOY_SECRET
 from memory_store import (
     init_db, get_signals, get_latest_summary, get_summaries,
     get_sentiment_timeline, get_recent_alerts, insert_summary,
@@ -133,8 +133,53 @@ app = Flask(__name__, template_folder="templates")
 app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = False   # set True in production behind HTTPS
 app.config["PERMANENT_SESSION_LIFETIME"] = _td(days=30)
-socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
+
+# SocketIO: only allow connections from the same origin (prevents cross-origin WS abuse)
+socketio = SocketIO(app, async_mode="threading", cors_allowed_origins=[])
+
+# ── SECURITY: rate-limiting for login (in-memory, resets on restart) ──────────
+import time as _time
+_login_attempts: dict = {}       # ip -> [timestamps]
+_LOGIN_WINDOW = 300              # 5-minute rolling window
+_LOGIN_MAX = 10                  # max attempts per window
+
+
+def _check_rate_limit(ip: str) -> bool:
+    """Return True if this IP is allowed; False if rate-limited."""
+    now = _time.time()
+    attempts = _login_attempts.get(ip, [])
+    attempts = [t for t in attempts if now - t < _LOGIN_WINDOW]
+    _login_attempts[ip] = attempts
+    if len(attempts) >= _LOGIN_MAX:
+        return False
+    attempts.append(now)
+    _login_attempts[ip] = attempts
+    return True
+
+
+@app.after_request
+def _security_headers(response):
+    """Attach security headers to every response."""
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    # Content-Security-Policy: allow our CDN scripts (lightweight-charts, globe.gl, fonts)
+    # and same-origin everything else.
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' unpkg.com cdn.jsdelivr.net fonts.googleapis.com; "
+        "style-src 'self' 'unsafe-inline' fonts.googleapis.com; "
+        "font-src 'self' fonts.gstatic.com; "
+        "img-src 'self' data: i.ytimg.com unpkg.com; "
+        "connect-src 'self' wss: ws:; "
+        "frame-src https://www.youtube.com; "
+        "object-src 'none';"
+    )
+    return response
 
 _updater.init(socketio)
 
@@ -160,9 +205,14 @@ def login_required(f):
 @app.route("/login", methods=["GET", "POST"])
 def login_page():
     if request.method == "POST":
+        ip = request.remote_addr or "unknown"
+        if not _check_rate_limit(ip):
+            return jsonify({"error": "Too many login attempts. Try again in 5 minutes."}), 429
         data = request.json or request.form
         user = verify_user(data.get("username", ""), data.get("password", ""))
         if user:
+            # Session regeneration — clear old session to prevent fixation
+            session.clear()
             session.permanent = bool(data.get("remember_me", True))
             session["user_id"] = user["id"]
             session["username"] = user["username"]
@@ -258,8 +308,13 @@ def api_init():
 @login_required
 def api_history(symbol):
     bump_interest(session["user_id"], symbol, delta=0.5)
+    # Whitelist period/interval to prevent yfinance abuse
+    valid_periods = {"1d","5d","1mo","3mo","6mo","1y","2y","5y","10y","ytd","max"}
+    valid_intervals = {"1m","5m","15m","30m","60m","1h","1d","1wk","1mo"}
     period = request.args.get("period", "5d")
     interval = request.args.get("interval", "30m")
+    if period not in valid_periods: period = "5d"
+    if interval not in valid_intervals: interval = "30m"
     return jsonify(fetch_history(symbol.upper(), period=period, interval=interval))
 
 
@@ -272,7 +327,7 @@ def api_summaries():
 @app.route("/api/trending")
 @login_required
 def api_trending():
-    hours = int(request.args.get("hours", 4))
+    hours = min(max(int(request.args.get("hours", 4)), 1), 168)
     trending = get_trending_assets(hours=hours, limit=20)
     quotes = _quotes_cache or {}
     for t in trending:
@@ -364,14 +419,18 @@ def api_rnd_propose():
 @app.route("/api/rnd/run", methods=["POST"])
 @login_required
 def api_rnd_run():
-    """Trigger a full R&D + implementation cycle (async)."""
+    """Trigger a full R&D + implementation cycle (admin only)."""
+    uid = session["user_id"]
+    user = get_user(uid)
+    if not user or user.get("username") != "admin":
+        return jsonify({"error": "Admin only"}), 403
     def _run():
         try:
             from improve import run_improvement_cycle
             results = run_improvement_cycle()
             socketio.emit("rnd_complete", results)
         except Exception as e:
-            socketio.emit("rnd_complete", {"error": str(e)})
+            socketio.emit("rnd_complete", {"error": "R&D cycle failed"})
     socketio.start_background_task(_run)
     return jsonify({"status": "R&D cycle started"})
 
@@ -426,10 +485,15 @@ def api_update_check():
 
 @app.route("/api/update/apply", methods=["POST"])
 def api_update_apply():
-    """Pull latest from GitHub. Accepts both authenticated users and CI deploy header."""
-    deploy_header = request.headers.get("X-FredAI-Deploy")
-    if not deploy_header and "user_id" not in session:
-        return jsonify({"error": "unauthorized"}), 401
+    """Pull latest from GitHub. Accepts authenticated session OR CI deploy secret header."""
+    deploy_header = request.headers.get("X-FredAI-Deploy", "")
+    if "user_id" not in session:
+        # CI path: must supply correct deploy secret (empty secret = CI webhook disabled)
+        if not FREDAI_DEPLOY_SECRET or not deploy_header:
+            return jsonify({"error": "unauthorized"}), 401
+        import hmac as _hmac
+        if not _hmac.compare_digest(deploy_header, FREDAI_DEPLOY_SECRET):
+            return jsonify({"error": "unauthorized"}), 401
     result = _updater.apply_update()
     if result["updated"]:
         socketio.emit("alert", {
@@ -665,7 +729,7 @@ def api_reset_password():
 def api_news_globe_data():
     """Aggregate news by geographic source for the globe visualization."""
     from news_client import SOURCE_COORDINATES
-    hours = int(request.args.get("hours", 24))
+    hours = min(max(int(request.args.get("hours", 24)), 1), 720)
     news = get_news(hours=hours, limit=500)
     from collections import defaultdict
     region_counts: dict = defaultdict(lambda: {"count": 0, "sources": set(), "categories": []})
@@ -729,8 +793,8 @@ def api_youtube_channels():
                         "embed_url": f"https://www.youtube.com/embed/{vid_id.text}?rel=0&modestbranding=1",
                     })
             results[name] = {"channel_id": cid, "videos": entries}
-        except Exception as e:
-            results[name] = {"channel_id": cid, "videos": [], "error": str(e)}
+        except Exception:
+            results[name] = {"channel_id": cid, "videos": []}
     return jsonify(results)
 
 
@@ -750,10 +814,10 @@ def graph_page():
 @login_required
 def api_news():
     category = request.args.get("category", "all")
-    ticker = request.args.get("ticker", "")
-    hours = int(request.args.get("hours", 24))
-    page = int(request.args.get("page", 1))
-    limit = int(request.args.get("limit", 30))
+    ticker = request.args.get("ticker", "")[:20]   # truncate to prevent abuse
+    hours = min(max(int(request.args.get("hours", 24)), 1), 720)
+    page = min(max(int(request.args.get("page", 1)), 1), 100)
+    limit = min(max(int(request.args.get("limit", 30)), 1), 100)
     offset = (page - 1) * limit
     items = get_news(category=category, ticker=ticker or None, hours=hours, limit=limit, offset=offset)
     total = count_news(category=category, ticker=ticker or None, hours=hours)
@@ -763,7 +827,7 @@ def api_news():
 @app.route("/api/calendar")
 @login_required
 def api_calendar():
-    days = int(request.args.get("days", 7))
+    days = min(max(int(request.args.get("days", 7)), 1), 90)
     events = get_calendar_events(days=days)
     return jsonify({"events": events})
 
@@ -1073,11 +1137,11 @@ Only return valid JSON, no markdown."""
         import re
         clean = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
         result = __import__("json").loads(clean)
-    except Exception as e:
+    except Exception:
         result = {
             "interpretation": query,
             "results": [],
-            "summary": f"Query processing error: {e}",
+            "summary": "Query processing encountered an error. Please try again.",
         }
 
     # Augment results with live quote data

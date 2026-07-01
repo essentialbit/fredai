@@ -361,6 +361,38 @@ def login_github_callback():
     return redirect("/")
 
 
+def save_google_credentials(user_id: int, access_token: str, refresh_token: str = None):
+    from memory_store import get_conn, get_user
+    import json
+    user = get_user(user_id)
+    if not user:
+        return
+    prefs = {}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        pass
+    google_creds = prefs.get("google_credentials", {})
+    google_creds["access_token"] = access_token
+    if refresh_token:
+        google_creds["refresh_token"] = refresh_token
+    prefs["google_credentials"] = google_creds
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), user_id))
+
+def get_google_token(user_id: int) -> str | None:
+    from memory_store import get_user
+    import json
+    user = get_user(user_id)
+    if not user:
+        return None
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+        return prefs.get("google_credentials", {}).get("access_token")
+    except Exception:
+        return None
+
+
 @app.route("/login/google")
 def login_google():
     if not GOOGLE_CLIENT_ID:
@@ -373,7 +405,9 @@ def login_google():
         "redirect_uri": redirect_uri,
         "state": state,
         "response_type": "code",
-        "scope": "openid profile email"
+        "scope": "openid profile email https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file",
+        "access_type": "offline",
+        "prompt": "consent"
     }
     url = "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
     return redirect(url)
@@ -409,6 +443,7 @@ def login_google_callback():
         
     token_data = token_res.json()
     access_token = token_data.get("access_token")
+    refresh_token = token_data.get("refresh_token")
     if not access_token:
         return "Could not retrieve access token.", 400
         
@@ -437,6 +472,9 @@ def login_google_callback():
         if not user:
             return "Failed to register user.", 500
             
+    # Save tokens in user preferences database
+    save_google_credentials(user["id"], access_token, refresh_token)
+
     session.clear()
     session.permanent = True
     session["user_id"] = user["id"]
@@ -449,6 +487,96 @@ def login_google_callback():
 @app.route("/")
 def index():
     return render_template("dashboard.html")
+
+
+# ── GOOGLE ECOSYSTEM INTEGRATION ENDPOINTS ────────────────────────────────────
+
+@app.route("/api/google/status")
+@login_required
+def api_google_status():
+    uid = session["user_id"]
+    token = get_google_token(uid)
+    return jsonify({
+        "linked": token is not None
+    })
+
+@app.route("/api/google/export/sheets", methods=["POST"])
+@login_required
+def api_google_sheets_export():
+    uid = session["user_id"]
+    token = get_google_token(uid)
+    if not token:
+        return jsonify({"error": "Google account not linked. Please sign in via Google OAuth first."}), 400
+        
+    from google_integration import export_to_sheets
+    from memory_store import get_watchlist
+    
+    quotes = _quotes_cache or {}
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, quotes)
+    
+    watchlist = get_watchlist(uid)
+    
+    result = export_to_sheets(token, portfolio, watchlist)
+    if result:
+        return jsonify({"status": "ok", "spreadsheetId": result["spreadsheetId"], "url": result["url"]})
+    return jsonify({"error": "Failed to create Google Sheet. Ensure your session token is valid."}), 500
+
+@app.route("/api/google/sync/calendar", methods=["POST"])
+@login_required
+def api_google_calendar_sync():
+    uid = session["user_id"]
+    token = get_google_token(uid)
+    if not token:
+        return jsonify({"error": "Google account not linked."}), 400
+        
+    from google_integration import sync_to_calendar
+    
+    events = get_calendar_events(days=7)
+    if not events:
+        return jsonify({"status": "ok", "message": "No events found to sync."})
+        
+    count = 0
+    for event in events:
+        event_map = {
+            "title": event.get("title") or event.get("name") or "Economic Event",
+            "description": f"Sector/Symbol: {event.get('symbol','Global')} | Impact: High | Source: FredAI",
+            "date": event.get("date") or datetime.now().strftime("%Y-%m-%d")
+        }
+        if sync_to_calendar(token, event_map):
+            count += 1
+            
+    return jsonify({"status": "ok", "synced_count": count})
+
+@app.route("/api/google/backup/drive", methods=["POST"])
+@login_required
+def api_google_drive_backup():
+    uid = session["user_id"]
+    token = get_google_token(uid)
+    if not token:
+        return jsonify({"error": "Google account not linked."}), 400
+        
+    from google_integration import backup_to_drive
+    from memory_store import get_watchlist, get_user
+    
+    user = get_user(uid)
+    wl = get_watchlist(uid)
+    holdings = get_portfolio(uid)
+    
+    backup_data = {
+        "user_profile": {
+            "username": user["username"],
+            "display_name": user.get("display_name"),
+            "preferences": user.get("preferences")
+        },
+        "watchlist": wl,
+        "portfolio": holdings,
+        "timestamp": datetime.now().isoformat()
+    }
+    
+    if backup_to_drive(token, backup_data):
+        return jsonify({"status": "ok", "message": "Backup saved successfully as fredai_secure_backup.json on Google Drive."})
+    return jsonify({"error": "Failed to upload backup to Google Drive."}), 500
 
 
 # ── INIT / DATA ROUTES ────────────────────────────────────────────────────────

@@ -104,6 +104,35 @@ _FINANCIAL_KEYWORDS = re.compile(
 _TICKER_MENTION = re.compile(r'\b([A-Z]{2,5})(?:\s*-\s*USD)?\b|\$([A-Z]{2,5})\b')
 
 
+def translate_to_english(text: str) -> tuple[str, bool]:
+    """
+    Translates non-English text to English using Google's public translation endpoint.
+    Returns: (translated_text, was_translated)
+    """
+    if not text or not text.strip():
+        return text, False
+    try:
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {
+            "client": "gtx",
+            "sl": "auto",
+            "tl": "en",
+            "dt": "t",
+            "q": text
+        }
+        r = requests.get(url, params=params, headers=_HEADERS, timeout=6)
+        if r.status_code == 200:
+            res = r.json()
+            if res and res[0]:
+                translated = "".join([part[0] for part in res[0] if part[0]])
+                detected_lang = res[2]
+                was_translated = (detected_lang != "en")
+                return translated, was_translated
+    except Exception as e:
+        print(f"[Translate] Failed: {e}")
+    return text, False
+
+
 def _guid(url: str, title: str) -> str:
     return hashlib.md5(f"{url}{title}".encode()).hexdigest()
 
@@ -147,6 +176,14 @@ def _parse_feed(feed_meta: dict, watchlist: list[str]) -> list[dict]:
         for entry in f.entries[:30]:
             title = (entry.get("title") or "").strip()
             summary = BeautifulSoup(entry.get("summary") or "", "html.parser").get_text()[:500].strip()
+
+            # Auto-translate if non-English
+            trans_title, is_title_trans = translate_to_english(title)
+            trans_summary, is_summary_trans = translate_to_english(summary)
+            if is_title_trans or is_summary_trans:
+                title = f"[Translated] {trans_title}"
+                summary = trans_summary
+
             url = entry.get("link") or ""
             guid = entry.get("id") or _guid(url, title)
 
@@ -211,6 +248,14 @@ def _fetch_per_ticker(symbols: list[str]) -> list[dict]:
             for entry in f.entries[:8]:
                 title = (entry.get("title") or "").strip()
                 summary = BeautifulSoup(entry.get("summary") or "", "html.parser").get_text()[:400]
+
+                # Auto-translate if non-English
+                trans_title, is_title_trans = translate_to_english(title)
+                trans_summary, is_summary_trans = translate_to_english(summary)
+                if is_title_trans or is_summary_trans:
+                    title = f"[Translated] {trans_title}"
+                    summary = trans_summary
+
                 url = entry.get("link") or ""
                 guid = entry.get("id") or _guid(url, title)
                 items.append({

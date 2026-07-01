@@ -1050,6 +1050,21 @@ def api_reset_password():
     return jsonify({"error": "User not found"}), 404
 
 
+@app.route("/api/translate", methods=["POST"])
+@login_required
+def api_translate():
+    data = request.json or {}
+    text = data.get("text", "")
+    if not text:
+        return jsonify({"translated_text": "", "was_translated": False})
+    from news_client import translate_to_english
+    translated, was_translated = translate_to_english(text)
+    return jsonify({
+        "translated_text": translated,
+        "was_translated": was_translated
+    })
+
+
 @app.route("/api/news/globe-data")
 @login_required
 def api_news_globe_data():

@@ -1631,6 +1631,13 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[RnD] Cycle error: {e}")
 
+    def job_gemini_rnd():
+        try:
+            from gemini_improve import run_gemini_improvement_cycle
+            run_gemini_improvement_cycle()
+        except Exception as e:
+            print(f"[Gemini RnD] Cycle error: {e}")
+
     def job_prune():
         """Data retention enforcement — GDPR Art.5 / APP 11.2 data minimisation."""
         from config import DATA_RETENTION_DAYS
@@ -1704,17 +1711,30 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Community] Error: {e}")
 
+    def job_gemini_community():
+        """Engage with GitHub Issues, Discussions, and PRs via Gemini every 6h."""
+        try:
+            from gemini_community import run_gemini_community_cycle
+            summary = run_gemini_community_cycle()
+            responded = summary.get("responses_posted", 0)
+            if responded:
+                print(f"[Gemini Community] Posted {responded} response(s) to GitHub")
+        except Exception as e:
+            print(f"[Gemini Community] Error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx")
     scheduler.add_job(job_scan_cycle, "interval", hours=SCAN_INTERVAL_HOURS, id="scan")
     scheduler.add_job(job_rnd, "interval", hours=6, id="rnd")
+    scheduler.add_job(job_gemini_rnd, "interval", hours=6, id="gemini_rnd", jitter=1800)
     scheduler.add_job(job_prune, "cron", hour=2, minute=0, id="prune")
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)
+    scheduler.add_job(job_gemini_community, "interval", hours=6, id="gemini_community", jitter=2100)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

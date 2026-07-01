@@ -35,9 +35,19 @@ def _ensure_label(name: str, color: str = "ededed"):
 
 def sync_proposal_to_issue(proposal: dict) -> int | None:
     """Mirror a feature_backlog row to a GitHub Issue. Returns the issue
-    number, or None if GITHUB_TOKEN isn't configured or the request fails."""
+    number, or None if GITHUB_TOKEN isn't configured or the request fails.
+
+    Idempotent per proposal_id: insert_feature_proposal()'s dedup can return
+    an *existing* row's id when a near-duplicate is proposed again, but that
+    doesn't mean the issue-sync step should create a second Issue for it —
+    check the DB for an already-linked issue number first."""
     if not GITHUB_TOKEN:
         return None
+
+    from memory_store import get_proposal
+    existing = get_proposal(proposal["id"])
+    if existing and existing.get("github_issue_number"):
+        return existing["github_issue_number"]
 
     fsi = _fsi_level(proposal.get("description", ""))
     risk = classify_risk(

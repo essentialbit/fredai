@@ -126,17 +126,21 @@ class _FredProvider:
             return f"[Fred error: {e}]"
 
     def _ollama_complete(self, messages, system, max_tokens) -> str:
-        import requests as _req
+        import re as _re, requests as _req
         payload = {
             "model": OLLAMA_MODEL,
             "messages": [{"role": "system", "content": system}] + messages,
             "stream": False,
-            "options": {"num_predict": max_tokens},
+            "think": False,          # disable chain-of-thought for reasoning models (qwen3, deepseek-r1)
+            "options": {"num_predict": max_tokens + 512},  # headroom above max_tokens
         }
         try:
             r = _req.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=120)
             r.raise_for_status()
-            return r.json()["message"]["content"]
+            content = r.json()["message"]["content"]
+            # Belt-and-suspenders: strip any <think>...</think> blocks that leak through
+            content = _re.sub(r"<think>.*?</think>", "", content, flags=_re.DOTALL).strip()
+            return content
         except Exception as e:
             return f"[Ollama error: {e}]"
 

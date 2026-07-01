@@ -1132,11 +1132,14 @@ Only return valid JSON, no markdown."""
             [{"role": "user", "content": prompt}],
             FRED_SYSTEM,
             tier="summary",
-            max_tokens=800,
+            max_tokens=1600,  # headroom for reasoning models that think inline
         )
-        import re
-        clean = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
-        result = __import__("json").loads(clean)
+        import re as _re, json as _json
+        # Strip markdown fences and leading/trailing reasoning prose
+        # then find the first complete JSON object anywhere in the response
+        clean = _re.sub(r"```(?:json)?\s*|\s*```", "", raw)
+        m = _re.search(r'\{[\s\S]*\}', clean)
+        result = _json.loads(m.group()) if m else _json.loads(clean.strip())
     except Exception:
         result = {
             "interpretation": query,

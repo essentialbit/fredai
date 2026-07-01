@@ -24,23 +24,28 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### v1.2.0 — Community Engagement + CI Fix
-- Autonomous GitHub community engagement: Fred responds to Issues, Discussions, and PRs every 6h
-- Fixed CI/CD YAML error that blocked all pipeline runs since v1.1.0
-- CI `rnd` job now has correct write permissions for issues, discussions, pull-requests
+### FredAI v1.2.0 — Community Engagement + CI Fix
+- **Autonomous community engagement:** Fred monitors GitHub Issues, Discussions, and PRs every 6h. Classifies and responds to bug reports, feature requests, questions, and contributions. Silently ignores spam and unproductive content.
+- **CI/CD fixed:** Fixed YAML syntax error (unquoted colon in step name) that was breaking all CI runs since v1.1.0
+- **CI permissions:** `rnd` job now has `issues: write`, `discussions: write`, `pull-requests: write` so community responses post correctly in CI
+- **README:** Community engagement section expanded with response behavior table
+- **config.py:** `GITHUB_TOKEN` and `GITHUB_REPO` env vars documented
 
-### v1.1.0 — Security Hardening + CI/CD Automation
-- OWASP top-10 hardening: brute-force rate limiting, session fixation prevention, CSP headers, SocketIO CORS lockdown
-- Multi-arch Docker builds (linux/amd64 + linux/arm64) published to GHCR on every push
-- Autonomous installer: macOS Dock shortcut, Windows .url, Linux .desktop — all created on first run
-- Interactive 3D Signal Globe (globe.gl + WebGL) on News and Dashboard tabs
-- YouTube video intelligence: Bloomberg, Yahoo Finance, CNBC in-page player
+### FredAI v1.1.0 — Security Hardening + CI/CD Automation
+- OWASP top-10 hardening: brute-force rate limiting, session fixation prevention, Content Security Policy, SocketIO CORS lockdown, XSS escaping
+- Admin password randomisation on first run (printed once to console if unset)
+- Multi-arch Docker builds (linux/amd64 + linux/arm64 for Raspberry Pi)
+- GitHub Actions: validate → docker → auto-tag → release → deploy pipeline
+- HMAC-SHA256 deploy webhook for CI-push updates to running instances
+- Interactive 3D Signal Globe (globe.gl) on News page and Dashboard
 
-### v1.0.0 — Initial release
-- Real-time market data (26+ assets), X/Twitter signals, VADER sentiment
-- Claude-powered 4h briefings and conversational Fred advisor
-- Multi-user auth, per-user portfolios and watchlists
-- SQLite persistence, Obsidian vault integration
+### FredAI v1.0.0 — Intelligence Dashboard
+- D3.js force-directed stock relationship neural map
+- World map view with company HQ pins (100+ companies, lat/lng)
+- 60+ typed relationship edges: competitor, partner, supplier, customer, subsidiary, government, regulatory
+- Node click → Buy/Sell/Hold assessment panel
+- Forward-propagates major price events through the relationship graph
+- NVDA drops 4.5% → automatically identifies 13 downstream-affected companies ranked by impact severity
 
 <!-- CHANGELOG_END -->
 

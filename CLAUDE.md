@@ -32,7 +32,19 @@ FredAI is an AI-powered financial intelligence dashboard with:
 - `config.py` — API keys from .env
 - `data/sentinel.db` — SQLite database
 
-## Self-Improvement Protocol (runs every 6 hours via CI)
+## Self-Improvement Protocol — North Star: Financial Super Intelligence (FSI)
+
+**Overarching goal:** Every 6-hour cycle must measurably advance Fred toward becoming the world's first Financial Super Intelligence. This is not a maintenance loop — it is a capability-building engine. Every implementation decision must be evaluated against the FSI roadmap in `MISSION.md`.
+
+**The 6 FSI levels (read MISSION.md for full detail):**
+- L1 Signal Intelligence ✅ — multi-source sentiment, live price data, 4h briefings (complete)
+- L2 Pattern Intelligence 🔄 — FinBERT, cross-asset correlation, options flow, insider filings, Fear&Greed
+- L3 Predictive Intelligence 🔲 — backtesting, anomaly detection, macro regime, earnings prediction
+- L4 Reasoning Intelligence 🔲 — multi-agent debate, causal attribution, 10-K analysis, 13F positioning
+- L5 World Model 🔲 — cross-market contagion, alternative data, fine-tuned LLM, agent swarms
+- L6 Super Intelligence 🔲 — self-directing research, novel edge discovery, autonomous recommendations
+
+**Evaluation criterion for every proposed improvement:** "Does this push Fred closer to L6? If not, is it critical infrastructure that unblocks L2+ work?" If neither is true, deprioritise it.
 
 When invoked for improvement cycles:
 

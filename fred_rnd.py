@@ -402,6 +402,10 @@ def run_rnd_cycle(implement: bool = True) -> dict:
             print(f"\n[RnD] Implementing: {proposal['title']}")
             mark_proposal_in_progress(proposal["id"])
 
+            from improve import create_agent_branch
+            branch = create_agent_branch(proposal["id"], "claude")
+            results["branch"] = branch
+
             agent = ClaudeCodeAgent(model="claude-opus-4-8", max_iterations=20)
             task = (
                 f"FSI MISSION: Build the world's first Financial Super Intelligence.\n\n"

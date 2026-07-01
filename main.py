@@ -19,7 +19,8 @@ from memory_store import (
     get_portfolio, upsert_portfolio,
     get_user_interests, bump_interest, decay_interests,
     get_trending_assets,
-    verify_user, create_user, get_user, get_user_by_username,
+    verify_user, create_user, get_user,
+    get_user_by_oauth, create_oauth_user,
     log_consent, has_consent, export_user_data, delete_user_data, prune_old_data,
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
@@ -161,7 +162,12 @@ app.config["SECRET_KEY"] = SECRET_KEY
 app.config["SESSION_COOKIE_NAME"] = "fredai_session"
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
-app.config["SESSION_COOKIE_SECURE"] = False   # set True in production behind HTTPS
+app.config["SESSION_COOKIE_SECURE"] = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
+# Defaults False since this app is commonly self-hosted over plain HTTP on a
+# LAN (Raspberry Pi, etc. — see MISSION.md deployment targets); the comment
+# this replaced said "set True in production behind HTTPS" but there was no
+# actual way to do that without editing source. Set SESSION_COOKIE_SECURE=true
+# in .env once you're behind HTTPS (reverse proxy, Cloudflare Tunnel, etc.).
 app.config["PERMANENT_SESSION_LIFETIME"] = _td(days=30)
 
 # SocketIO: only allow connections from the same origin (prevents cross-origin WS abuse)
@@ -252,6 +258,9 @@ def login_page():
 
 @app.route("/register", methods=["POST"])
 def register():
+    ip = request.remote_addr or "unknown"
+    if not _check_rate_limit(ip):
+        return jsonify({"error": "Too many registration attempts. Try again in 5 minutes."}), 429
     data = request.json or {}
     username = data.get("username", "").strip().lower()
     password = data.get("password", "")
@@ -363,22 +372,25 @@ def login_github_callback():
         return "Failed to fetch user profile from GitHub.", 400
         
     user_profile = user_res.json()
+    github_id = user_profile.get("id")
     github_login = user_profile.get("login")
     github_name = user_profile.get("name") or github_login
-    
-    if not github_login:
-        return "Failed to retrieve username from GitHub.", 400
-        
-    username = f"github_{github_login}".lower()
-    
-    import hashlib
-    user = get_user_by_username(username)
+
+    if not github_id or not github_login:
+        return "Failed to retrieve user ID from GitHub.", 400
+
+    github_id = str(github_id)
+
+    # Look up by GitHub's stable numeric ID, never by a derived username —
+    # a username string can be squatted via /register ahead of time, which
+    # would otherwise let an attacker hijack a victim's future OAuth login.
+    user = get_user_by_oauth("github", github_id)
     if not user:
-        rand_pw_hash = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-        user = create_user(username, rand_pw_hash, github_name)
+        username = f"github_{github_login}".lower()
+        user = create_oauth_user("github", github_id, username, github_name)
         if not user:
             return "Failed to register user.", 500
-            
+
     session.clear()
     session.permanent = True
     session["user_id"] = user["id"]
@@ -390,6 +402,7 @@ def login_github_callback():
 
 def save_google_credentials(user_id: int, access_token: str, refresh_token: str = None):
     from memory_store import get_conn, get_user
+    from crypto_utils import encrypt_secret
     import json
     user = get_user(user_id)
     if not user:
@@ -400,22 +413,24 @@ def save_google_credentials(user_id: int, access_token: str, refresh_token: str 
     except Exception:
         pass
     google_creds = prefs.get("google_credentials", {})
-    google_creds["access_token"] = access_token
+    google_creds["access_token"] = encrypt_secret(access_token)
     if refresh_token:
-        google_creds["refresh_token"] = refresh_token
+        google_creds["refresh_token"] = encrypt_secret(refresh_token)
     prefs["google_credentials"] = google_creds
     with get_conn() as conn:
         conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), user_id))
 
 def get_google_token(user_id: int) -> str | None:
     from memory_store import get_user
+    from crypto_utils import decrypt_secret
     import json
     user = get_user(user_id)
     if not user:
         return None
     try:
         prefs = json.loads(user.get("preferences") or "{}")
-        return prefs.get("google_credentials", {}).get("access_token")
+        encrypted = prefs.get("google_credentials", {}).get("access_token")
+        return decrypt_secret(encrypted) if encrypted else None
     except Exception:
         return None
 
@@ -488,17 +503,18 @@ def login_google_callback():
     if not google_sub:
         return "Failed to retrieve user ID from Google.", 400
         
-    local_name = google_email.split('@')[0] if google_email else google_sub[:8]
-    username = f"google_{local_name}".lower()
-    
-    import hashlib
-    user = get_user_by_username(username)
+    # Look up by Google's stable "sub" claim, never by a derived username —
+    # a username string can be squatted via /register ahead of time, which
+    # would otherwise let an attacker hijack a victim's future OAuth login
+    # (and, worse, receive the victim's real Google access/refresh tokens).
+    user = get_user_by_oauth("google", google_sub)
     if not user:
-        rand_pw_hash = hashlib.sha256(secrets.token_bytes(32)).hexdigest()
-        user = create_user(username, rand_pw_hash, google_name)
+        local_name = google_email.split('@')[0] if google_email else google_sub[:8]
+        username = f"google_{local_name}".lower()
+        user = create_oauth_user("google", google_sub, username, google_name)
         if not user:
             return "Failed to register user.", 500
-            
+
     # Save tokens in user preferences database
     save_google_credentials(user["id"], access_token, refresh_token)
 
@@ -1217,29 +1233,30 @@ def api_system_refresh():
 @login_required
 def api_save_user_keys():
     from memory_store import get_conn, get_user
+    from crypto_utils import encrypt_secret
     import json
     uid = session.get("user_id")
     user = get_user(uid)
     if not user:
         return jsonify({"error": "User not found"}), 404
-        
+
     data = request.json or {}
     anthropic_key = data.get("anthropic_key", "").strip()
     gemini_key = data.get("gemini_key", "").strip()
-    
+
     prefs = {}
     try:
         prefs = json.loads(user.get("preferences") or "{}")
     except Exception:
         pass
-        
+
     if anthropic_key:
-        prefs["user_anthropic_key"] = anthropic_key
+        prefs["user_anthropic_key"] = encrypt_secret(anthropic_key)
     elif "user_anthropic_key" in prefs:
         del prefs["user_anthropic_key"]
-        
+
     if gemini_key:
-        prefs["user_gemini_key"] = gemini_key
+        prefs["user_gemini_key"] = encrypt_secret(gemini_key)
     elif "user_gemini_key" in prefs:
         del prefs["user_gemini_key"]
         

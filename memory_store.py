@@ -27,7 +27,9 @@ def init_db():
             display_name TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             last_login DATETIME,
-            preferences TEXT DEFAULT '{}'
+            preferences TEXT DEFAULT '{}',
+            oauth_github_id TEXT,
+            oauth_google_sub TEXT
         );
 
         CREATE TABLE IF NOT EXISTS watchlist (
@@ -208,11 +210,17 @@ def init_db():
         # CREATE TABLE IF NOT EXISTS above only covers fresh databases.
         for ddl in (
             "ALTER TABLE feature_backlog ADD COLUMN github_issue_number INTEGER",
+            "ALTER TABLE users ADD COLUMN oauth_github_id TEXT",
+            "ALTER TABLE users ADD COLUMN oauth_google_sub TEXT",
         ):
             try:
                 conn.execute(ddl)
             except sqlite3.OperationalError:
                 pass  # column already exists
+        conn.executescript("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_github ON users(oauth_github_id) WHERE oauth_github_id IS NOT NULL;
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_google ON users(oauth_google_sub) WHERE oauth_google_sub IS NOT NULL;
+        """)
 
         # Seed a default admin user if none exist.
         # Password is randomised on first run — printed to console once.
@@ -295,6 +303,39 @@ def get_user_by_username(username: str) -> dict | None:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
     return dict(row) if row else None
+
+
+def get_user_by_oauth(provider: str, provider_id: str) -> dict | None:
+    """Look up a user by their stable OAuth provider ID — NEVER by a
+    derived username string, which an attacker could pre-register via
+    /register to hijack a future victim's OAuth login."""
+    column = {"github": "oauth_github_id", "google": "oauth_google_sub"}[provider]
+    with get_conn() as conn:
+        row = conn.execute(f"SELECT * FROM users WHERE {column}=?", (provider_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def create_oauth_user(provider: str, provider_id: str, username: str, display_name: str) -> dict | None:
+    """Create a new account linked to an OAuth provider ID. If the natural
+    username is already taken by an unrelated account, falls back to a
+    provider-ID-suffixed username that's guaranteed unique — never reuses
+    an existing account that wasn't already linked to this provider_id."""
+    column = {"github": "oauth_github_id", "google": "oauth_google_sub"}[provider]
+    import secrets as _secrets
+    pw_hash = generate_password_hash(_secrets.token_urlsafe(32))
+    candidates = [username, f"{username}_{provider_id}"]
+    with get_conn() as conn:
+        for candidate in candidates:
+            try:
+                conn.execute(
+                    f"INSERT INTO users (username, password_hash, display_name, {column}) VALUES (?,?,?,?)",
+                    (candidate, pw_hash, display_name, provider_id)
+                )
+                row = conn.execute("SELECT * FROM users WHERE username=?", (candidate,)).fetchone()
+                return dict(row)
+            except sqlite3.IntegrityError:
+                continue
+    return None
 
 
 # ── WATCHLIST ─────────────────────────────────────────────────────────────────

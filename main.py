@@ -131,6 +131,7 @@ from datetime import timedelta as _td
 
 app = Flask(__name__, template_folder="templates")
 app.config["SECRET_KEY"] = SECRET_KEY
+app.config["SESSION_COOKIE_NAME"] = "fredai_session"
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SECURE"] = False   # set True in production behind HTTPS

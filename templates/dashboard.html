@@ -1580,7 +1580,21 @@ html[data-tier="ultra"] #ops-picture{display:block}
 <!-- ══ JAVASCRIPT ══════════════════════════════════════════════════════════ -->
 <script>
 // ── GLOBALS ───────────────────────────────────────────────────────────────
-const socket = io();
+let socket;
+try {
+  socket = typeof io !== 'undefined' ? io() : {
+    on: () => {},
+    emit: () => {},
+    off: () => {}
+  };
+} catch(e) {
+  console.warn('[FredAI] Socket.IO client load failed, using mock socket:', e);
+  socket = {
+    on: () => {},
+    emit: () => {},
+    off: () => {}
+  };
+}
 const TIER = window.FRED_TIER || 'full';
 const IS_TOUCH = window.FRED_TOUCH;
 
@@ -2271,6 +2285,10 @@ function renderUltraTrend(data) {
 
 // ── PRICE CHART (adaptive quality per tier) ───────────────────────────────
 function initPriceChart() {
+  if (typeof LightweightCharts === 'undefined') {
+    console.warn('[FredAI] LightweightCharts library not loaded');
+    return;
+  }
   const wrap=g('price-chart'); if(!wrap) return;
   const isDark = true;
   priceChart=LightweightCharts.createChart(wrap,{

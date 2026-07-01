@@ -91,7 +91,35 @@ def analyze_current_state() -> dict:
     }
 
 
-def git_push(message: str):
+def create_agent_branch(proposal_id: int, agent: str) -> str:
+    """Check out a fresh branch off an up-to-date main for one proposal's implementation.
+
+    Called before the code agent starts iterating, so all its local commits
+    (via _auto_commit()) land on this branch instead of main — main is now
+    branch-protected and agents open a PR instead of pushing to it directly.
+    """
+    root = Path(__file__).parent
+    branch = f"agent/{agent}-{proposal_id}-{datetime.now(UTC).strftime('%Y%m%d')}"
+    subprocess.run(["git", "fetch", "origin", "main"], cwd=root, capture_output=True)
+    subprocess.run(["git", "checkout", "main"], cwd=root, capture_output=True)
+    subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=root, capture_output=True)
+    subprocess.run(["git", "checkout", "-B", branch], cwd=root, capture_output=True)
+    return branch
+
+
+def _open_pr(branch: str, title: str, agent: str) -> dict | None:
+    from community import _gh_post, GITHUB_REPO
+    return _gh_post(f"repos/{GITHUB_REPO}/pulls", {
+        "title": title,
+        "head": branch,
+        "base": "main",
+        "body": f"Opened automatically by FredAI's {agent} self-improvement cycle.",
+    })
+
+
+def git_push(message: str, agent: str = "claude", branch: str | None = None):
+    """Commit + push an agent's work as a PR branch — main is branch-protected,
+    direct pushes are rejected server-side, so this always targets a branch."""
     try:
         root = Path(__file__).parent
 
@@ -106,13 +134,23 @@ def git_push(message: str):
             subprocess.run(["git", "commit", "-m", message], cwd=root)
 
         ahead = subprocess.run(
-            ["git", "rev-list", "--count", "@{u}..HEAD"], capture_output=True, text=True, cwd=root
+            ["git", "rev-list", "--count", "origin/main..HEAD"], capture_output=True, text=True, cwd=root
         ).stdout.strip()
         if ahead in ("", "0"):
             print("[Git] Nothing to push")
             return
 
-        push = subprocess.run(["git", "push", "origin", "main"], capture_output=True, text=True, cwd=root)
+        current_branch = subprocess.run(
+            ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=root
+        ).stdout.strip()
+        if not branch:
+            branch = current_branch if current_branch and current_branch != "main" else (
+                f"agent/{agent}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+            )
+        if current_branch != branch:
+            subprocess.run(["git", "checkout", "-B", branch], cwd=root)
+
+        push = subprocess.run(["git", "push", "-u", "origin", branch], capture_output=True, text=True, cwd=root)
         if push.returncode != 0:
             # Likely a non-fast-forward rejection from a concurrent cycle (Claude/Gemini/CI)
             # pushing in the same window — rebase onto the new remote tip and retry once.
@@ -123,12 +161,19 @@ def git_push(message: str):
                 subprocess.run(["git", "rebase", "--abort"], cwd=root)
                 print(f"[Git] Rebase failed, giving up this cycle: {rebase.stderr.strip()[:200]}")
                 return
-            retry = subprocess.run(["git", "push", "origin", "main"], capture_output=True, text=True, cwd=root)
+            retry = subprocess.run(["git", "push", "-u", "origin", branch], capture_output=True, text=True, cwd=root)
             if retry.returncode != 0:
                 print(f"[Git] Retry push failed: {retry.stderr.strip()[:200]}")
                 return
 
-        print(f"[Git] Pushed: {message}")
+        print(f"[Git] Pushed branch: {branch}")
+
+        pr = _open_pr(branch, message, agent)
+        print(f"[Git] Opened PR: {pr.get('html_url')}" if pr else "[Git] PR creation skipped (may already exist, or GITHUB_TOKEN unset)")
+
+        # Return to a clean, up-to-date main so the next cycle starts fresh.
+        subprocess.run(["git", "checkout", "main"], cwd=root, capture_output=True)
+        subprocess.run(["git", "pull", "--ff-only", "origin", "main"], cwd=root, capture_output=True)
     except Exception as e:
         print(f"[Git] Error: {e}")
 
@@ -205,7 +250,7 @@ def run_improvement_cycle(dry_run: bool = False, discover_only: bool = False):
     ts = datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')
     impl_title = rnd_results.get("implemented", {}) or {}
     title = impl_title.get("proposal", "maintenance") if isinstance(impl_title, dict) else "maintenance"
-    git_push(f"auto-improve({ts}): {title}")
+    git_push(f"auto-improve({ts}): {title}", agent="claude", branch=rnd_results.get("branch"))
 
     # ── Phase 4: Log to Obsidian ──────────────────────────────────
     report = "\n".join([

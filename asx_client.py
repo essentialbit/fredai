@@ -113,6 +113,10 @@ def fetch_asx_quotes(symbols: list[str] = None) -> dict:
     Fetch live quotes for ASX tickers via Yahoo Finance v8 API.
     Returns dict keyed by symbol, with 'currency': 'AUD'.
     """
+    from market_data import _yf_is_blocked
+    if _yf_is_blocked():
+        print("[ASX] Yahoo Finance rate-limited — skipping ASX quote fetch")
+        return {}
     symbols = symbols or list(ASX_TICKERS.keys())
     results = {}
     for sym in symbols:

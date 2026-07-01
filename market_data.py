@@ -21,6 +21,29 @@ _HEADERS = {
 _BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
 _BASE2 = "https://query2.finance.yahoo.com/v8/finance/chart"
 _BATCH_URL = "https://query1.finance.yahoo.com/v7/finance/quote"
+_NASDAQ_API = "https://api.nasdaq.com/api/quote/{sym}/info"
+_COINGECKO_API = "https://api.coingecko.com/api/v3/simple/price"
+
+_COINGECKO_IDS = {
+    "BTC-USD": "bitcoin",
+    "ETH-USD": "ethereum",
+    "SOL-USD": "solana",
+    "BNB-USD": "binancecoin",
+}
+
+# When Yahoo Finance returns 429, block all YF calls for this many seconds
+_YF_COOLDOWN_S = 900  # 15 minutes
+_yf_blocked_until: float = 0.0
+
+
+def _yf_is_blocked() -> bool:
+    return time.time() < _yf_blocked_until
+
+
+def _yf_set_blocked() -> None:
+    global _yf_blocked_until
+    _yf_blocked_until = time.time() + _YF_COOLDOWN_S
+    print(f"[Market] Yahoo Finance rate-limited — pausing YF requests for {_YF_COOLDOWN_S//60}min")
 
 _session: requests.Session | None = None
 _crumb: str | None = None
@@ -46,6 +69,85 @@ def _get_session() -> tuple[requests.Session, str]:
     # Fallback: bare session without crumb (still works on unblocked IPs sometimes)
     _session, _crumb, _session_ts = s, "", time.time()
     return _session, _crumb
+
+
+def _fetch_nasdaq(symbols: list[str]) -> dict:
+    """Nasdaq public API — works without auth for US stocks/ETFs."""
+    results = {}
+    for sym in symbols:
+        if sym.endswith(".AX") or "-" in sym:
+            continue
+        assetclass = "etf" if sym in ("SPY", "QQQ", "IWM", "GLD", "TLT") else "stocks"
+        try:
+            r = requests.get(
+                _NASDAQ_API.format(sym=sym),
+                params={"assetclass": assetclass},
+                headers=_HEADERS,
+                timeout=10,
+            )
+            if r.status_code != 200:
+                continue
+            primary = r.json().get("data", {}).get("primaryData", {})
+            price_str = primary.get("lastSalePrice", "0").replace("$", "").replace(",", "")
+            price = float(price_str) if price_str else 0.0
+            if not price:
+                continue
+            chg_str = primary.get("percentageChange", "0%").replace("%", "").replace("+", "")
+            chg_pct = float(chg_str) if chg_str else 0.0
+            chg = price * chg_pct / 100
+            prev = price - chg if price else 0.0
+            results[sym] = {
+                "symbol": sym,
+                "name": DISPLAY_SYMBOLS.get(sym, sym),
+                "price": round(price, 2),
+                "change": round(chg, 2),
+                "change_pct": round(chg_pct, 2),
+                "prev_close": round(prev, 2),
+                "currency": "USD",
+                "updated": datetime.now(timezone.utc).isoformat(),
+            }
+            time.sleep(0.15)
+        except Exception:
+            continue
+    return results
+
+
+def _fetch_crypto(symbols: list[str]) -> dict:
+    """CoinGecko free API for crypto — no key required."""
+    crypto_syms = [s for s in symbols if s in _COINGECKO_IDS]
+    if not crypto_syms:
+        return {}
+    ids = ",".join(_COINGECKO_IDS[s] for s in crypto_syms)
+    try:
+        r = requests.get(
+            _COINGECKO_API,
+            params={"ids": ids, "vs_currencies": "usd", "include_24hr_change": "true"},
+            headers=_HEADERS,
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        results = {}
+        for sym in crypto_syms:
+            cg_id = _COINGECKO_IDS[sym]
+            d = data.get(cg_id, {})
+            price = float(d.get("usd", 0))
+            chg_pct = float(d.get("usd_24h_change", 0))
+            chg = price * chg_pct / 100
+            prev = price - chg
+            results[sym] = {
+                "symbol": sym,
+                "name": DISPLAY_SYMBOLS.get(sym, sym),
+                "price": round(price, 2),
+                "change": round(chg, 2),
+                "change_pct": round(chg_pct, 2),
+                "prev_close": round(prev, 2),
+                "currency": "USD",
+                "updated": datetime.now(timezone.utc).isoformat(),
+            }
+        return results
+    except Exception:
+        return {}
 
 
 def _load_disk_cache() -> dict:
@@ -75,52 +177,44 @@ def _save_disk_cache(quotes: dict) -> None:
 
 def _fetch_batch(symbols: list[str]) -> dict:
     """Single Yahoo Finance v7 batch call for up to 100 symbols. Returns price dict."""
+    if _yf_is_blocked():
+        return {}
     sess, crumb = _get_session()
     chunk_results = {}
-    # Yahoo v7 handles ~100 symbols per request
     for i in range(0, len(symbols), 100):
         chunk = symbols[i:i + 100]
-        for attempt in range(3):
-            try:
-                params = {
-                    "symbols": ",".join(chunk),
-                    "fields": "regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose,shortName,currency",
+        try:
+            params = {
+                "symbols": ",".join(chunk),
+                "fields": "regularMarketPrice,regularMarketChangePercent,regularMarketPreviousClose,shortName,currency",
+            }
+            if crumb:
+                params["crumb"] = crumb
+            r = sess.get(_BATCH_URL, params=params, timeout=20)
+            if r.status_code == 429:
+                _yf_set_blocked()
+                return chunk_results
+            r.raise_for_status()
+            items = r.json().get("quoteResponse", {}).get("result", [])
+            for q in items:
+                sym = q.get("symbol", "")
+                price = float(q.get("regularMarketPrice") or 0)
+                prev = float(q.get("regularMarketPreviousClose") or price)
+                change_pct = float(q.get("regularMarketChangePercent") or 0)
+                change = price - prev
+                currency = "AUD" if sym.endswith(".AX") else q.get("currency", "USD")
+                chunk_results[sym] = {
+                    "symbol": sym,
+                    "name": DISPLAY_SYMBOLS.get(sym, q.get("shortName", sym)),
+                    "price": round(price, 2),
+                    "change": round(change, 2),
+                    "change_pct": round(change_pct, 2),
+                    "prev_close": round(prev, 2),
+                    "currency": currency,
+                    "updated": datetime.now(timezone.utc).isoformat(),
                 }
-                if crumb:
-                    params["crumb"] = crumb
-                r = sess.get(
-                    _BATCH_URL,
-                    params=params,
-                    timeout=20,
-                )
-                if r.status_code == 429:
-                    wait = 15 * (2 ** attempt)
-                    print(f"[Market] 429 rate-limit — waiting {wait}s")
-                    time.sleep(wait)
-                    continue
-                r.raise_for_status()
-                items = r.json().get("quoteResponse", {}).get("result", [])
-                for q in items:
-                    sym = q.get("symbol", "")
-                    price = float(q.get("regularMarketPrice") or 0)
-                    prev = float(q.get("regularMarketPreviousClose") or price)
-                    change_pct = float(q.get("regularMarketChangePercent") or 0)
-                    change = price - prev
-                    currency = "AUD" if sym.endswith(".AX") else q.get("currency", "USD")
-                    chunk_results[sym] = {
-                        "symbol": sym,
-                        "name": DISPLAY_SYMBOLS.get(sym, q.get("shortName", sym)),
-                        "price": round(price, 2),
-                        "change": round(change, 2),
-                        "change_pct": round(change_pct, 2),
-                        "prev_close": round(prev, 2),
-                        "currency": currency,
-                        "updated": datetime.now(timezone.utc).isoformat(),
-                    }
-                break
-            except Exception as e:
-                if attempt == 2:
-                    print(f"[Market] Batch fetch failed: {e}")
+        except Exception as e:
+            print(f"[Market] Batch fetch failed: {e}")
     return chunk_results
 
 SECTORS = {
@@ -147,25 +241,25 @@ _RANGE_MAP = {
 
 
 def _chart(symbol: str, interval: str = "1d", period: str = "5d") -> dict | None:
+    if _yf_is_blocked():
+        return None
     interval = _INTERVAL_MAP.get(interval, interval)
     period = _RANGE_MAP.get(period, period)
     for base in (_BASE, _BASE2):
-        for attempt in range(3):
-            try:
-                r = requests.get(
-                    f"{base}/{symbol}?interval={interval}&range={period}",
-                    headers=_HEADERS, timeout=12,
-                )
-                if r.status_code == 429:
-                    time.sleep(10 * (2 ** attempt))
-                    continue
-                r.raise_for_status()
-                result = r.json().get("chart", {}).get("result")
-                if result:
-                    return result[0]
-                break
-            except Exception:
-                break
+        try:
+            r = requests.get(
+                f"{base}/{symbol}?interval={interval}&range={period}",
+                headers=_HEADERS, timeout=12,
+            )
+            if r.status_code == 429:
+                _yf_set_blocked()
+                return None
+            r.raise_for_status()
+            result = r.json().get("chart", {}).get("result")
+            if result:
+                return result[0]
+        except Exception:
+            continue
     return None
 
 
@@ -178,12 +272,20 @@ def fetch_quotes(symbols: list[str] = None) -> dict:
         if cached:
             return cached
 
-    # Batch fetch (single request for all symbols)
-    results = _fetch_batch(target)
+    results: dict = {}
 
-    # Per-symbol chart fallback for anything the batch missed
+    # Primary: Nasdaq API (US stocks/ETFs) + CoinGecko (crypto) — no auth required
+    results.update(_fetch_nasdaq(target))
+    results.update(_fetch_crypto(target))
+
+    # Fallback: Yahoo Finance v7 batch (for ASX and anything Nasdaq missed)
     missing = [s for s in target if s not in results]
-    for sym in missing:
+    if missing:
+        results.update(_fetch_batch(missing))
+
+    # Last resort: per-symbol Yahoo Finance chart call
+    still_missing = [s for s in target if s not in results]
+    for sym in still_missing:
         try:
             time.sleep(0.5)
             data = _chart(sym, "1d", "5d")
@@ -212,6 +314,7 @@ def fetch_quotes(symbols: list[str] = None) -> dict:
 
     if results and not symbols:
         _save_disk_cache(results)
+        print(f"[Market] Fetched {len(results)}/{len(target)} quotes, saved to disk cache")
 
     return results
 

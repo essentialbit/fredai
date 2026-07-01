@@ -133,6 +133,10 @@ def run_gemini_rnd_cycle(implement: bool = True) -> dict:
             print(f"\n[Gemini RnD] Implementing: {proposal['title']}")
             mark_proposal_in_progress(proposal["id"])
 
+            from improve import create_agent_branch
+            branch = create_agent_branch(proposal["id"], "gemini")
+            results["branch"] = branch
+
             agent = GeminiCodeAgent(model="gemini-2.5-flash", max_iterations=20)
             task = (
                 f"FSI MISSION: Build the world's first Financial Super Intelligence.\n\n"

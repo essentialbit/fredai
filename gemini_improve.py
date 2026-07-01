@@ -73,7 +73,7 @@ def run_gemini_improvement_cycle(dry_run: bool = False, discover_only: bool = Fa
     ts = datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')
     impl_title = rnd_results.get("implemented", {}) or {}
     title = impl_title.get("proposal", "maintenance") if isinstance(impl_title, dict) else "maintenance"
-    git_push(f"auto-improve-gemini({ts}): {title}")
+    git_push(f"auto-improve-gemini({ts}): {title}", agent="gemini", branch=rnd_results.get("branch"))
 
     # ── Phase 4: Log to Obsidian ──────────────────────────────────
     report = "\n".join([

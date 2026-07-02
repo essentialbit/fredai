@@ -24,6 +24,14 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.0 — Collaboration Board substrate & UI/UX glassmorphism elevation
+- **Collaboration Board & Debate Substrate**: Integrated cross-agent debate cycle verifying consensus on open proposals, with robust local Ollama fallbacks (`gemma3:4b`) to support offline debate reviews for both Claude and Gemini.
+- **Visual Overhaul & Redesign**: Elevated dashboard, news feed, timeline, and D3 graphs to a premium, ultra-modern glassmorphic dark theme using Outfit and JetBrains Mono typography, translucent panel cards, hover-lifting tile animations, and refined glowing badges.
+- **Backtesting & Signal Outcome Tracker**: Implemented FSI Level 3 backtesting engine to log predictions at $T$ and verify accuracy at 4h, 24h, and 72h intervals, minimizing yfinance rate-limiting.
+- **CNN Fear & Greed Index**: Integrated unofficial CNN Sentiment Index into the macro strip with custom browser headers and daily cache updates.
+- **Security & Fixes**: Patched stored-XSS vulnerability inside watchlist/portfolio symbols using server-side Regex validation (`_valid_symbol()`) and client-side escaping. Fixed Graph and Globe container resize scaling issues via SVG viewBox coordinate mapping and debounced resize listeners.
+- **Docs & Approval Guards**: Implemented the `#SaifApproved` human sign-off tag constraint to safely distinguish human approvals from automated AI code reviews.
+
 ### FredAI v1.2.30 — Gemini integration hardening
 - `gemini_code_agent.py` hardcoded its project path to a specific machine's SSD mirror location, breaking in CI, on any fork, and even on the primary dev checkout. Now resolves relative to its own file location, matching `claude_code_agent.py`.
 - `git_push()` (used by both the Claude and Gemini self-improvement cycles) could silently skip pushing real, committed work whenever the working tree was already clean — which happens routinely since the code agents commit locally as they iterate. It now checks commits-ahead-of-upstream instead, and retries once via fetch+rebase if the push is rejected (the Claude cycle, Gemini cycle, and CI's scheduled `rnd` job all push to `main` on similar cadences and can race).

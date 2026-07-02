@@ -29,12 +29,15 @@ from trend_detector import compute_sentiment_stats, detect_trends, get_risk_leve
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
+from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
+from fear_greed_client import fetch_fear_greed
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, count_news, upsert_news_items,
     get_calendar_events, upsert_calendar_events,
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
+    insert_trend, get_trend_history,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -191,6 +194,19 @@ def _check_rate_limit(ip: str) -> bool:
     attempts.append(now)
     _login_attempts[ip] = attempts
     return True
+
+
+# Ticker symbols (watchlist/portfolio/tech-alerts) were stored with zero
+# server-side validation — a symbol containing HTML/JS was rendered back
+# unescaped in the watchlist table (including inside an inline onclick
+# attribute in dashboard.html), a stored-XSS path. Covers plain tickers
+# (AAPL), crypto pairs (BTC-USD), and ASX suffixes (BHP.AX).
+import re as _re
+_SYMBOL_RE = _re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,14}$")
+
+
+def _valid_symbol(sym: str) -> bool:
+    return bool(sym) and bool(_SYMBOL_RE.match(sym))
 
 
 @app.after_request
@@ -715,6 +731,8 @@ def api_watchlist():
         sym = data.get("symbol", "").upper().strip()
         if not sym:
             return jsonify({"error": "symbol required"}), 400
+        if not _valid_symbol(sym):
+            return jsonify({"error": "invalid symbol"}), 400
         add_to_watchlist(uid, sym, data.get("notes"))
         return jsonify({"status": "ok", "symbol": sym})
     if request.method == "DELETE":
@@ -742,6 +760,8 @@ def api_portfolio():
     if request.method == "POST":
         data = request.json or {}
         sym = data.get("symbol", "").upper()
+        if not _valid_symbol(sym):
+            return jsonify({"error": "invalid symbol"}), 400
         upsert_portfolio(uid, sym, float(data.get("shares", 0)), float(data.get("avg_cost", 0)))
         return jsonify({"status": "ok"})
     if request.method == "DELETE":
@@ -764,6 +784,15 @@ def api_manual_scan():
 @login_required
 def api_rnd_backlog():
     return jsonify(get_all_proposals(limit=50))
+
+
+@app.route("/api/backtest/accuracy")
+@login_required
+def api_backtest_accuracy():
+    """Basic reporting for the signal outcome tracker (FSI L3): how often
+    Fred's aggregated per-asset signal direction matched the actual price
+    move, at each of the 4h/24h/72h checkpoints."""
+    return jsonify(get_accuracy_report())
 
 
 @app.route("/api/rnd/propose", methods=["POST"])
@@ -1412,6 +1441,8 @@ def api_create_tech_alert():
     required = ["symbol", "alert_type", "condition", "threshold"]
     if not all(k in data for k in required):
         return jsonify({"error": f"Required: {required}"}), 400
+    if not _valid_symbol(data["symbol"].upper()):
+        return jsonify({"error": "invalid symbol"}), 400
     alert = create_tech_alert(
         uid, data["symbol"], data["alert_type"],
         data["condition"], float(data["threshold"]),
@@ -1873,6 +1904,19 @@ def job_market_refresh():
         except Exception:
             macro = _macro_cache
 
+        # CNN Fear & Greed Index (cached 1h in fear_greed_client; stored once/day)
+        try:
+            fg = fetch_fear_greed()
+            if fg and "score" in fg:
+                _macro_cache = {**_macro_cache, "FEAR_GREED": {
+                    "label": "Fear & Greed", "value": fg["score"], "rating": fg.get("rating"),
+                    "change": round(fg["score"] - fg["previous_close"], 2) if fg.get("previous_close") is not None else None,
+                }}
+                if not get_trend_history("MARKET", "fear_greed", hours=20):
+                    insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
+        except Exception as e:
+            print(f"[Job] fear_greed error: {e}")
+
         socketio.emit("market_update", {
             "quotes": quotes,
             "sector": sector,
@@ -1921,6 +1965,11 @@ def job_scan_cycle():
 
             trending = get_trending_assets(hours=4, limit=15)
             timeline = get_sentiment_timeline(hours=24)
+
+            try:
+                log_scan_outcomes(trending, quotes)
+            except Exception as e:
+                print(f"[Scan] backtest outcome logging error: {e}")
 
             socketio.emit("summary_update", {
                 "summary": summary_text,
@@ -2133,6 +2182,16 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Debate] Error: {e}")
 
+    def job_backtest_check():
+        """Fill in due 4h/24h/72h price checkpoints for tracked signal
+        outcomes (FSI L3 backtesting)."""
+        try:
+            result = run_backtest_check()
+            if result["filled"]:
+                print(f"[Backtest] Filled {result['filled']} checkpoint(s), {result['errors']} error(s)")
+        except Exception as e:
+            print(f"[Backtest] Error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx")
@@ -2147,6 +2206,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)
     scheduler.add_job(job_gemini_community, "interval", hours=6, id="gemini_community", jitter=2100)
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
+    scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

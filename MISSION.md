@@ -155,6 +155,8 @@ Each level unlocks the next. No level is skipped.
 
 6. **Everyday hardware**: Fred must run on a Raspberry Pi 4. Super Intelligence that requires a $10k GPU cluster is not democratised intelligence.
 
+7. **Minimalist, high-signal UI (added 2026-07-02)**: Every screen should show less, not more — and what it shows should be real, high-value signal, not decorative noise. A page dense with jargon-badges, redundant simultaneous animations, or cosmetic "telemetry" copy is not sophisticated, it's cluttered — a genuinely sophisticated finance professional wants the fewest elements that convey the most, not a busy cockpit. Any number presented as a signal (a confidence score, an impact %, a rating) must be a real computed value per the existing anti-hallucination rule (agent.py's FRED_SYSTEM) — never a decorative placeholder invented for visual effect. When adapting UI ideas from external concepts, keep the interaction depth and visual craft, prune the verbosity.
+
 ---
 
 ## How the R&D Cycle Advances the Mission

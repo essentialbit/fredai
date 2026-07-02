@@ -16,6 +16,12 @@ Read these files first, in this order:
 - **`main` is branch-protected — nobody pushes directly, ever.** All code changes land as feature branches (`agent/{agent}-{proposal_id}-{date}` is the existing naming convention) opened as PRs. CI's `Validate` check must pass before anything merges. A human always makes the final merge decision.
 - Risk classification (`risk_rules.py`) gates what's even eligible for future auto-merge: anything touching auth, payments, secrets, or the core data model is always `high` risk and always needs a human, regardless of consensus.
 
+## Merge policy (updated 2026-07-02)
+
+- **`risk:low` PRs with a green "Validate" CI check: merge them yourself (squash, delete branch) without waiting for the user's `#SaifApproved` tag.** This is a deliberate policy the user confirmed on 2026-07-02 — low-risk, CI-passing work doesn't need to wait for explicit sign-off each time. After merging, update `README.md`'s changelog and cut a GitHub Release per the convention above.
+- **`risk:medium` and `risk:high` PRs: unchanged — always wait for `#SaifApproved`.** Never merge these without it, no matter how confident the CI/review looks.
+- If you're implementing something yourself and it's genuinely `risk:low` with passing CI, the same rule applies symmetrically — you don't need to wait on Claude's sensor to tell you to merge it.
+
 ## Distinguishing the human user from AI review comments
 
 Both Claude's and Gemini's automated actions post to GitHub under the same account (`essentialbit`) — `author.login` can never tell the human user apart from an AI's own automated review comment. This caused a real mistake once: Claude found an "LGTM! Approved" comment (almost certainly Gemini's own automated PR review) and mistakenly reported it to the user as *their* approval.

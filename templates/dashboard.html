@@ -1545,6 +1545,10 @@ html[data-tier="ultra"] #ops-picture{display:block}
           <button class="dash-gflt" data-gc="ai" onclick="dashGlobeFilter(this,'ai')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(0,255,136,.3);color:var(--green);background:none;cursor:pointer">AI</button>
           <button class="dash-gflt" data-gc="geopolitical" onclick="dashGlobeFilter(this,'geopolitical')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(255,59,92,.3);color:var(--red);background:none;cursor:pointer">Geopolitical</button>
         </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-left:8px;border-left:1px solid var(--border);padding-left:10px">
+          <button class="dash-gmode active" onclick="setGlobeMode('standard',this)" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid var(--t4);color:var(--t2);background:none;cursor:pointer;transition:.12s">Standard View</button>
+          <button class="dash-gmode" onclick="setGlobeMode('monitored',this)" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(255,215,0,.3);color:#ffd700;background:none;cursor:pointer">Monitored Only</button>
+        </div>
       </div>
       <div id="dash-globe-wrap" style="flex:1;height:100%;position:relative;background:var(--bg0)">
         <div id="dash-globe-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--t3);font-size:12px;z-index:10">
@@ -1566,6 +1570,9 @@ html[data-tier="ultra"] #ops-picture{display:block}
             <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>AI & Tech</div>
             <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--red)"></div>Geopolitical</div>
             <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--gold)"></div>Central Banks</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:#ffd700"></div>Portfolio Node</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:#c684ff"></div>Watchlist Node</div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;border:1.5px solid rgba(0,255,136,0.65);background:none"></div>Pulsing Hotspot</div>
           </div>
         </div>
       </div>
@@ -2451,6 +2458,119 @@ function switchTab(tab, btn) {
 const _GCOLS = {market:'#00b4ff',ai:'#00ff88',geopolitical:'#ff3b5c',central_bank:'#f5a623',macro:'#9b59ff',ticker:'#8ba3b8'};
 function _gcol(cat){return _GCOLS[cat]||'#8ba3b8'}
 
+const TICKER_HQ_EXCHANGE = {
+  "AAPL": [37.3229, -122.0322, "Cupertino", "USA", "NASDAQ", 40.7580, -73.9855],
+  "MSFT": [47.6740, -122.1215, "Redmond", "USA", "NASDAQ", 40.7580, -73.9855],
+  "NVDA": [37.3541, -121.9552, "Santa Clara", "USA", "NASDAQ", 40.7580, -73.9855],
+  "TSLA": [30.2672, -97.7431, "Austin", "USA", "NASDAQ", 40.7580, -73.9855],
+  "AMZN": [47.6062, -122.3321, "Seattle", "USA", "NASDAQ", 40.7580, -73.9855],
+  "GOOGL": [37.4220, -122.0841, "Mountain View", "USA", "NASDAQ", 40.7580, -73.9855],
+  "GOOG": [37.4220, -122.0841, "Mountain View", "USA", "NASDAQ", 40.7580, -73.9855],
+  "META": [37.4530, -122.1817, "Menlo Park", "USA", "NASDAQ", 40.7580, -73.9855],
+  "BAC": [35.2271, -80.8431, "Charlotte", "USA", "NYSE", 40.7069, -74.0113],
+  "JPM": [40.7549, -73.9840, "New York", "USA", "NYSE", 40.7069, -74.0113],
+  "GS": [40.7141, -74.0087, "New York", "USA", "NYSE", 40.7069, -74.0113],
+  "SPY": [40.7069, -74.0113, "New York", "USA", "NYSE", 40.7069, -74.0113],
+  "QQQ": [40.7580, -73.9855, "New York", "USA", "NASDAQ", 40.7580, -73.9855],
+  "BTC-USD": [37.7749, -122.4194, "San Francisco", "USA", "Crypto", 37.7749, -122.4194],
+  "ETH-USD": [37.7749, -122.4194, "San Francisco", "USA", "Crypto", 37.7749, -122.4194],
+  "TSM": [24.78, 120.97, "Hsinchu", "Taiwan", "TWSE", 25.0330, 121.5654],
+  "ASML": [51.40, 5.40, "Veldhoven", "Netherlands", "Euronext", 48.8686, 2.3421],
+  "INTC": [37.3541, -121.9552, "Santa Clara", "USA", "NASDAQ", 40.7580, -73.9855],
+  "AMD": [37.3541, -121.9552, "Santa Clara", "USA", "NASDAQ", 40.7580, -73.9855],
+  "AZN": [52.2053, 0.1218, "Cambridge", "United Kingdom", "LSE", 51.5151, -0.0984],
+  "BHP.AX": [-37.81, 144.96, "Melbourne", "Australia", "ASX", -33.8678, 151.2073],
+  "CPU.AX": [-37.81, 144.96, "Melbourne", "Australia", "ASX", -33.8678, 151.2073],
+  "REA.AX": [-33.8688, 151.2093, "Sydney", "Australia", "ASX", -33.8678, 151.2073],
+  "PLS.AX": [-31.9505, 115.8605, "Perth", "Australia", "ASX", -33.8678, 151.2073]
+};
+
+const ANCHOR_CITIES = [
+  ["New York", "USA", 40.7128, -74.0060, "NYSE", 40.7069, -74.0113],
+  ["London", "United Kingdom", 51.5074, -0.1278, "LSE", 51.5151, -0.0984],
+  ["Tokyo", "Japan", 35.6895, 139.6917, "TSE", 35.6824, 139.7781],
+  ["Singapore", "Singapore", 1.3521, 103.8198, "SGX", 1.2789, 103.8504],
+  ["Frankfurt", "Germany", 50.1107, 8.6821, "FSX", 50.1109, 8.6821],
+  ["Sydney", "Australia", -33.8688, 151.2093, "ASX", -33.8678, 151.2073]
+];
+
+function resolveTickerLocation(ticker) {
+  const upper = (ticker || "").toUpperCase().trim();
+  if (TICKER_HQ_EXCHANGE[upper]) {
+    const [lat, lon, city, country, exchange, ex_lat, ex_lon] = TICKER_HQ_EXCHANGE[upper];
+    return { lat, lon, city, country, exchange, exchange_lat: ex_lat, exchange_lon: ex_lon };
+  }
+
+  let h = 0;
+  for (let i = 0; i < upper.length; i++) {
+    h = (upper.charCodeAt(i) + ((h << 5) - h)) & 0xFFFFFFFF;
+  }
+  h = Math.abs(h < 0 ? h : h);
+  const [city, country, lat, lon, exchange, ex_lat, ex_lon] = ANCHOR_CITIES[h % ANCHOR_CITIES.length];
+  const lat_jitter = ((h % 40) - 20) / 4.0;
+  const lon_jitter = (((h >> 3) % 40) - 20) / 4.0;
+  return {
+    lat: lat + lat_jitter, lon: lon + lon_jitter,
+    city: `HQ Node - ${city} Sector`, country,
+    exchange, exchange_lat: ex_lat, exchange_lon: ex_lon
+  };
+}
+
+let _globeMode = 'standard';
+
+function getGlobePoints() {
+  let pts = [];
+  if (_globeMode === 'standard') {
+    pts = _dashGlobeFilter === 'all' 
+      ? _dashGlobeData.map(p => ({ ...p, type: 'news' }))
+      : _dashGlobeData.filter(d => d.category === _dashGlobeFilter).map(p => ({ ...p, type: 'news' }));
+  }
+  
+  const uniqueMonitored = new Set([
+    ...(window._portfolio || []),
+    ...(window._watchlist || [])
+  ]);
+  
+  uniqueMonitored.forEach(sym => {
+    const loc = resolveTickerLocation(sym);
+    const isPort = (window._portfolio || []).includes(sym);
+    const isWatch = (window._watchlist || []).includes(sym);
+    let color = '#ff69b4';
+    let labelText = `${sym} (Portfolio + Watchlist)`;
+    if (isPort && !isWatch) {
+      color = '#ffd700';
+      labelText = `${sym} (Portfolio)`;
+    } else if (!isPort && isWatch) {
+      color = '#c684ff';
+      labelText = `${sym} (Watchlist)`;
+    }
+    
+    pts.push({
+      lat: loc.lat,
+      lng: loc.lon,
+      label: `<div style="background:rgba(6,15,28,.95);border:1px solid ${color};border-radius:6px;padding:8px 12px;font-family:Inter,sans-serif">
+        <div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:2px">${esc(labelText)}</div>
+        <div style="font-size:9px;color:var(--t3)">HQ: ${esc(loc.city)}, ${esc(loc.country)}</div>
+        <div style="font-size:9px;color:var(--t3);margin-top:2px;font-family:monospace">Exchange: ${esc(loc.exchange)}</div>
+      </div>`,
+      count: 3,
+      category: 'monitored',
+      symbol: sym,
+      color: color,
+      type: 'monitored'
+    });
+  });
+  return pts;
+}
+
+function setGlobeMode(mode, btn) {
+  document.querySelectorAll('.dash-gmode').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _globeMode = mode;
+  if (!_dashGlobeInst) return;
+  _dashGlobeInst.pointsData(getGlobePoints());
+}
+
 async function initDashGlobe() {
   if (!window.Globe) return;
   const container = g('dash-globe-canvas');
@@ -2462,22 +2582,64 @@ async function initDashGlobe() {
     g('dash-globe-stats').textContent = `${data.total} signals · 24h`;
     loading.style.display = 'none';
 
-    // Real per-story HQ-to-exchange arcs, colored by actual sentiment (issue #48
-    // Phase 2 — replaces the old hardcoded decorative hub arcs with real data).
-    // Capped to the most recent N to keep the globe high-signal, not cluttered.
     const storyArcs = (data.story_arcs || []).slice(0, 40).map(s => {
       const score = s.sentiment_score || 0;
-      const color = score > 0.1 ? 'rgba(0, 255, 136, 0.7)' : score < -0.1 ? 'rgba(255, 59, 92, 0.7)' : 'rgba(0, 180, 255, 0.4)';
+      const isPositive = score > 0.05;
+      const isNegative = score < -0.05;
+      const color = isPositive ? 'rgba(0, 255, 136, 0.75)' : isNegative ? 'rgba(255, 59, 92, 0.75)' : 'rgba(245, 166, 35, 0.55)';
       return {
         startLat: s.hq_lat,
         startLng: s.hq_lng,
         endLat: s.exchange_lat,
         endLng: s.exchange_lng,
-        color: [color, color],
-        label: `${s.ticker} → ${s.exchange}: ${s.title}`
+        color: [color, 'rgba(0,0,0,0.1)'],
+        label: `<div style="background:rgba(6,15,28,.95);border:1px solid rgba(0,180,255,.3);border-radius:6px;padding:10px 14px;font-family:Inter,sans-serif;max-width:280px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+            <span style="font-weight:600;color:#ffd700">${esc(s.ticker)}</span>
+            <span style="font-size:8px;background:#1a2b3c;color:#00ff88;padding:1px 4px;border-radius:2px">${esc(s.exchange)}</span>
+          </div>
+          <div style="font-size:11px;color:#e8f4ff;line-height:1.4">${esc(s.title)}</div>
+          <div style="font-size:10px;margin-top:5px;font-family:monospace;color:${isPositive?'#00ff88':(isNegative?'#ff3b5c':'#f5a623')}">
+            Sentiment: ${score >= 0 ? '+' : ''}${score.toFixed(2)}
+          </div>
+        </div>`
       };
     });
     const arcs = storyArcs;
+
+    const clusters = [];
+    const threshold = 10.0;
+    _dashGlobeData.forEach(p => {
+      let merged = false;
+      for (const c of clusters) {
+        const dist = Math.sqrt(Math.pow(p.lat - c.lat, 2) + Math.pow(p.lng - c.lng, 2));
+        if (dist < threshold) {
+          c.points.push(p);
+          c.lat = c.points.reduce((sum, pt) => sum + pt.lat, 0) / c.points.length;
+          c.lng = c.points.reduce((sum, pt) => sum + pt.lng, 0) / c.points.length;
+          c.count += p.count || 1;
+          c.sentiment = c.points.reduce((sum, pt) => sum + (pt.sentiment_score || 0), 0) / c.points.length;
+          merged = true;
+          break;
+        }
+      }
+      if (!merged) {
+        clusters.push({
+          lat: p.lat,
+          lng: p.lng,
+          count: p.count || 1,
+          sentiment: p.sentiment_score || 0,
+          points: [p]
+        });
+      }
+    });
+
+    const ringClusters = clusters.filter(c => c.count > 1).map(c => ({
+      lat: c.lat,
+      lng: c.lng,
+      sentiment: c.sentiment,
+      maxRadius: Math.min(4 + c.count * 1.5, 18)
+    }));
 
     _dashGlobeInst = Globe({ animateIn: true })(container)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
@@ -2485,21 +2647,33 @@ async function initDashGlobe() {
       .atmosphereColor('rgba(0,180,255,.12)')
       .atmosphereAltitude(0.15)
       .backgroundColor('#03080f')
-      .pointAltitude(d => Math.min(0.05 + d.count * 0.012, 0.22))
-      .pointRadius(d => Math.min(0.35 + d.count * 0.07, 1.1))
-      .pointColor(d => _gcol(d.category))
-      .pointLabel(d => `<div style="background:rgba(6,15,28,.9);border:1px solid rgba(0,180,255,.25);border-radius:6px;padding:8px 12px;font-family:Inter,sans-serif"><div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:3px">${d.label}</div><div style="font-size:10px;color:#00b4ff;font-family:monospace">${d.count} signal${d.count!==1?'s':''}</div><div style="font-size:9px;color:#3d5a73;margin-top:2px">${d.category}</div></div>`)
+      .pointAltitude(d => d.type === 'monitored' ? 0.08 : Math.min(0.05 + d.count * 0.012, 0.22))
+      .pointRadius(d => d.type === 'monitored' ? 0.65 : Math.min(0.35 + d.count * 0.07, 1.1))
+      .pointColor(d => d.type === 'monitored' ? d.color : _gcol(d.category))
+      .pointLabel(d => d.type === 'monitored' ? d.label : `<div style="background:rgba(6,15,28,.9);border:1px solid rgba(0,180,255,.25);border-radius:6px;padding:8px 12px;font-family:Inter,sans-serif"><div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:3px">${d.label}</div><div style="font-size:10px;color:#00b4ff;font-family:monospace">${d.count} signal${d.count!==1?'s':''}</div><div style="font-size:9px;color:#3d5a73;margin-top:2px">${d.category}</div></div>`)
       .pointsMerge(false)
-      .onPointClick(d => { window.location.href = `/news?cat=${d.category}`; })
+      .onPointClick(d => { 
+        if (d.type === 'monitored') {
+          openAnalystReport(d.symbol);
+        } else {
+          window.location.href = `/news?cat=${d.category}`; 
+        }
+      })
       .arcsData(arcs)
       .arcColor('color')
-      .arcDashLength(0.4)
-      .arcDashGap(4)
-      .arcDashAnimateTime(1600)
-      .arcStroke(0.35)
-      .arcAltitude(0.22);
+      .arcDashLength(0.45)
+      .arcDashGap(3)
+      .arcDashAnimateTime(1800)
+      .arcStroke(0.38)
+      .arcAltitude(0.24)
+      .ringsData(ringClusters)
+      .ringColor(d => d.sentiment > 0.05 ? 'rgba(0, 255, 136, 0.55)' : (d.sentiment < -0.05 ? 'rgba(255, 59, 92, 0.55)' : 'rgba(245, 166, 35, 0.55)'))
+      .ringMaxRadius(d => d.maxRadius)
+      .ringPropagationSpeed(1.8)
+      .ringRepeatNum(2)
+      .ringAltitude(0.01);
 
-    _dashGlobeInst.pointsData(_dashGlobeData);
+    _dashGlobeInst.pointsData(getGlobePoints());
     _dashGlobeInst.controls().autoRotate = true;
     _dashGlobeInst.controls().autoRotateSpeed = 0.35;
     container.addEventListener('mousedown', () => { _dashGlobeInst.controls().autoRotate = false; });
@@ -2555,8 +2729,7 @@ function dashGlobeFilter(btn, cat) {
   btn.style.background = 'rgba(0,180,255,.12)';
   _dashGlobeFilter = cat;
   if (!_dashGlobeInst) return;
-  const pts = cat === 'all' ? _dashGlobeData : _dashGlobeData.filter(d => d.category === cat);
-  _dashGlobeInst.pointsData(pts);
+  _dashGlobeInst.pointsData(getGlobePoints());
 }
 
 function switchChart(mode, btn) {
@@ -2891,7 +3064,7 @@ function buildSentData(tl){
 function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(tl);sentChart.update('none')}
 
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
-async function loadWatchlist(){const r=await fetch('/api/watchlist');const d=await r.json();renderWatchlist(d,[])}
+async function loadWatchlist(){const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[])}
 function renderWatchlist(items,interests){
   const im={};(interests||[]).forEach(i=>im[i.symbol]=i.interest_score);
   const tbody=g('wl-body');
@@ -2931,6 +3104,7 @@ async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE
 // ── PORTFOLIO ─────────────────────────────────────────────────────────────
 async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p)}
 function renderPortfolioTab(p){
+  window._portfolio=(p.positions||[]).map(x=>x.symbol);
   portData=p;updatePortfolioUI(p);
   const positions=p.positions||[];
   const asxPos=positions.filter(x=>isAsx(x.symbol));

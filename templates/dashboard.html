@@ -2586,13 +2586,15 @@ function updateIdxBar(q) {
 }
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
+const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)'};
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};
   const html=Object.entries(macro).map(([k,v])=>{
     if(!v||v.value==null) return '';
-    const lbl=LBL[k]||k,chg=v.change,cls=!chg?'flat':chg>0?'up':'dn';
-    return `<span class="macro-item"><span class="macro-label">${lbl}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:''}</span>`;
+    const lbl=v.label||LBL[k]||k,chg=v.change,cls=!chg?'flat':chg>0?'up':'dn';
+    const rating=v.rating?`<span class="macro-chg" style="color:${_FG_COLOR[v.rating]||'var(--t3)'}">${esc(v.rating)}</span>`:'';
+    return `<span class="macro-item"><span class="macro-label">${esc(lbl)}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${rating||(chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:'')}</span>`;
   }).filter(Boolean).join('');
   g('macro-items').innerHTML=html||'<span style="color:var(--t3)">No macro data — add NASDAQ_API_KEY</span>';
 }

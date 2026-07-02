@@ -29,12 +29,14 @@ from trend_detector import compute_sentiment_stats, detect_trends, get_risk_leve
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
+from fear_greed_client import fetch_fear_greed
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, count_news, upsert_news_items,
     get_calendar_events, upsert_calendar_events,
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
+    insert_trend, get_trend_history,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -1872,6 +1874,19 @@ def job_market_refresh():
                 _macro_cache = macro
         except Exception:
             macro = _macro_cache
+
+        # CNN Fear & Greed Index (cached 1h in fear_greed_client; stored once/day)
+        try:
+            fg = fetch_fear_greed()
+            if fg and "score" in fg:
+                _macro_cache = {**_macro_cache, "FEAR_GREED": {
+                    "label": "Fear & Greed", "value": fg["score"], "rating": fg.get("rating"),
+                    "change": round(fg["score"] - fg["previous_close"], 2) if fg.get("previous_close") is not None else None,
+                }}
+                if not get_trend_history("MARKET", "fear_greed", hours=20):
+                    insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
+        except Exception as e:
+            print(f"[Job] fear_greed error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

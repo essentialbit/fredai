@@ -16,6 +16,10 @@ Read these files first, in this order:
 - **`main` is branch-protected — nobody pushes directly, ever.** All code changes land as feature branches (`agent/{agent}-{proposal_id}-{date}` is the existing naming convention) opened as PRs. CI's `Validate` check must pass before anything merges. A human always makes the final merge decision.
 - Risk classification (`risk_rules.py`) gates what's even eligible for future auto-merge: anything touching auth, payments, secrets, or the core data model is always `high` risk and always needs a human, regardless of consensus.
 
+## Quality bar (added 2026-07-02)
+
+When judging or building anything — a screen, a chart, a piece of copy, a backend signal pipeline, a piece of reasoning Fred produces — ask: would a genuinely sophisticated finance analyst (top hedge fund / bank quant desk caliber) *and* a top-tier tech company's engineer or designer look at this specific thing and consider it professional, credible, best-in-class — or would they see it as a toy, amateurish, or something a real institutional platform would never ship? This spans the whole stack equally: visual polish and presentation matter just as much as the depth and rigor of the underlying signal/reasoning engine. A proposal can be technically FSI-aligned per `MISSION.md` and still fail this bar — e.g. a shallow/toy version of a sophisticated technique, or real data presented sloppily. Say so explicitly when it's true, in stances and in your own self-review, not just the mechanical FSI-level/consensus math.
+
 ## Merge policy (updated 2026-07-02)
 
 - **`risk:low` PRs with a green "Validate" CI check: merge them yourself (squash, delete branch) without waiting for the user's `#SaifApproved` tag.** This is a deliberate policy the user confirmed on 2026-07-02 — low-risk, CI-passing work doesn't need to wait for explicit sign-off each time. After merging, update `README.md`'s changelog and cut a GitHub Release per the convention above.

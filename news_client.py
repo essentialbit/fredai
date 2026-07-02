@@ -155,9 +155,18 @@ def _parse_date(entry) -> str:
     return datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def _score(title: str, summary: str) -> float:
+def _score(title: str, summary: str) -> tuple[float, str]:
     text = f"{title} {summary}"[:500]
-    return round(_vader.polarity_scores(text)["compound"], 3)
+    try:
+        from finbert_sentiment import analyze_sentiment
+        res = analyze_sentiment(text)
+        if res is not None:
+            score, stype = res
+            return round(score, 3), "finbert"
+    except Exception as e:
+        print(f"[News Client] FinBERT scoring error: {e}")
+
+    return round(_vader.polarity_scores(text)["compound"], 3), "vader"
 
 
 def _extract_tickers(text: str, watchlist: list[str]) -> str:
@@ -189,7 +198,7 @@ def _parse_feed(feed_meta: dict, watchlist: list[str]) -> list[dict]:
 
             text = f"{title} {summary}"
             tickers = _extract_tickers(text, watchlist)
-            score = _score(title, summary)
+            score, model = _score(title, summary)
 
             items.append({
                 "guid": guid,
@@ -200,6 +209,7 @@ def _parse_feed(feed_meta: dict, watchlist: list[str]) -> list[dict]:
                 "category": feed_meta["category"],
                 "tickers": tickers,
                 "sentiment_score": score,
+                "sentiment_model": model,
                 "published_at": _parse_date(entry),
             })
     except Exception as e:
@@ -258,6 +268,7 @@ def _fetch_per_ticker(symbols: list[str]) -> list[dict]:
 
                 url = entry.get("link") or ""
                 guid = entry.get("id") or _guid(url, title)
+                score, model = _score(title, summary)
                 items.append({
                     "guid": guid,
                     "title": title,
@@ -266,7 +277,8 @@ def _fetch_per_ticker(symbols: list[str]) -> list[dict]:
                     "source": "Yahoo Finance",
                     "category": "ticker",
                     "tickers": sym,
-                    "sentiment_score": _score(title, summary),
+                    "sentiment_score": score,
+                    "sentiment_model": model,
                     "published_at": _parse_date(entry),
                 })
         except Exception:

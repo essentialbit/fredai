@@ -73,6 +73,7 @@ def init_db():
             author TEXT,
             sentiment_score REAL,
             signal_type TEXT,
+            sentiment_model TEXT DEFAULT 'vader',
             metadata TEXT
         );
 
@@ -142,6 +143,7 @@ def init_db():
             category TEXT DEFAULT 'market',
             tickers TEXT,
             sentiment_score REAL DEFAULT 0.0,
+            sentiment_model TEXT DEFAULT 'vader',
             published_at DATETIME,
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
@@ -227,6 +229,8 @@ def init_db():
             "ALTER TABLE feature_backlog ADD COLUMN github_issue_number INTEGER",
             "ALTER TABLE users ADD COLUMN oauth_github_id TEXT",
             "ALTER TABLE users ADD COLUMN oauth_google_sub TEXT",
+            "ALTER TABLE signals ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
+            "ALTER TABLE news_items ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
         ):
             try:
                 conn.execute(ddl)
@@ -429,11 +433,11 @@ def get_portfolio(user_id: int) -> list[dict]:
 
 
 # ── SIGNALS ───────────────────────────────────────────────────────────────────
-def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0, signal_type="neutral", metadata=None):
+def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0, signal_type="neutral", sentiment_model="vader", metadata=None):
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO signals (source, asset, content, author, sentiment_score, signal_type, metadata) VALUES (?,?,?,?,?,?,?)",
-            (source, asset, content, author, sentiment_score, signal_type, json.dumps(metadata or {}))
+            "INSERT INTO signals (source, asset, content, author, sentiment_score, signal_type, sentiment_model, metadata) VALUES (?,?,?,?,?,?,?,?)",
+            (source, asset, content, author, sentiment_score, signal_type, sentiment_model, json.dumps(metadata or {}))
         )
 
 
@@ -893,11 +897,13 @@ def upsert_news_items(items: list[dict]) -> int:
     with get_conn() as conn:
         for item in items:
             try:
+                d = dict(item)
+                d.setdefault("sentiment_model", "vader")
                 conn.execute("""
-                    INSERT INTO news_items (guid, title, summary, url, source, category, tickers, sentiment_score, published_at)
-                    VALUES (:guid, :title, :summary, :url, :source, :category, :tickers, :sentiment_score, :published_at)
+                    INSERT INTO news_items (guid, title, summary, url, source, category, tickers, sentiment_score, sentiment_model, published_at)
+                    VALUES (:guid, :title, :summary, :url, :source, :category, :tickers, :sentiment_score, :sentiment_model, :published_at)
                     ON CONFLICT(guid) DO NOTHING
-                """, item)
+                """, d)
                 saved += 1
             except Exception:
                 pass

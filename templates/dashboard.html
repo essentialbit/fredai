@@ -2510,6 +2510,20 @@ async function initDashGlobe() {
   }
 }
 
+// globe.gl sizes to its container once at init but doesn't re-measure on
+// window resize without an explicit width()/height() call — without this,
+// the globe stays sized for whatever viewport it first loaded in.
+let _globeResizeTimer = null;
+window.addEventListener('resize', () => {
+  clearTimeout(_globeResizeTimer);
+  _globeResizeTimer = setTimeout(() => {
+    if (!_dashGlobeInst) return;
+    const container = g('dash-globe-canvas');
+    if (!container) return;
+    _dashGlobeInst.width(container.clientWidth).height(container.clientHeight);
+  }, 200);
+});
+
 function dashGlobeFilter(btn, cat) {
   document.querySelectorAll('.dash-gflt').forEach(b => b.style.background = 'none');
   btn.style.background = 'rgba(0,180,255,.12)';
@@ -2567,7 +2581,7 @@ function renderPositions(positions, cid) {
   function posRow(p){
     const currency=quotesCache[p.symbol]?.currency||(isAsx(p.symbol)?'AUD':'USD');
     const cTag=currency==='AUD'?`<span style="font-size:7px;color:#f5a623;margin-left:3px">AUD</span>`:'';
-    return `<div class="pos-row"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${p.symbol.replace('-USD','').replace('.AX','')}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}</div><div class="pn">${p.name||p.symbol}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
+    return `<div class="pos-row"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -2586,13 +2600,15 @@ function updateIdxBar(q) {
 }
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
+const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)'};
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};
   const html=Object.entries(macro).map(([k,v])=>{
     if(!v||v.value==null) return '';
-    const lbl=LBL[k]||k,chg=v.change,cls=!chg?'flat':chg>0?'up':'dn';
-    return `<span class="macro-item"><span class="macro-label">${lbl}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:''}</span>`;
+    const lbl=v.label||LBL[k]||k,chg=v.change,cls=!chg?'flat':chg>0?'up':'dn';
+    const rating=v.rating?`<span class="macro-chg" style="color:${_FG_COLOR[v.rating]||'var(--t3)'}">${esc(v.rating)}</span>`:'';
+    return `<span class="macro-item"><span class="macro-label">${esc(lbl)}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${rating||(chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:'')}</span>`;
   }).filter(Boolean).join('');
   g('macro-items').innerHTML=html||'<span style="color:var(--t3)">No macro data — add NASDAQ_API_KEY</span>';
 }
@@ -2859,12 +2875,20 @@ function renderWatchlist(items,interests){
   const usItems=items.filter(w=>!isAsx(w.symbol||w));
   const asxItems=items.filter(w=>isAsx(w.symbol||w));
   function rowHtml(w){
+    // sym is only ever safe to interpolate into the onclick string literals
+    // below because /api/watchlist now rejects anything outside
+    // [A-Z0-9.-] server-side (main.py::_valid_symbol) — esc() (a
+    // textContent round-trip) escapes <, >, & for the text-content spots
+    // but does NOT escape quotes, so it would NOT actually protect the
+    // onclick attribute's JS-string context. Don't remove the server-side
+    // validation without replacing this onclick pattern with a
+    // data-attribute + addEventListener instead.
     const sym=w.symbol||w,q=quotesCache[sym]||{},pct=q.change_pct||0,pos=pct>=0;
     const currency=q.currency||(isAsx(sym)?'AUD':'USD');
     const interest=im[sym]||1,pct_bar=Math.min(interest/20*100,100);
     const sentCls=getSentClass(sym);
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${sym.replace('-USD','').replace('.AX','')}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${q.name||sym}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}

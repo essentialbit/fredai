@@ -61,37 +61,79 @@ def _parse_stance(text: str) -> dict | None:
 def _get_stance_claude(body: str) -> dict | None:
     import anthropic
     from config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL_SUMMARY
-    if not ANTHROPIC_API_KEY:
-        return None
+    if ANTHROPIC_API_KEY and not ANTHROPIC_API_KEY.startswith("your_"):
+        try:
+            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+            resp = client.messages.create(
+                model=ANTHROPIC_MODEL_SUMMARY, max_tokens=300,
+                messages=[{"role": "user", "content": _STANCE_PROMPT.format(body=body)}],
+            )
+            parsed = _parse_stance(resp.content[0].text)
+            if parsed:
+                return parsed
+        except Exception as e:
+            print(f"[Debate] Claude stance API error: {e}")
+
+    # Fallback to local Ollama (free, offline)
     try:
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        resp = client.messages.create(
-            model=ANTHROPIC_MODEL_SUMMARY, max_tokens=300,
-            messages=[{"role": "user", "content": _STANCE_PROMPT.format(body=body)}],
-        )
-        return _parse_stance(resp.content[0].text)
-    except Exception as e:
-        print(f"[Debate] Claude stance error: {e}")
-        return None
+        import requests
+        from config import OLLAMA_URL, OLLAMA_MODEL
+        payload = {
+            "model": OLLAMA_MODEL,
+            "messages": [{"role": "user", "content": _STANCE_PROMPT.format(body=body)}],
+            "stream": False,
+            "options": {"num_predict": 300}
+        }
+        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=90)
+        if r.status_code == 200:
+            text = r.json()["message"]["content"]
+            parsed = _parse_stance(text)
+            if parsed:
+                print(f"[Debate] Claude stance generated via Ollama fallback ({OLLAMA_MODEL})")
+                return parsed
+    except Exception as ollama_err:
+        print(f"[Debate] Claude stance Ollama fallback error: {ollama_err}")
+    return None
 
 
 def _get_stance_gemini(body: str) -> dict | None:
     import requests
     from config import GEMINI_API_KEY, GEMINI_MODEL_SUMMARY
-    if not GEMINI_API_KEY:
-        return None
+    if GEMINI_API_KEY and not GEMINI_API_KEY.startswith("your_"):
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL_SUMMARY}:generateContent?key={GEMINI_API_KEY}"
+            payload = {"contents": [{"role": "user", "parts": [{"text": _STANCE_PROMPT.format(body=body)}]}]}
+            r = requests.post(url, json=payload, timeout=30)
+            if r.status_code == 200:
+                text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+                parsed = _parse_stance(text)
+                if parsed:
+                    return parsed
+            else:
+                print(f"[Debate] Gemini stance API error: {r.status_code} {r.text[:200]}")
+        except Exception as e:
+            print(f"[Debate] Gemini stance API error: {e}")
+
+    # Fallback to local Ollama (free, offline)
     try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL_SUMMARY}:generateContent?key={GEMINI_API_KEY}"
-        payload = {"contents": [{"role": "user", "parts": [{"text": _STANCE_PROMPT.format(body=body)}]}]}
-        r = requests.post(url, json=payload, timeout=30)
-        if r.status_code != 200:
-            print(f"[Debate] Gemini stance error: {r.status_code} {r.text[:200]}")
-            return None
-        text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-        return _parse_stance(text)
-    except Exception as e:
-        print(f"[Debate] Gemini stance error: {e}")
-        return None
+        from config import OLLAMA_URL, OLLAMA_MODEL
+        payload = {
+            "model": OLLAMA_MODEL,
+            "messages": [{"role": "user", "content": _STANCE_PROMPT.format(body=body)}],
+            "stream": False,
+            "options": {"num_predict": 300}
+        }
+        r = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=90)
+        if r.status_code == 200:
+            text = r.json()["message"]["content"]
+            parsed = _parse_stance(text)
+            if parsed:
+                print(f"[Debate] Gemini stance generated via Ollama fallback ({OLLAMA_MODEL})")
+                return parsed
+    except Exception as ollama_err:
+        print(f"[Debate] Gemini stance Ollama fallback error: {ollama_err}")
+    return None
+
 
 
 def compute_consensus(proposer: str, reviewer: str, impact_score: float, reviewer_stance: dict) -> float:

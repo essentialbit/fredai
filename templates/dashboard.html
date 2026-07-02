@@ -2462,22 +2462,22 @@ async function initDashGlobe() {
     g('dash-globe-stats').textContent = `${data.total} signals · 24h`;
     loading.style.display = 'none';
 
-    // Geopolitical flight path arcs to NY
-    const nyCoord = { lat: 40.7128, lng: -74.0060 };
-    const hubs = [
-      { name: 'Tokyo', lat: 35.6762, lng: 139.6503, color: '#00ff88' },
-      { name: 'Frankfurt', lat: 50.1109, lng: 8.6821, color: '#f5a623' },
-      { name: 'London', lat: 51.5074, lng: -0.1278, color: '#00b4ff' },
-      { name: 'Sydney', lat: -33.8688, lng: 151.2093, color: '#9b59ff' }
-    ];
-    const arcs = hubs.map(h => ({
-      startLat: h.lat,
-      startLng: h.lng,
-      endLat: nyCoord.lat,
-      endLng: nyCoord.lng,
-      color: ['rgba(0, 180, 255, 0.75)', 'rgba(0, 255, 136, 0.75)'],
-      label: `${h.name} ➔ New York Hub`
-    }));
+    // Real per-story HQ-to-exchange arcs, colored by actual sentiment (issue #48
+    // Phase 2 — replaces the old hardcoded decorative hub arcs with real data).
+    // Capped to the most recent N to keep the globe high-signal, not cluttered.
+    const storyArcs = (data.story_arcs || []).slice(0, 40).map(s => {
+      const score = s.sentiment_score || 0;
+      const color = score > 0.1 ? 'rgba(0, 255, 136, 0.7)' : score < -0.1 ? 'rgba(255, 59, 92, 0.7)' : 'rgba(0, 180, 255, 0.4)';
+      return {
+        startLat: s.hq_lat,
+        startLng: s.hq_lng,
+        endLat: s.exchange_lat,
+        endLng: s.exchange_lng,
+        color: [color, color],
+        label: `${s.ticker} → ${s.exchange}: ${s.title}`
+      };
+    });
+    const arcs = storyArcs;
 
     _dashGlobeInst = Globe({ animateIn: true })(container)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')

@@ -195,6 +195,19 @@ def _check_rate_limit(ip: str) -> bool:
     return True
 
 
+# Ticker symbols (watchlist/portfolio/tech-alerts) were stored with zero
+# server-side validation — a symbol containing HTML/JS was rendered back
+# unescaped in the watchlist table (including inside an inline onclick
+# attribute in dashboard.html), a stored-XSS path. Covers plain tickers
+# (AAPL), crypto pairs (BTC-USD), and ASX suffixes (BHP.AX).
+import re as _re
+_SYMBOL_RE = _re.compile(r"^[A-Z0-9][A-Z0-9.\-]{0,14}$")
+
+
+def _valid_symbol(sym: str) -> bool:
+    return bool(sym) and bool(_SYMBOL_RE.match(sym))
+
+
 @app.after_request
 def _security_headers(response):
     """Attach security headers to every response."""
@@ -717,6 +730,8 @@ def api_watchlist():
         sym = data.get("symbol", "").upper().strip()
         if not sym:
             return jsonify({"error": "symbol required"}), 400
+        if not _valid_symbol(sym):
+            return jsonify({"error": "invalid symbol"}), 400
         add_to_watchlist(uid, sym, data.get("notes"))
         return jsonify({"status": "ok", "symbol": sym})
     if request.method == "DELETE":
@@ -744,6 +759,8 @@ def api_portfolio():
     if request.method == "POST":
         data = request.json or {}
         sym = data.get("symbol", "").upper()
+        if not _valid_symbol(sym):
+            return jsonify({"error": "invalid symbol"}), 400
         upsert_portfolio(uid, sym, float(data.get("shares", 0)), float(data.get("avg_cost", 0)))
         return jsonify({"status": "ok"})
     if request.method == "DELETE":
@@ -1414,6 +1431,8 @@ def api_create_tech_alert():
     required = ["symbol", "alert_type", "condition", "threshold"]
     if not all(k in data for k in required):
         return jsonify({"error": f"Required: {required}"}), 400
+    if not _valid_symbol(data["symbol"].upper()):
+        return jsonify({"error": "invalid symbol"}), 400
     alert = create_tech_alert(
         uid, data["symbol"], data["alert_type"],
         data["condition"], float(data["threshold"]),

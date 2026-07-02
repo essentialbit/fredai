@@ -1349,7 +1349,24 @@ def api_news_globe_data():
             "count": data["count"],
             "category": primary,
         })
-    return jsonify({"points": points, "total": len(news), "hours": hours})
+
+    from ticker_geo import resolve_ticker_location
+    story_arcs = []
+    for item in news:
+        ticker = (item.get("tickers") or "").split(",")[0].strip()
+        if not ticker:
+            continue
+        loc = resolve_ticker_location(ticker)
+        story_arcs.append({
+            "ticker": ticker,
+            "title": item.get("title"),
+            "sentiment_score": item.get("sentiment_score"),
+            "hq_lat": loc["lat"], "hq_lng": loc["lon"],
+            "exchange": loc["exchange"],
+            "exchange_lat": loc["exchange_lat"], "exchange_lng": loc["exchange_lon"],
+        })
+
+    return jsonify({"points": points, "story_arcs": story_arcs, "total": len(news), "hours": hours})
 
 
 @app.route("/api/news/youtube-channels")

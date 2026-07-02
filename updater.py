@@ -174,8 +174,14 @@ def trigger_restart() -> bool:
     called after _import_smoke_test() has passed on the new code, so a
     broken pull can no longer take the running instance down with it."""
     try:
-        cmd = f'sleep 1.2 && "{sys.executable}" main.py'
-        subprocess.Popen(cmd, cwd=str(REPO_DIR), env=os.environ, shell=True, start_new_session=True)
+        # Spawn a helper python subprocess that sleeps and then launches main.py
+        # in its own session, avoiding a direct shell=True invocation.
+        cmd = [
+            sys.executable,
+            "-c",
+            f"import time, subprocess, sys; time.sleep(1.2); subprocess.Popen([sys.executable, 'main.py'], start_new_session=True)"
+        ]
+        subprocess.Popen(cmd, cwd=str(REPO_DIR), env=os.environ, start_new_session=True)
         threading.Timer(0.8, lambda: os._exit(0)).start()
         return True
     except Exception as e:

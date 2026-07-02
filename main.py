@@ -1048,9 +1048,8 @@ def api_user_delete():
     # Require password re-confirmation unless OAuth user
     is_oauth = user["username"].startswith("google_") or user["username"].startswith("github_")
     if not is_oauth:
-        import hashlib
-        pw_hash = hashlib.sha256(data.get("password", "").encode()).hexdigest()
-        if pw_hash != user["password_hash"]:
+        from werkzeug.security import check_password_hash
+        if not check_password_hash(user["password_hash"], data.get("password", "")):
             return jsonify({"error": "Password confirmation required"}), 403
     ok = delete_user_data(uid)
     if ok:
@@ -1069,13 +1068,13 @@ def api_change_password():
     user = get_user(uid)
     if not user:
         return jsonify({"error": "User not found"}), 404
-    current_hash = hashlib.sha256(data.get("current_password", "").encode()).hexdigest()
-    if current_hash != user["password_hash"]:
+    from werkzeug.security import check_password_hash, generate_password_hash
+    if not check_password_hash(user["password_hash"], data.get("current_password", "")):
         return jsonify({"error": "Current password incorrect"}), 403
     new_pw = data.get("new_password", "")
     if len(new_pw) < 6:
         return jsonify({"error": "New password must be ≥6 characters"}), 400
-    new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+    new_hash = generate_password_hash(new_pw)
     from memory_store import get_conn as _gc
     with _gc() as c:
         c.execute("UPDATE users SET password_hash=? WHERE id=?", (new_hash, uid))

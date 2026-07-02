@@ -10,12 +10,17 @@
 <script src="https://d3js.org/topojson.v3.min.js"></script>
 <style>
 :root{
-  --bg:#03080f;--bg1:#07111c;--bg2:#0d1a2a;
-  --green:#00ff88;--red:#ff3b5c;--blue:#00b4ff;--purple:#9b59ff;--gold:#f5a623;
-  --t1:#e8f4ff;--t2:#8ba3b8;--t3:#4a6380;
-  --border:rgba(0,180,255,.12);
-  --sans:'Inter','SF Pro Display',-apple-system,sans-serif;
+  /* Colors - Rich, futuristic dark theme with high-contrast neon accents */
+  --bg:#020408;--bg1:#050a14;--bg2:#080f1e;--bg3:#0c162b;
+  --green:#00ffaa;--red:#ff3366;--blue:#00d2ff;--purple:#8338ec;--gold:#ffb703;
+  --t1:#f8f9fa;--t2:#94a3b8;--t3:#475569;
+  --border:rgba(0, 180, 255, 0.08);--border2:rgba(0, 255, 170, 0.12);
+  --sans:'Outfit','Inter',sans-serif;
   --mono:'JetBrains Mono','Fira Code',monospace;
+  --glass-bg:rgba(8, 15, 30, 0.6);
+  --glass-border:rgba(0, 210, 255, 0.12);
+  --glass-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --radius:8px;
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--sans);overflow:hidden}
@@ -24,34 +29,35 @@ html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--san
 #top-bar{
   position:fixed;top:0;left:0;right:0;z-index:200;
   display:flex;align-items:center;gap:12px;padding:10px 16px;
-  background:rgba(3,8,15,.85);backdrop-filter:blur(12px);
+  background:rgba(5,10,20,.95);backdrop-filter:blur(16px);
   border-bottom:1px solid var(--border);
 }
 .brand{font-size:15px;font-weight:800;letter-spacing:2px;color:var(--blue)}
 .brand span{color:var(--green)}
-#back-btn{padding:4px 12px;background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.25);border-radius:6px;color:var(--blue);font-size:11px;cursor:pointer;font-family:var(--sans)}
-#back-btn:hover{background:rgba(0,180,255,.2)}
+#back-btn{padding:4px 12px;background:rgba(0,210,255,.08);border:1px solid rgba(0,210,255,.2);border-radius:6px;color:var(--blue);font-size:11px;cursor:pointer;font-family:var(--sans);transition:all 0.2s ease-in-out}
+#back-btn:hover{background:rgba(0,210,255,.18);transform:scale(1.02)}
 .view-toggle{display:flex;gap:4px;margin-left:auto}
 .vt-btn{
   padding:5px 14px;background:none;border:1px solid var(--border);
   border-radius:6px;color:var(--t2);font-size:11px;cursor:pointer;font-family:var(--sans);
-  transition:.15s;
+  transition:all 0.15s ease-in-out;
 }
-.vt-btn.active{background:rgba(0,180,255,.15);border-color:var(--blue);color:var(--blue)}
+.vt-btn.active{background:rgba(0,210,255,.15);border-color:var(--blue);color:var(--blue);transform:scale(1.02)}
 #node-count{font-size:10px;color:var(--t3)}
-#legend-toggle{padding:4px 10px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--t3);font-size:10px;cursor:pointer;font-family:var(--sans)}
+#legend-toggle{padding:4px 10px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--t3);font-size:10px;cursor:pointer;font-family:var(--sans);transition:all 0.2s ease-in-out}
+#legend-toggle:hover{border-color:var(--blue);color:var(--t2)}
 
 /* ── MAIN CANVAS ── */
 #graph-view, #map-view{
   position:fixed;top:42px;left:0;right:0;bottom:0;
-  background:radial-gradient(ellipse at 50% 30%,rgba(0,180,255,.04) 0%,var(--bg) 60%);
+  background:radial-gradient(ellipse at 50% 30%,rgba(0,210,255,.04) 0%,var(--bg) 60%);
 }
 #map-view{display:none}
 
 svg#graph-svg, svg#map-svg{width:100%;height:100%}
 
 /* Grid lines */
-#graph-svg .grid-line{stroke:rgba(0,180,255,.04);stroke-width:1}
+#graph-svg .grid-line{stroke:rgba(0,210,255,.04);stroke-width:1}
 
 /* Nodes */
 .node-circle{
@@ -84,14 +90,17 @@ svg#graph-svg, svg#map-svg{width:100%;height:100%}
 /* ── INFO PANEL ── */
 #info-panel{
   position:fixed;right:16px;top:58px;width:280px;
-  background:rgba(7,17,28,.95);backdrop-filter:blur(16px);
-  border:1px solid var(--border);border-radius:12px;
+  background:var(--glass-bg);backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--glass-border);border-radius:var(--radius);
   overflow:hidden;display:none;z-index:150;
+  box-shadow:var(--glass-shadow);
+  transition:all 0.2s ease-in-out;
 }
 #info-panel.visible{display:block}
 #ip-header{
   padding:12px 14px 8px;
-  background:linear-gradient(135deg,rgba(0,180,255,.08),rgba(155,89,255,.08));
+  background:linear-gradient(135deg,rgba(0,210,255,.08),rgba(131,56,236,.08));
   border-bottom:1px solid var(--border);
 }
 #ip-sym{font-size:20px;font-weight:800;font-family:var(--mono);color:var(--t1)}
@@ -109,10 +118,10 @@ svg#graph-svg, svg#map-svg{width:100%;height:100%}
   display:inline-block;padding:4px 12px;border-radius:20px;
   font-size:11px;font-weight:800;letter-spacing:1px;margin-bottom:6px;
 }
-.assess-signal.BUY{background:rgba(0,255,136,.15);color:var(--green);border:1px solid rgba(0,255,136,.3)}
-.assess-signal.SELL{background:rgba(255,59,92,.15);color:var(--red);border:1px solid rgba(255,59,92,.3)}
+.assess-signal.BUY{background:rgba(0,255,170,.15);color:var(--green);border:1px solid rgba(0,255,170,.3)}
+.assess-signal.SELL{background:rgba(255,51,102,.15);color:var(--red);border:1px solid rgba(255,51,102,.3)}
 .assess-signal.HOLD{background:rgba(245,166,35,.15);color:var(--gold);border:1px solid rgba(245,166,35,.3)}
-.assess-signal.WATCH{background:rgba(0,180,255,.15);color:var(--blue);border:1px solid rgba(0,180,255,.3)}
+.assess-signal.WATCH{background:rgba(0,210,255,.15);color:var(--blue);border:1px solid rgba(0,210,255,.3)}
 .assess-conviction{font-size:9px;color:var(--t3);margin-left:6px}
 .assess-rat{font-size:10px;color:var(--t2);line-height:1.5;margin-bottom:8px}
 .assess-case{font-size:9px;line-height:1.5;margin-bottom:3px}
@@ -133,9 +142,11 @@ svg#graph-svg, svg#map-svg{width:100%;height:100%}
 /* ── LEGEND ── */
 #legend{
   position:fixed;left:16px;bottom:16px;
-  background:rgba(7,17,28,.9);backdrop-filter:blur(10px);
-  border:1px solid var(--border);border-radius:10px;padding:10px 14px;
+  background:var(--glass-bg);backdrop-filter:blur(12px);
+  -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--glass-border);border-radius:var(--radius);padding:10px 14px;
   display:none;z-index:150;max-width:200px;
+  box-shadow:var(--glass-shadow);
 }
 #legend.visible{display:block}
 .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:4px;font-size:9px;color:var(--t2)}

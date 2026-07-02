@@ -29,6 +29,7 @@ from trend_detector import compute_sentiment_stats, detect_trends, get_risk_leve
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
+from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, count_news, upsert_news_items,
@@ -764,6 +765,15 @@ def api_manual_scan():
 @login_required
 def api_rnd_backlog():
     return jsonify(get_all_proposals(limit=50))
+
+
+@app.route("/api/backtest/accuracy")
+@login_required
+def api_backtest_accuracy():
+    """Basic reporting for the signal outcome tracker (FSI L3): how often
+    Fred's aggregated per-asset signal direction matched the actual price
+    move, at each of the 4h/24h/72h checkpoints."""
+    return jsonify(get_accuracy_report())
 
 
 @app.route("/api/rnd/propose", methods=["POST"])
@@ -1922,6 +1932,11 @@ def job_scan_cycle():
             trending = get_trending_assets(hours=4, limit=15)
             timeline = get_sentiment_timeline(hours=24)
 
+            try:
+                log_scan_outcomes(trending, quotes)
+            except Exception as e:
+                print(f"[Scan] backtest outcome logging error: {e}")
+
             socketio.emit("summary_update", {
                 "summary": summary_text,
                 "stats": stats,
@@ -2133,6 +2148,16 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Debate] Error: {e}")
 
+    def job_backtest_check():
+        """Fill in due 4h/24h/72h price checkpoints for tracked signal
+        outcomes (FSI L3 backtesting)."""
+        try:
+            result = run_backtest_check()
+            if result["filled"]:
+                print(f"[Backtest] Filled {result['filled']} checkpoint(s), {result['errors']} error(s)")
+        except Exception as e:
+            print(f"[Backtest] Error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx")
@@ -2147,6 +2172,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)
     scheduler.add_job(job_gemini_community, "interval", hours=6, id="gemini_community", jitter=2100)
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
+    scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

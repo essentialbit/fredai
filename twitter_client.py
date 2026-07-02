@@ -21,13 +21,22 @@ def _headers():
 
 
 def _score(text: str) -> tuple:
+    try:
+        from finbert_sentiment import analyze_sentiment
+        res = analyze_sentiment(text)
+        if res is not None:
+            score, stype = res
+            return score, stype, "finbert"
+    except Exception as e:
+        print(f"[Twitter Client] FinBERT scoring error: {e}")
+
     s = _analyzer.polarity_scores(text)
     c = s["compound"]
     if c >= 0.05:
-        return c, "bullish"
+        return c, "bullish", "vader"
     elif c <= -0.05:
-        return c, "bearish"
-    return c, "neutral"
+        return c, "bearish", "vader"
+    return c, "neutral", "vader"
 
 
 def _extract_asset(text: str) -> str | None:
@@ -65,7 +74,7 @@ def search_recent(query: str, max_results: int = 20) -> list[dict]:
         results = []
         for t in tweets:
             text = t.get("text", "")
-            score, stype = _score(text)
+            score, stype, model = _score(text)
             asset = _extract_asset(text)
             author = "@" + users.get(t.get("author_id", ""), "unknown")
             metrics = t.get("public_metrics") or {}
@@ -75,6 +84,7 @@ def search_recent(query: str, max_results: int = 20) -> list[dict]:
                 "author": author,
                 "sentiment_score": score,
                 "signal_type": stype,
+                "sentiment_model": model,
                 "asset": asset,
                 "likes": metrics.get("like_count", 0),
                 "retweets": metrics.get("retweet_count", 0),
@@ -107,6 +117,7 @@ def fetch_signals(max_results: int = SIGNAL_FETCH_LIMIT, user_watchlist: list = 
                 author=s["author"],
                 sentiment_score=s["sentiment_score"],
                 signal_type=s["signal_type"],
+                sentiment_model=s.get("sentiment_model", "vader"),
                 metadata={"id": s["id"], "likes": s["likes"], "retweets": s["retweets"]},
             )
         collected.extend(results)
@@ -116,4 +127,5 @@ def fetch_signals(max_results: int = SIGNAL_FETCH_LIMIT, user_watchlist: list = 
 
 
 def score_text(text: str) -> tuple:
-    return _score(text)
+    score, stype, model = _score(text)
+    return score, stype

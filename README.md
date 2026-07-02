@@ -24,6 +24,17 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.11 — FinBERT sentiment phase 1 & high-signal UI guiding principle
+- **FinBERT Sentiment Upgrade (Phase 1)**: Integrated Hugging Face's `ProsusAI/finbert` sequence classification model with lazy loading and capability-gated fallback to VADER on low-end hardware (RAM < 1GB like Raspberry Pi Zero) (closes #46).
+- **Database Schema Evolution**: Added `sentiment_model` columns to `signals` and `news_items` tables with automatic migrations to support directly comparing FinBERT vs VADER accuracy.
+- **Minimalist, High-Signal UI Principle**: Adopted the new standing design guideline prioritizing high-signal density, decluttered visual cues, and direct language over decorative animation and jargon (closes #50).
+
+### FredAI v1.3.10 — FSI sensor upgrades & auto-merge policy
+- **FSI Innovation Explorer**: Added automated scans of `MISSION.md` backlog to draft roadmaps and propose joint labor divisions between Claude and Gemini (closes #45).
+- **FSI Alignment Audit**: Integrated a strategic evaluation sensor checking checklist items against FSI levels on every CI run (closes #44).
+- **Auto-Merge Policy & Quality Bar**: Documented a streamlined `risk:low` auto-merge policy for green CI branches and added the shared quality bar lens (closes #39, #43).
+- **Assigned Taskings Sensor**: Configured the CI sensor to flag pending task allocations from Claude (closes #42).
+
 ### FredAI v1.3.4 — installer, security & grounding hardening
 - **Version-Aware Shortcuts**: Introduced installer version checking (`FREDAI_INSTALLER_VERSION=2`) to automatically upgrade desktop/application launcher scripts. Patched Windows shortcut detection (closes #37).
 - **Financial Data Grounding**: Hardened LLM system prompt and context builders to forbid fabrication of prices, drawdown math, or analyst ratings when quotes are empty or rate-limited (closes #31).

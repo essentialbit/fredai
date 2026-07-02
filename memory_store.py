@@ -194,7 +194,22 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS signal_outcomes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            asset TEXT NOT NULL,
+            predicted_direction TEXT NOT NULL,
+            signal_count INTEGER DEFAULT 0,
+            avg_sentiment REAL,
+            predicted_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            price_at_t0 REAL,
+            price_at_4h REAL,
+            price_at_24h REAL,
+            price_at_72h REAL
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
+        CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
@@ -515,6 +530,71 @@ def get_trend_history(asset, metric, hours=24) -> list[dict]:
             (asset, metric, since.isoformat())
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── BACKTESTING (signal outcome tracking) ──────────────────────────────────────
+_OUTCOME_CHECKPOINTS = ("4h", "24h", "72h")
+
+
+def log_signal_outcome(asset: str, predicted_direction: str, signal_count: int,
+                        avg_sentiment: float, price_at_t0: float | None):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO signal_outcomes
+               (asset, predicted_direction, signal_count, avg_sentiment, price_at_t0)
+               VALUES (?,?,?,?,?)""",
+            (asset, predicted_direction, signal_count, avg_sentiment, price_at_t0)
+        )
+
+
+def get_pending_outcomes(checkpoint: str, min_hours: float) -> list[dict]:
+    """Rows where `checkpoint` hasn't been filled yet and enough time has
+    passed since predicted_at for that checkpoint to be due."""
+    if checkpoint not in _OUTCOME_CHECKPOINTS:
+        raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
+    col = f"price_at_{checkpoint}"
+    cutoff = datetime.utcnow() - timedelta(hours=min_hours)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM signal_outcomes WHERE {col} IS NULL AND price_at_t0 IS NOT NULL AND predicted_at<=?",
+            (cutoff.isoformat(),)
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def update_outcome_price(outcome_id: int, checkpoint: str, price: float):
+    if checkpoint not in _OUTCOME_CHECKPOINTS:
+        raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
+    col = f"price_at_{checkpoint}"
+    with get_conn() as conn:
+        conn.execute(f"UPDATE signal_outcomes SET {col}=? WHERE id=?", (price, outcome_id))
+
+
+def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict:
+    """Of outcomes completed at this checkpoint within the lookback window,
+    how often did the predicted direction match the actual price move."""
+    if checkpoint not in _OUTCOME_CHECKPOINTS:
+        raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
+    col = f"price_at_{checkpoint}"
+    since = datetime.utcnow() - timedelta(hours=hours)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM signal_outcomes WHERE {col} IS NOT NULL AND predicted_at>?",
+            (since.isoformat(),)
+        ).fetchall()
+    rows = [dict(r) for r in rows]
+    if not rows:
+        return {"checkpoint": checkpoint, "total": 0, "correct": 0, "accuracy_pct": None}
+    correct = 0
+    for r in rows:
+        change = r[col] - r["price_at_t0"]
+        actual_dir = "bullish" if change > 0 else ("bearish" if change < 0 else "neutral")
+        if r["predicted_direction"] == actual_dir:
+            correct += 1
+    return {
+        "checkpoint": checkpoint, "total": len(rows), "correct": correct,
+        "accuracy_pct": round(correct / len(rows) * 100, 1),
+    }
 
 
 # ── ALERTS ────────────────────────────────────────────────────────────────────

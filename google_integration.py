@@ -170,3 +170,40 @@ def backup_to_drive(token: str, profile_data: dict) -> bool:
     except Exception as e:
         print(f"[Google Drive] Exception: {e}")
     return False
+
+
+def send_gmail_report(token: str, recipient: str, subject: str, html_content: str) -> bool:
+    """
+    Sends an HTML report to the recipient's email address using the Gmail send API.
+    """
+    import base64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    
+    message = MIMEMultipart("alternative")
+    message["Subject"] = subject
+    message["From"] = "me"
+    message["To"] = recipient
+    
+    part = MIMEText(html_content, "html")
+    message.attach(part)
+    
+    raw_message = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+    body = {
+        "raw": raw_message
+    }
+    
+    try:
+        url = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send"
+        r = requests.post(url, headers=headers, json=body, timeout=12)
+        if r.status_code == 200:
+            return True
+        print(f"[Gmail API] Send failed: {r.text}")
+    except Exception as e:
+        print(f"[Gmail API] Exception: {e}")
+    return False

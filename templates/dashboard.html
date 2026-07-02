@@ -1763,6 +1763,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
       <div id="analyst-report-content" style="display:none"></div>
     </div>
     <div class="analyst-footer">
+      <button class="login-btn" id="btn-email-report" onclick="emailAnalystReport()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0 6px 0 0;display:none">Email Report</button>
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
     </div>
@@ -1799,6 +1800,7 @@ async function checkAuthProviders() {
     if (!r.ok) return;
     const d = await r.json();
     if (d.status !== 'anonymous' && d.display_name) {
+      checkGoogleStatus();
       if (g('login-screen').style.display !== 'none') {
         g('login-screen').style.display = 'none';
         g('app-shell').classList.add('visible');
@@ -2053,16 +2055,31 @@ async function checkGoogleStatus() {
     const r = await fetch('/api/google/status');
     const d = await r.json();
     const isLinked = d.linked;
+    window._googleLinked = isLinked;
     
     const badge = g('google-status-badge');
-    badge.textContent = isLinked ? 'Connected' : 'Disconnected';
-    badge.style.background = isLinked ? 'rgba(0,255,136,0.15)' : 'rgba(255,59,92,0.15)';
-    badge.style.color = isLinked ? 'var(--green)' : 'var(--red)';
+    if (badge) {
+      badge.textContent = isLinked ? 'Connected' : 'Disconnected';
+      badge.style.background = isLinked ? 'rgba(0,255,136,0.15)' : 'rgba(255,59,92,0.15)';
+      badge.style.color = isLinked ? 'var(--green)' : 'var(--red)';
+    }
     
-    g('btn-link-google').style.display = isLinked ? 'none' : 'flex';
-    g('btn-export-sheets').disabled = !isLinked;
-    g('btn-sync-calendar').disabled = !isLinked;
-    g('btn-backup-drive').disabled = !isLinked;
+    const btnLink = g('btn-link-google');
+    if (btnLink) btnLink.style.display = isLinked ? 'none' : 'flex';
+    
+    const btnExport = g('btn-export-sheets');
+    if (btnExport) btnExport.disabled = !isLinked;
+    
+    const btnSync = g('btn-sync-calendar');
+    if (btnSync) btnSync.disabled = !isLinked;
+    
+    const btnBackup = g('btn-backup-drive');
+    if (btnBackup) btnBackup.disabled = !isLinked;
+    
+    const btnEmail = g('btn-email-report');
+    if (btnEmail) {
+      btnEmail.style.display = (isLinked && window._activeAnalystTicker) ? 'inline-block' : 'none';
+    }
   } catch (e) {
     console.error('Failed to check Google status:', e);
   }
@@ -3833,6 +3850,12 @@ async function openAnalystReport(ticker) {
   ticker = ticker.replace(/[\$\[\]]/g, '').trim().toUpperCase();
   if (!ticker) return;
 
+  window._activeAnalystTicker = ticker;
+  const btnEmail = g('btn-email-report');
+  if (btnEmail) {
+    btnEmail.style.display = window._googleLinked ? 'inline-block' : 'none';
+  }
+
   const modal = g('analyst-modal');
   const title = g('analyst-modal-title');
   const loading = g('analyst-loading');
@@ -3867,6 +3890,9 @@ async function openAnalystReport(ticker) {
 }
 
 function closeAnalystModal() {
+  window._activeAnalystTicker = null;
+  const btnEmail = g('btn-email-report');
+  if (btnEmail) btnEmail.style.display = 'none';
   g('analyst-modal').classList.remove('open');
 }
 
@@ -3891,6 +3917,37 @@ function printAnalystReport() {
     </html>
   `);
   win.document.close();
+}
+
+async function emailAnalystReport() {
+  if (!window._activeAnalystTicker) return;
+  const btn = g('btn-email-report');
+  if (!btn) return;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    const htmlContent = g('analyst-report-content').innerHTML;
+    const r = await fetch('/api/google/export/gmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticker: window._activeAnalystTicker,
+        html: `<h2>FredAI Analyst Report: \${esc(window._activeAnalystTicker)}</h2><div style="font-family:sans-serif;line-height:1.6;color:#111">\${htmlContent}</div>`
+      })
+    });
+    const d = await r.json();
+    if (r.ok) {
+      alert(`Report successfully emailed to \${d.recipient}!`);
+    } else {
+      alert(`Failed to send email: \${d.error || 'Unknown error'}`);
+    }
+  } catch(e) {
+    alert('Error sending email report.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
 }
 
 function linkifyTickers(text) {

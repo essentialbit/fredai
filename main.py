@@ -463,7 +463,7 @@ def login_google():
         "redirect_uri": redirect_uri,
         "state": state,
         "response_type": "code",
-        "scope": "openid profile email https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file",
+        "scope": "openid profile email https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/gmail.send",
         "access_type": "offline",
         "prompt": "consent"
     }
@@ -580,6 +580,42 @@ def api_google_sheets_export():
     if result:
         return jsonify({"status": "ok", "spreadsheetId": result["spreadsheetId"], "url": result["url"]})
     return jsonify({"error": "Failed to create Google Sheet. Ensure your session token is valid."}), 500
+
+
+@app.route("/api/google/export/gmail", methods=["POST"])
+@login_required
+def api_google_gmail_export():
+    uid = session["user_id"]
+    token = get_google_token(uid)
+    if not token:
+        return jsonify({"error": "Google account not linked. Please sign in via Google OAuth first."}), 400
+        
+    data = request.get_json() or {}
+    ticker = data.get("ticker", "").strip().upper()
+    subject = data.get("subject", f"FredAI Analyst Report: {ticker}" if ticker else "FredAI Briefing Report")
+    body_html = data.get("html", "")
+    
+    if not body_html:
+        return jsonify({"error": "Missing report content."}), 400
+        
+    import requests as api_requests
+    recipient = None
+    try:
+        user_url = "https://www.googleapis.com/oauth2/v3/userinfo"
+        user_headers = {"Authorization": f"Bearer {token}"}
+        user_res = api_requests.get(user_url, headers=user_headers, timeout=10)
+        if user_res.status_code == 200:
+            recipient = user_res.json().get("email")
+    except Exception:
+        pass
+        
+    if not recipient:
+        return jsonify({"error": "Could not retrieve recipient email address from Google profile."}), 400
+        
+    from google_integration import send_gmail_report
+    if send_gmail_report(token, recipient, subject, body_html):
+        return jsonify({"status": "ok", "recipient": recipient})
+    return jsonify({"error": "Failed to send email via Gmail API."}), 500
 
 @app.route("/api/google/sync/calendar", methods=["POST"])
 @login_required

@@ -24,13 +24,16 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.0
-- **Google Universe Integration**: Synchronized portfolios sheets generation, calendar event syncs, and secure file backups.
-- **Dynamic Ticker Linkification & On-Demand AI Analyst Modal**: Click any stock symbol anywhere to auto-generate research reports using real-time sentiment and market quotes context.
-- **Real-Time Translation Engine**: Automatically detects and translates foreign news/chat scripts into English with visual badges.
-- **Claude-First Routing & 2s Timeout Fallbacks**: Enforces strict 2s timeouts for preferred models to trigger immediate cloud fallbacks (Anthropic Claude -> Gemini -> Ollama).
-- **Secure Custom Credentials**: Input fields in settings dialog to store custom user keys in DB preferences.
-- **↻ Sync & Restart**: Header button to pull GitHub updates and safely reload the Flask server without socket conflicts.
+### FredAI v1.2.30 — Gemini integration hardening
+- `gemini_code_agent.py` hardcoded its project path to a specific machine's SSD mirror location, breaking in CI, on any fork, and even on the primary dev checkout. Now resolves relative to its own file location, matching `claude_code_agent.py`.
+- `git_push()` (used by both the Claude and Gemini self-improvement cycles) could silently skip pushing real, committed work whenever the working tree was already clean — which happens routinely since the code agents commit locally as they iterate. It now checks commits-ahead-of-upstream instead, and retries once via fetch+rebase if the push is rejected (the Claude cycle, Gemini cycle, and CI's scheduled `rnd` job all push to `main` on similar cadences and can race).
+- Added an in-process lock so Claude's and Gemini's RnD cycles can never run their write phases concurrently and interleave into each other's commits.
+
+### FredAI v1.2.29 — security hardening
+- **Password hashing migrated** from unsalted SHA-256 to werkzeug's salted hashes. Existing accounts are transparently upgraded to the new format on their next successful login.
+- **Repo-tracked pre-commit guard** (`scripts/hooks/pre-commit`, auto-wired via `core.hooksPath` on every app startup) blocks `.env`, `*.db`, and `__pycache__` from ever being committed again.
+- Purged `.env` and `data/sentinel.db` from the entire git history (all commits + tags rewritten and force-pushed) after discovering they had been tracked since the initial commit.
+- Rotated the app `SECRET_KEY`.
 
 ### FredAI v1.2.8
 - Update Twitter API keys in .env file
@@ -40,12 +43,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.2.6
 - fix: prices showing \$0.00 in Fred chat responses
-
-### FredAI v1.2.5
-- fix: Ollama chat compatibility for reasoning models (qwen3, gemma3, deepseek-r1)
-
-### FredAI v1.2.4
-- docs: add Android self-hosting guide via Termux
 
 <!-- CHANGELOG_END -->
 

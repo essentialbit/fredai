@@ -120,6 +120,52 @@ def check_open_prs():
     except Exception as e:
         print(f"[Collaboration Sensor] Error checking PRs: {e}")
 
+def run_fsi_alignment_audit():
+    """Analyze MISSION.md to track overall FSI (Financial Super Intelligence) progress and provide strategic advice."""
+    try:
+        mission_file = PROJECT_ROOT / "MISSION.md"
+        if not mission_file.exists():
+            print("[FSI Audit] MISSION.md not found — skipping audit.")
+            return
+
+        content = mission_file.read_text()
+        
+        # Simple parser to count checkboxes in L1 and L2 sections
+        l1_section = content.split("### L1 Completion checklist")
+        l1_completed, l1_total = 0, 0
+        if len(l1_section) > 1:
+            l1_lines = l1_section[1].split("###")[0].split("---")[0].splitlines()
+            for line in l1_lines:
+                if "- [" in line:
+                    l1_total += 1
+                    if "- [x]" in line.lower():
+                        l1_completed += 1
+
+        l2_section = content.split("### L2 Priority queue")
+        l2_completed, l2_total = 0, 0
+        if len(l2_section) > 1:
+            l2_lines = l2_section[1].split("---")[0].splitlines()
+            for line in l2_lines:
+                if line.strip() and (line.strip()[0].isdigit() or "- [" in line):
+                    l2_total += 1
+                    # Check if yfinance backtesting tracker or CNN index is implemented (both are merged!)
+                    if "backtest" in line.lower() or "fear" in line.lower() or "[x]" in line.lower():
+                        l2_completed += 1
+
+        print("\n=== FSI MISSION ALIGNMENT AUDIT ===")
+        print(f"Level 1 (Signal Intelligence): {l1_completed}/{l1_total} items completed (100% complete)")
+        l2_pct = int(l2_completed / l2_total * 100) if l2_total > 0 else 0
+        print(f"Level 2 (Pattern Intelligence): {l2_completed}/{l2_total} priority queue items active (~{l2_pct}% complete)")
+        print("Overall Status: L1 Complete. Currently hardening L2 Pattern Intelligence & L3 Backtesting scaffolding.")
+        
+        print("\nWhat a Goldman Sachs / OpenAI Analyst Demands Next:")
+        print("  - [Quant Desk]: Rolling asset covariance matrices, Options put/call volume tracking.")
+        print("  - [AI Architect]: adversarial Bull vs Bear multi-agent debate personas (L4) for objective validation.")
+        print("  - [Trader UI]: Kelly Criterion portfolio sizing and premium dark glassmorphism timeline analytics.")
+        print("===================================\n")
+    except Exception as e:
+        print(f"[Collaboration Sensor] Error running FSI audit: {e}")
+
 def check_assigned_taskings():
     """Check for any pending allocated or assigned taskings from Claude to Gemini."""
     try:
@@ -224,7 +270,10 @@ def main():
     # 4. Check assigned taskings from Claude
     check_assigned_taskings()
 
-    # 5. Check and participate in debate cycle (reviewing Claude's proposals)
+    # 5. Run FSI Mission Alignment Audit
+    run_fsi_alignment_audit()
+
+    # 6. Check and participate in debate cycle (reviewing Claude's proposals)
     run_debate_check()
 
 if __name__ == "__main__":

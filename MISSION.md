@@ -173,3 +173,31 @@ When all L2 items are complete, Fred declares L2 and shifts focus to L3.
 
 *Fred is not a dashboard. Fred is becoming the world's most intelligent financial mind.*
 *One cycle at a time. One capability at a time. No shortcuts.*
+
+---
+
+## FSI Master Plan: Scaling to Institutional & Retail Excellence
+
+To capture both the institutional depth of top-tier quants (Goldman Sachs, Citadel) and the accessible utility of everyday retail traders, FredAI must continually evolve along both aesthetic and technical frontiers. 
+
+### 1. What a Goldman Sachs/Citadel Analyst Demands
+* **Mathematical Rigor**: Moving beyond raw sentiment scores to covariance matrices, rolling beta estimation, Sharpe/Sortino ratios, and real-time Value at Risk (VaR) calculations.
+* **Causal Attribution (L4)**: Knowing *why* a move happened. Attributing stock performance to macroeconomic cycles (CPI, FOMC statement deltas) vs micro events (earnings, insider trading).
+* **Options Flow and IV Surfaces (L4)**: Monitoring unusual options sweep activity, put/call volume ratios, and visualizing the Implied Volatility (IV) surface to detect institutional positioning.
+* **Alternative Data (L5)**: Scraping corporate actions, insider purchases (Form 4), patent filings, and GitHub commit velocities.
+
+### 2. What an OpenAI/Google AI Architect Demands
+* **Verifiable Accuracy (L3)**: Strong backtesting ground-truth loops ensuring that sentiment signals actually predict subsequent price action, keeping LLMs grounded.
+* **Adversarial Debating (L4)**: Multi-agent debate loops where specialised Bull and Bear agents argue current proposals with a neutral Arbiter agent writing the summary.
+* **Domain-Specific Embedding (L2)**: Standardizing on FinBERT or locally-running financial LLM models rather than raw VADER scoring.
+
+### 3. What the Everyday Retail Trader Demands
+* **Aesthetic Superiority**: Clean, dark glassmorphic dashboards that summarize complex signal networks at a glance, eliminating clutter.
+* **Actionable Alerts**: Instant push notifications or Obsidian-synced briefings highlighting trading setups before they happen.
+* **Democratised Deployment**: Runs on a $35 Raspberry Pi Zero/4 or low-cost cloud VM without requiring a cluster of expensive GPUs.
+
+### 4. Next Implementation Steps (Q3 2026)
+1. **Adversarial Multi-Agent Debates (L4)**: Create dedicated Bull/Bear agent personas for the debate cycle to simulate quantitative peer review.
+2. **FinBERT / Llama-3 Sentiment Upgrade (L2)**: Migrate the current RSS and Twitter scraping pipelines to use finance-specific models.
+3. **Advanced Risk and Portfolio Sizing (L3/L4)**: Implement Kelly Criterion and Sharpe ratio tracking in the portfolio module.
+4. **SEC EDGAR Insider Trading Parser (L2/L4)**: Automate parsing of Form 4 filings for immediate ticker alerting.*

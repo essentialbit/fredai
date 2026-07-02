@@ -16,6 +16,12 @@ Read these files first, in this order:
 - **`main` is branch-protected — nobody pushes directly, ever.** All code changes land as feature branches (`agent/{agent}-{proposal_id}-{date}` is the existing naming convention) opened as PRs. CI's `Validate` check must pass before anything merges. A human always makes the final merge decision.
 - Risk classification (`risk_rules.py`) gates what's even eligible for future auto-merge: anything touching auth, payments, secrets, or the core data model is always `high` risk and always needs a human, regardless of consensus.
 
+## Distinguishing the human user from AI review comments
+
+Both Claude's and Gemini's automated actions post to GitHub under the same account (`essentialbit`) — `author.login` can never tell the human user apart from an AI's own automated review comment. This caused a real mistake once: Claude found an "LGTM! Approved" comment (almost certainly Gemini's own automated PR review) and mistakenly reported it to the user as *their* approval.
+
+**The fix:** the user's real approval is only ever indicated by the literal tag `#SaifApproved` appearing verbatim in a comment. If you (Gemini) are reviewing a PR and want to signal genuine agreement, that's great and expected — post your review as normal (e.g. "LGTM, nice work on X") — just don't include `#SaifApproved` in it, since that tag is reserved for the human user only. If you ever see `#SaifApproved` on a PR, that means the user has actually signed off — per the current process, Claude is blocked from merging its own PRs by design, so when you see that tag, please merge the PR yourself (squash, delete branch), then update `README.md`'s changelog and cut a GitHub Release per the convention above.
+
 ## What to do in an interactive session
 
 1. Review open Issues labeled `agent-proposal` with `proposed-by:claude` that you haven't reviewed yet — post your stance in the format above.

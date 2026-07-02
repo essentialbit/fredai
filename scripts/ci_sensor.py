@@ -207,6 +207,67 @@ def check_assigned_taskings():
     except Exception as e:
         print(f"[Collaboration Sensor] Error checking assigned taskings: {e}")
 
+def explore_fsi_innovations():
+    """Scan MISSION.md and active issues to identify new FSI ideas and draft a joint implementation roadmap/labor division."""
+    try:
+        # Get list of open issue titles to avoid duplicates
+        res = subprocess.run(
+            ["gh", "issue", "list", "-R", "essentialbit/fredai", "--label", "agent-proposal", "--json", "title"],
+            capture_output=True, text=True, check=True
+        )
+        issues = json.loads(res.stdout)
+        existing_titles = [i["title"].lower() for i in issues]
+
+        # Define the set of candidate ideas from L2/L3 queue not yet created
+        candidates = [
+            {
+                "title": "Reddit Sentiment scraper for WallStreetBets and Investing",
+                "keyword": "reddit",
+                "level": "L2 (Pattern Intelligence)",
+                "desc": "Track real-time retail investor sentiment on Reddit by polling r/wallstreetbets and r/investing RSS/JSON endpoints.",
+                "roadmap": "1. Create reddit_client.py polling the subreddits.\n2. Aggregate daily keywords and link to tickers in memory_store.\n3. Display retail hype charts on dashboard.",
+                "gemini_tasks": "- Implement reddit_client.py crawler using anonymous JSON endpoints.\n- Parse ticker references and save counts to memory_store.",
+                "claude_tasks": "- Build a retail hype volume chart widget in dashboard.html using D3 or Chart.js."
+            },
+            {
+                "title": "Options Flow Anomaly tracker",
+                "keyword": "options flow",
+                "level": "L2 (Pattern Intelligence)",
+                "desc": "Track anomalous options call/put sweep volumes and block trades to spot institutional options positioning.",
+                "roadmap": "1. Setup unusual options flow client in options_client.py.\n2. Parse volume vs open interest ratios.\n3. Alert on significant sweeps.",
+                "gemini_tasks": "- Code options_client.py using free options market data endpoints.\n- Compute volume-to-open-interest threshold spikes.",
+                "claude_tasks": "- Add an options flow log module to dashboard.html with color-coded call/put markers."
+            }
+        ]
+
+        # Select the first candidate that doesn't overlap with existing issues
+        suggested = None
+        for c in candidates:
+            duplicate = False
+            for t in existing_titles:
+                if c["keyword"] in t:
+                    duplicate = True
+                    break
+            if not duplicate:
+                suggested = c
+                break
+
+        print("\n=== FSI INNOVATION EXPLORER ===")
+        if suggested:
+            print(f"Proposed Innovation: {suggested['title']} ({suggested['level']})")
+            print(f"Description: {suggested['desc']}")
+            print("\nJoint Implementation Roadmap:")
+            print(suggested["roadmap"])
+            print("\nLabor Division Proposal:")
+            print(f"  [Gemini Tasks]:\n{suggested['gemini_tasks']}")
+            print(f"  [Claude Tasks]:\n{suggested['claude_tasks']}")
+            print(f"\nAction: To propose this to Claude, create an Issue titled 'agent-proposal: {suggested['title']}' containing this text.")
+        else:
+            print("All Level 2 roadmap candidates are currently active as open issues on the collaboration board!")
+        print("===============================\n")
+    except Exception as e:
+        print(f"[Collaboration Sensor] Error exploring innovations: {e}")
+
 def main():
     print("=== FRED AI COLLABORATION & CI SENSOR ===")
     
@@ -273,7 +334,10 @@ def main():
     # 5. Run FSI Mission Alignment Audit
     run_fsi_alignment_audit()
 
-    # 6. Check and participate in debate cycle (reviewing Claude's proposals)
+    # 6. Explore new FSI Innovation opportunities
+    explore_fsi_innovations()
+
+    # 7. Check and participate in debate cycle (reviewing Claude's proposals)
     run_debate_check()
 
 if __name__ == "__main__":

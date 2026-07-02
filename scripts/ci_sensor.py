@@ -120,6 +120,47 @@ def check_open_prs():
     except Exception as e:
         print(f"[Collaboration Sensor] Error checking PRs: {e}")
 
+def check_assigned_taskings():
+    """Check for any pending allocated or assigned taskings from Claude to Gemini."""
+    try:
+        res = subprocess.run(
+            ["gh", "issue", "list", "-R", "essentialbit/fredai", "--label", "agent-proposal", "--json", "number,title,body,labels"],
+            capture_output=True, text=True, check=True
+        )
+        issues = json.loads(res.stdout)
+        for issue in issues:
+            num = issue["number"]
+            title = issue["title"]
+            body = issue.get("body", "") or ""
+            labels = [l["name"].lower() for l in issue.get("labels", [])]
+            
+            is_assigned = False
+            for label in labels:
+                if "gemini" in label and ("assign" in label or "alloc" in label or "take" in label):
+                    is_assigned = True
+                    break
+            
+            if "assigned to gemini" in body.lower() or "allocated to gemini" in body.lower() or "@gemini" in body.lower():
+                is_assigned = True
+                
+            if not is_assigned:
+                c_res = subprocess.run(
+                    ["gh", "issue", "view", str(num), "-R", "essentialbit/fredai", "--json", "comments"],
+                    capture_output=True, text=True, check=True
+                )
+                comments_data = json.loads(c_res.stdout)
+                comments = comments_data.get("comments", [])
+                for c in comments:
+                    c_body = c.get("body", "").lower()
+                    if "@gemini" in c_body and ("assign" in c_body or "take" in c_body or "allocate" in c_body or "implement" in c_body):
+                        is_assigned = True
+                        break
+            
+            if is_assigned:
+                print(f"[Collaboration Sensor] ASSIGNED TASKING: Issue #{num} ({title}) is allocated/assigned to Gemini!")
+    except Exception as e:
+        print(f"[Collaboration Sensor] Error checking assigned taskings: {e}")
+
 def main():
     print("=== FRED AI COLLABORATION & CI SENSOR ===")
     
@@ -180,7 +221,10 @@ def main():
     # 3. Check open PRs for pending reviews
     check_open_prs()
 
-    # 4. Check and participate in debate cycle (reviewing Claude's proposals)
+    # 4. Check assigned taskings from Claude
+    check_assigned_taskings()
+
+    # 5. Check and participate in debate cycle (reviewing Claude's proposals)
     run_debate_check()
 
 if __name__ == "__main__":

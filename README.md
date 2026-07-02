@@ -24,6 +24,11 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.4 — installer, security & grounding hardening
+- **Version-Aware Shortcuts**: Introduced installer version checking (`FREDAI_INSTALLER_VERSION=2`) to automatically upgrade desktop/application launcher scripts. Patched Windows shortcut detection (closes #37).
+- **Financial Data Grounding**: Hardened LLM system prompt and context builders to forbid fabrication of prices, drawdown math, or analyst ratings when quotes are empty or rate-limited (closes #31).
+- **Setup & Credentials Polish**: Removed misleading static `admin / sentinel2024` credential hints from setup messages and dashboard UI, pointing instead to the one-time generated admin password (closes #34).
+
 ### FredAI v1.3.0 — Collaboration Board substrate & UI/UX glassmorphism elevation
 - **Collaboration Board & Debate Substrate**: Integrated cross-agent debate cycle verifying consensus on open proposals, with robust local Ollama fallbacks (`gemma3:4b`) to support offline debate reviews for both Claude and Gemini.
 - **Visual Overhaul & Redesign**: Elevated dashboard, news feed, timeline, and D3 graphs to a premium, ultra-modern glassmorphic dark theme using Outfit and JetBrains Mono typography, translucent panel cards, hover-lifting tile animations, and refined glowing badges.

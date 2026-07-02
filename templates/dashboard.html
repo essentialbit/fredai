@@ -1204,6 +1204,87 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .ops-event-title{color:var(--t1);line-height:1.4;margin-bottom:2px}
 .ops-event-meta{color:var(--t3);font-size:8px}
 .ops-imp-dot{width:5px;height:5px;border-radius:50%;display:inline-block;margin-right:4px}
+
+/* ══ TICKER TAPE ══════════════════════════════════════════════════════════ */
+#ticker-tape {
+  width:100%;overflow:hidden;white-space:nowrap;background:rgba(3,8,15,0.45);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--border);
+  box-sizing:border-box;display:flex;align-items:center;height:24px;flex-shrink:0;
+  font-family:var(--mono);font-size:9px;
+}
+.ticker-wrap {
+  display:inline-block;white-space:nowrap;animation:ticker-slide 45s linear infinite;
+  padding-left:20px;
+}
+.ticker-wrap:hover { animation-play-state:paused; }
+.ticker-item { display:inline-block;padding:0 16px;color:var(--t2) }
+.ticker-item span { font-weight:bold }
+@keyframes ticker-slide {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+html[data-tier="nano"] #ticker-tape,
+html[data-tier="micro"] #ticker-tape { display:none }
+
+/* ══ NOTIFICATION CENTER ══════════════════════════════════════════════════ */
+.notif-bell-wrapper {
+  position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.05);margin-right:clamp(4px,1.5vw,10px);
+  user-select:none;
+}
+.notif-bell-wrapper:hover { background:rgba(255,255,255,0.06); }
+.notif-bell-icon { font-size:12px;filter:drop-shadow(0 0 2px rgba(0,180,255,0.3)); }
+.notif-badge {
+  position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;
+  font-size:7px;font-weight:700;padding:1px 3px;border-radius:8px;
+  border:1px solid #03080f;line-height:1;
+}
+.notif-dropdown {
+  display:none;position:absolute;top:32px;right:0;width:clamp(280px,80vw,340px);
+  background:rgba(4,12,23,0.96);backdrop-filter:blur(20px);
+  border:1px solid var(--border2);border-radius:10px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.6);z-index:1000;overflow:hidden;text-align:left;
+}
+.notif-dropdown.open { display:block; }
+.notif-hdr {
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 12px;border-bottom:1px solid rgba(255,255,255,0.06);
+  font-size:10px;font-weight:600;color:var(--t1);background:rgba(255,255,255,0.01);
+}
+.notif-clear-btn {
+  background:none;border:none;color:var(--blue);font-size:9px;
+  cursor:pointer;padding:0;font-family:inherit;
+}
+.notif-clear-btn:hover { text-decoration:underline; }
+.notif-list { max-height:260px;overflow-y:auto; }
+.notif-item {
+  padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.03);
+  font-size:9px;transition:background 0.2s;position:relative;
+}
+.notif-item:last-child { border-bottom:none; }
+.notif-item:hover { background:rgba(255,255,255,0.02); }
+.notif-item-title { color:var(--t1);font-weight:600;line-height:1.4;margin-bottom:3px; }
+.notif-item-body { color:var(--t2);line-height:1.4;margin-bottom:4px; }
+.notif-item-meta { display:flex;justify-content:space-between;color:var(--t3);font-size:8px; }
+
+/* ══ NEWS DETAIL MODAL ════════════════════════════════════════════════════ */
+#news-modal {
+  display:none;position:fixed;inset:0;background:rgba(3,8,15,0.7);
+  backdrop-filter:blur(15px);align-items:center;justify-content:center;z-index:900;
+}
+#news-modal.open { display:flex; }
+.news-modal-box {
+  width:clamp(300px,90vw,500px);background:rgba(6,15,30,0.94);
+  border:1px solid var(--border2);border-radius:12px;
+  box-shadow:0 20px 50px rgba(0,0,0,0.5);display:flex;flex-direction:column;max-height:80vh;
+}
+.news-modal-hdr {
+  display:flex;align-items:center;justify-content:space-between;
+  padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);
+}
+.news-modal-title { font-size:12px;font-weight:700;letter-spacing:1px;color:var(--t1) }
+.news-modal-body { padding:16px;overflow-y:auto }
 </style>
 </head>
 <body>
@@ -1254,6 +1335,11 @@ html[data-tier="ultra"] #ops-picture{display:block}
 <!-- ══ APP SHELL ══ -->
 <div id="app-shell">
 
+  <!-- TICKER TAPE -->
+  <div id="ticker-tape">
+    <div class="ticker-wrap" id="ticker-wrap"></div>
+  </div>
+
   <!-- HEADER -->
   <div id="hdr">
     <div class="hdr-logo">
@@ -1269,6 +1355,23 @@ html[data-tier="ultra"] #ops-picture{display:block}
       <div class="scan-timer">NEXT <span id="scan-cdwn">--</span></div>
       <button id="btn-install" class="install-btn" onclick="openInstallModal()" title="Install FredAI on this device" style="display:none">+ Install</button>
       <button id="btn-system-refresh" onclick="systemRefresh()" class="install-btn" style="background:rgba(0,180,255,.08);border:1px solid rgba(0,180,255,.3);color:var(--blue);font-weight:600;margin-right:6px" title="Pull updates from Github and restart Fred">↻ Sync</button>
+      
+      <!-- NOTIFICATION BELL -->
+      <div class="notif-bell-wrapper" id="notif-bell-btn" onclick="toggleNotifDropdown()">
+        <span class="notif-bell-icon">🔔</span>
+        <span class="notif-badge" id="notif-unread-count" style="display:none">0</span>
+        <!-- Dropdown menu -->
+        <div class="notif-dropdown" id="notif-dropdown-el">
+          <div class="notif-hdr">
+            <span>Alerts & Signal Stream</span>
+            <button class="notif-clear-btn" onclick="clearNotifications(event)">Clear All</button>
+          </div>
+          <div class="notif-list" id="notif-list-container">
+            <div class="notif-empty">No new signals. Always listening...</div>
+          </div>
+        </div>
+      </div>
+
       <div class="user-badge" id="user-badge" onclick="openSettingsModal()">-- ×</div>
       <div class="ws-dot off" id="ws-dot" title="WebSocket"></div>
     </div>
@@ -1770,6 +1873,32 @@ html[data-tier="ultra"] #ops-picture{display:block}
   </div>
 </div>
 
+<!-- NEWS DETAIL MODAL -->
+<div id="news-modal">
+  <div class="news-modal-box">
+    <div class="news-modal-hdr">
+      <h2 class="news-modal-title" id="news-modal-title">NEWS SUMMARY</h2>
+      <button class="install-close" onclick="closeNewsModal()" style="margin:0;padding:2px 8px;font-size:10px">Close</button>
+    </div>
+    <div class="news-modal-body" id="news-modal-body">
+      <div id="news-meta-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;font-size:11px;color:var(--t2)">
+        <div><b>Source:</b> <span id="nm-source"></span></div>
+        <div><b>Published:</b> <span id="nm-date"></span></div>
+        <div><b>Category:</b> <span id="nm-category"></span></div>
+        <div><b>Sentiment:</b> <span id="nm-sentiment"></span></div>
+        <div id="nm-ticker-row" style="grid-column: span 2; display: none;"><b>Associated Ticker:</b> <span id="nm-ticker" style="color:var(--blue);cursor:pointer;text-decoration:underline"></span></div>
+      </div>
+      <div id="nm-content" style="font-size:13px;color:var(--t1);line-height:1.6;margin-bottom:20px;border-top:1px solid var(--border);padding-top:12px"></div>
+    </div>
+    <div class="news-modal-footer" style="display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--border);padding-top:12px;padding-right:16px;padding-bottom:12px">
+      <button class="login-btn" id="btn-nm-visit" onclick="visitNewsSource()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Read Article ↗</button>
+      <button class="login-btn" id="btn-nm-email" onclick="emailNewsItem()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0;display:none">Email Alert</button>
+      <button class="login-btn" id="btn-nm-research" onclick="researchNewsTicker()" style="background:var(--purple);padding:6px 12px;font-size:11px;margin:0;display:none">Research Equity</button>
+      <button class="install-close" onclick="closeNewsModal()" style="margin:0">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- FRED DRAWER -->
 <div id="fred-drawer"></div>
 
@@ -1847,19 +1976,40 @@ console.log(`[FredAI] Display tier: ${TIER} | Touch: ${IS_TOUCH} | DPR: ${window
 socket.on('connect', () => { g('ws-dot').classList.remove('off'); loadInitData(); });
 socket.on('disconnect', () => g('ws-dot').classList.add('off'));
 socket.on('market_update', d => {
-  if (d.quotes) { quotesCache = d.quotes; updateIdxBar(d.quotes); updateNanoQuotes(d.quotes); }
+  if (d.quotes) { quotesCache = d.quotes; updateIdxBar(d.quotes); updateTickerTape(d.quotes); updateNanoQuotes(d.quotes); }
   if (d.sector) renderHeatmap(d.sector);
   if (d.stats) updateKPIs(d.stats, d.risk_level);
   if (d.trending) { trendData = d.trending; if (activeTab==='trending') renderTrending(d.trending); renderUltraTrend(d.trending); }
   if (d.macro) renderMacroStrip(d.macro);
 });
-socket.on('new_signal', s => { allSignals.unshift(s); renderSigs(); g('sig-badge').textContent = allSignals.length; updateNanoSignal(allSignals); });
+socket.on('new_signal', s => {
+  allSignals.unshift(s);
+  renderSigs();
+  g('sig-badge').textContent = allSignals.length;
+  updateNanoSignal(allSignals);
+  
+  const sentimentEmoji = s.sentiment === 'positive' ? '📈' : s.sentiment === 'negative' ? '📉' : '📊';
+  addNotification(
+    'signal',
+    `${sentimentEmoji} New ${s.asset || ''} Signal`,
+    s.content || 'A new signal has been registered.',
+    new Date(s.timestamp || Date.now()).toLocaleTimeString()
+  );
+});
 socket.on('summary_update', d => {
   renderSummary(d.summary, d.timestamp);
   if (d.stats) updateKPIs(d.stats, d.risk_level);
   if (d.next_scan) nextScanISO = d.next_scan;
 });
-socket.on('alert', a => prependAlert(a));
+socket.on('alert', a => {
+  prependAlert(a);
+  addNotification(
+    'alert',
+    `⚠ ${a.title || 'Market Alert'}`,
+    a.message || 'Significant trend change spotted.',
+    new Date(a.timestamp || Date.now()).toLocaleTimeString()
+  );
+});
 socket.on('timeline_update', d => { if (sentChart && d.timeline) updateSentChart(d.timeline); });
 socket.on('chat_response', d => {
   removeThinking(); appendMsg('fred', d.message);
@@ -2079,6 +2229,11 @@ async function checkGoogleStatus() {
     const btnEmail = g('btn-email-report');
     if (btnEmail) {
       btnEmail.style.display = (isLinked && window._activeAnalystTicker) ? 'inline-block' : 'none';
+    }
+    
+    const btnNmEmail = g('btn-nm-email');
+    if (btnNmEmail) {
+      btnNmEmail.style.display = (isLinked && currentNewsItem) ? 'inline-block' : 'none';
     }
   } catch (e) {
     console.error('Failed to check Google status:', e);
@@ -2372,6 +2527,7 @@ async function loadInitData() {
     }
     quotesCache = d.quotes||{};
     updateIdxBar(quotesCache);
+    updateTickerTape(quotesCache);
     updatePortfolioUI(d.portfolio||{});
     allSignals = d.signals||[];
     trendData = d.trending||[];
@@ -3366,13 +3522,14 @@ function renderNewsPreview(items) {
     el.innerHTML='<div style="color:var(--t3);font-size:var(--font-xs);padding:12px">News loading — first fetch in progress...</div>';
     return;
   }
+  window._newsCache = items;
   if (badge) badge.textContent = items.length;
-  el.innerHTML = items.map(item => {
+  el.innerHTML = items.map((item, index) => {
     const sent = item.sentiment_score || 0;
     const sentClass = sent>0.1?'pos':sent<-0.1?'neg':'';
     const sentText = sent>0.1?`▲${sent.toFixed(2)}`:sent<-0.1?`▼${sent.toFixed(2)}`:'';
     const pub = relTime(item.published_at);
-    return `<div class="news-item" onclick="window.open('${esc(item.url)}','_blank','noopener')">
+    return `<div class="news-item" onclick="openNewsModal(${index})">
       <div class="ni-source">${esc(item.source||'')} · ${esc(item.category||'')}</div>
       <div class="ni-title">${esc(item.title)}</div>
       <div class="ni-meta">
@@ -3842,6 +3999,225 @@ function initTranslationObserver() {
   });
 }
 
+
+// ── TICKER TAPE SCROLLING INDEX STRIP ─────────────────────────────────────
+function updateTickerTape(q) {
+  const tapeSymbols = ["SPY", "QQQ", "BTC-USD", "ETH-USD", "GC=F", "CL=F", "EURUSD=X", "AUDUSD=X", "BHP.AX", "CBA.AX"];
+  const displayNames = {
+    "SPY": "S&P 500", "QQQ": "Nasdaq", "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum",
+    "GC=F": "Gold", "CL=F": "Crude Oil", "EURUSD=X": "EUR/USD", "AUDUSD=X": "AUD/USD",
+    "BHP.AX": "BHP Group", "CBA.AX": "Commonwealth Bank"
+  };
+  
+  const items = tapeSymbols.map(sym => {
+    const d = q[sym];
+    if (!d) return '';
+    const pos = d.change_pct >= 0;
+    const priceStr = d.price != null ? (sym.includes('USD') || sym.includes('=X') ? d.price.toFixed(4) : d.price.toFixed(2)) : '--';
+    const pctStr = d.change_pct != null ? `${pos ? '+' : ''}${d.change_pct.toFixed(2)}%` : '--';
+    const color = pos ? 'var(--green)' : 'var(--red)';
+    const arrow = pos ? '▲' : '▼';
+    
+    return `<div class="ticker-item">${displayNames[sym] || sym}: <span style="color:${color}">${priceStr} ${arrow} ${pctStr}</span></div>`;
+  }).filter(Boolean);
+  
+  if (!items.length) return;
+  const doubleItems = [...items, ...items].join('');
+  const wrap = g('ticker-wrap');
+  if (wrap) wrap.innerHTML = doubleItems;
+}
+
+// ── NOTIFICATION DROPDOWN SYSTEM ──────────────────────────────────────────
+let unreadNotificationsCount = 0;
+
+function toggleNotifDropdown() {
+  const dropdown = g('notif-dropdown-el');
+  if (!dropdown) return;
+  const isOpen = dropdown.classList.contains('open');
+  dropdown.classList.toggle('open', !isOpen);
+  if (!isOpen) {
+    unreadNotificationsCount = 0;
+    updateNotifBadge();
+  }
+}
+
+// Close notifications when clicking outside
+document.addEventListener('click', (e) => {
+  const wrapper = g('notif-bell-btn');
+  const dropdown = g('notif-dropdown-el');
+  if (wrapper && dropdown && !wrapper.contains(e.target)) {
+    dropdown.classList.remove('open');
+  }
+});
+
+function addNotification(type, title, message, timeStr) {
+  const container = g('notif-list-container');
+  if (!container) return;
+  const empty = container.querySelector('.notif-empty');
+  if (empty) empty.remove();
+  
+  const item = document.createElement('div');
+  item.className = 'notif-item';
+  
+  let typeLabel = '';
+  if (type === 'signal') typeLabel = '<span style="color:var(--green);font-size:8px;border:1px solid rgba(0,255,136,0.2);padding:1px 3px;border-radius:3px">SIGNAL</span>';
+  else if (type === 'alert') typeLabel = '<span style="color:var(--red);font-size:8px;border:1px solid rgba(255,59,92,0.2);padding:1px 3px;border-radius:3px">ALERT</span>';
+  
+  item.innerHTML = `
+    <div class="notif-item-title">${esc(title)}</div>
+    <div class="notif-item-body">${esc(message)}</div>
+    <div class="notif-item-meta">
+      ${typeLabel}
+      <span>${esc(timeStr)}</span>
+    </div>
+  `;
+  
+  container.insertBefore(item, container.firstChild);
+  
+  const items = container.querySelectorAll('.notif-item');
+  if (items.length > 30) {
+    items[items.length - 1].remove();
+  }
+  
+  const dropdown = g('notif-dropdown-el');
+  if (dropdown && !dropdown.classList.contains('open')) {
+    unreadNotificationsCount++;
+    updateNotifBadge();
+  }
+}
+
+function updateNotifBadge() {
+  const badge = g('notif-unread-count');
+  if (!badge) return;
+  badge.textContent = unreadNotificationsCount;
+  badge.style.display = unreadNotificationsCount > 0 ? 'block' : 'none';
+}
+
+function clearNotifications(event) {
+  if (event) event.stopPropagation();
+  const container = g('notif-list-container');
+  if (container) container.innerHTML = '<div class="notif-empty">No new signals. Always listening...</div>';
+  unreadNotificationsCount = 0;
+  updateNotifBadge();
+}
+
+// ── NEWS DETAIL MODAL SYSTEM ──────────────────────────────────────────────
+let currentNewsItem = null;
+
+function openNewsModal(index) {
+  const item = window._newsCache ? window._newsCache[index] : null;
+  if (!item) return;
+  
+  currentNewsItem = item;
+  
+  g('nm-source').textContent = item.source || 'Unknown';
+  g('nm-date').textContent = relTime(item.published_at) || 'Recent';
+  g('nm-category').textContent = item.category || 'General';
+  
+  const sent = item.sentiment_score || 0;
+  const sentEl = g('nm-sentiment');
+  if (sent > 0.1) {
+    sentEl.innerHTML = `<span style="color:var(--green);font-weight:bold">Positive (▲${sent.toFixed(2)})</span>`;
+  } else if (sent < -0.1) {
+    sentEl.innerHTML = `<span style="color:var(--red);font-weight:bold">Negative (▼${sent.toFixed(2)})</span>`;
+  } else {
+    sentEl.innerHTML = `<span style="color:var(--t3)">Neutral (${sent.toFixed(2)})</span>`;
+  }
+  
+  const ticker = item.symbol || item.asset || '';
+  const tickerRow = g('nm-ticker-row');
+  const tickerEl = g('nm-ticker');
+  const btnResearch = g('btn-nm-research');
+  
+  if (ticker) {
+    tickerEl.textContent = ticker;
+    tickerRow.style.display = 'block';
+    if (btnResearch) btnResearch.style.display = 'inline-block';
+    
+    tickerEl.onclick = () => {
+      closeNewsModal();
+      openAnalystReport(ticker);
+    };
+  } else {
+    tickerRow.style.display = 'none';
+    if (btnResearch) btnResearch.style.display = 'none';
+  }
+  
+  g('nm-content').textContent = item.title || '';
+  
+  const btnEmail = g('btn-nm-email');
+  if (btnEmail) {
+    btnEmail.style.display = window._googleLinked ? 'inline-block' : 'none';
+  }
+  
+  g('news-modal').classList.add('open');
+}
+
+function closeNewsModal() {
+  const modal = g('news-modal');
+  if (modal) modal.classList.remove('open');
+  currentNewsItem = null;
+}
+
+function visitNewsSource() {
+  if (currentNewsItem && currentNewsItem.url) {
+    window.open(currentNewsItem.url, '_blank', 'noopener');
+  }
+}
+
+function researchNewsTicker() {
+  if (currentNewsItem) {
+    const ticker = currentNewsItem.symbol || currentNewsItem.asset;
+    if (ticker) {
+      closeNewsModal();
+      openAnalystReport(ticker);
+    }
+  }
+}
+
+async function emailNewsItem() {
+  if (!currentNewsItem) return;
+  const btn = g('btn-nm-email');
+  if (!btn) return;
+  const originalText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+  try {
+    const sent = currentNewsItem.sentiment_score || 0;
+    const sentStr = sent > 0.1 ? `Positive (▲${sent.toFixed(2)})` : sent < -0.1 ? `Negative (▼${sent.toFixed(2)})` : 'Neutral';
+    const ticker = currentNewsItem.symbol || currentNewsItem.asset || 'Global';
+    const htmlBody = `
+      <div style="font-family:sans-serif;padding:20px;color:#111">
+        <h2>FredAI News Alert: \${esc(currentNewsItem.title)}</h2>
+        <p><b>Source:</b> \${esc(currentNewsItem.source)}</p>
+        <p><b>Category:</b> \${esc(currentNewsItem.category)}</p>
+        <p><b>Sentiment:</b> \${sentStr}</p>
+        <p><b>Associated Ticker:</b> \${esc(ticker)}</p>
+        <p><a href="\${esc(currentNewsItem.url)}" style="color:#0088cc;text-decoration:underline">Read original article ↗</a></p>
+      </div>
+    `;
+    const r = await fetch('/api/google/export/gmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticker: ticker,
+        subject: `[FredAI Alert] \${currentNewsItem.title.slice(0, 50)}...`,
+        html: htmlBody
+      })
+    });
+    const d = await r.json();
+    if (r.ok) {
+      alert(`Alert successfully emailed to \${d.recipient}!`);
+    } else {
+      alert(`Failed to send email: \${d.error || 'Unknown error'}`);
+    }
+  } catch(e) {
+    alert('Error sending email alert.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+}
 
 // ── STOCK TICKER LINKIFICATION & AI REPORT OVERLAY ────────────────────────
 let currentAnalystReportText = '';

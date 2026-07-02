@@ -67,6 +67,7 @@ WATCHLIST = [
     "JPM", "GS", "BAC",
     "SPY", "QQQ",
     "BTC-USD", "ETH-USD",
+    "GC=F", "CL=F", "EURUSD=X", "AUDUSD=X",
     # ASX Blue Chips (prices in AUD via Yahoo Finance .AX suffix)
     "BHP.AX", "CBA.AX", "CSL.AX", "WBC.AX", "ANZ.AX",
     "NAB.AX", "WES.AX", "RIO.AX", "FMG.AX", "MQG.AX",
@@ -79,6 +80,7 @@ DISPLAY_SYMBOLS = {
     "JPM": "JPMorgan", "GS": "Goldman Sachs", "BAC": "Bank of America",
     "SPY": "S&P 500 ETF", "QQQ": "Nasdaq ETF",
     "BTC-USD": "Bitcoin", "ETH-USD": "Ethereum",
+    "GC=F": "Gold", "CL=F": "Crude Oil", "EURUSD=X": "EUR/USD", "AUDUSD=X": "AUD/USD",
     # ASX
     "BHP.AX": "BHP Group", "CBA.AX": "Commonwealth Bank", "CSL.AX": "CSL",
     "WBC.AX": "Westpac", "ANZ.AX": "ANZ", "NAB.AX": "NAB",

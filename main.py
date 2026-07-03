@@ -139,7 +139,7 @@ AI_UNIVERSE = {
     "Autonomous Vehicles": {
         "color": "#9b59ff",
         "desc": "Self-driving, EV, and mobility AI companies",
-        "tickers": ["TSLA", "UBER", "LYFT", "RIVN", "LCID", "GM", "F", "MOBILEYE", "MBLY"],
+        "tickers": ["TSLA", "UBER", "LYFT", "RIVN", "LCID", "GM", "F", "MBLY"],
     },
     "Consumer AI": {
         "color": "#00ff88",

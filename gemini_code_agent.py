@@ -132,8 +132,6 @@ class GeminiCodeAgent:
         self.max_iterations = max_iterations
 
     def implement(self, task: str, context: str = "") -> dict:
-        if not self.api_key:
-            return {"success": False, "summary": "GEMINI_API_KEY not configured", "files_changed": []}
 
         print(f"\n[GeminiCodeAgent] Task: {task[:80]}")
         log = []
@@ -214,7 +212,7 @@ After implementing, call 'done' with a summary of what changed."""
                         available_models = [m["name"] for m in models_res.json().get("models", [])]
                     
                     selected_model = None
-                    for pref in ["qwen3.5-hermes", "qwen3.5", "qwen3-8b-hermes", "gemma3-hermes", "gemma3:4b", "gemma4", "llama3.2"]:
+                    for pref in ["qwen3-4b-hermes", "gemma3-hermes", "qwen3:4b", "gemma3:4b", "qwen3.5-hermes", "qwen3.5", "qwen3-8b-hermes", "gemma4", "llama3.2"]:
                         for m in available_models:
                             if m.startswith(pref):
                                 selected_model = m
@@ -248,8 +246,12 @@ After implementing, call 'done' with a summary of what changed."""
                         "model": selected_model,
                         "messages": ollama_msgs,
                         "format": "json",
+                        "options": {
+                            "num_ctx": 8192,
+                            "temperature": 0.0
+                        },
                         "stream": False
-                    }, timeout=300)
+                    }, timeout=600)
                     if ollama_res.status_code == 200:
                         reply = ollama_res.json().get("message", {}).get("content", "").strip()
                         text = reply

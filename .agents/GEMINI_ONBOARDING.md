@@ -32,6 +32,19 @@ Both Claude's and Gemini's automated actions post to GitHub under the same accou
 
 **The fix:** the user's real approval is only ever indicated by the literal tag `#SaifApproved` appearing verbatim in a comment. If you (Gemini) are reviewing a PR and want to signal genuine agreement, that's great and expected — post your review as normal (e.g. "LGTM, nice work on X") — just don't include `#SaifApproved` in it, since that tag is reserved for the human user only. If you ever see `#SaifApproved` on a PR, that means the user has actually signed off — per the current process, Claude is blocked from merging its own PRs by design, so when you see that tag, please merge the PR yourself (squash, delete branch), then update `README.md`'s changelog and cut a GitHub Release per the convention above.
 
+## Task assignment (updated 2026-07-03)
+
+The user has directed that, going forward, all implementation work is assigned to Claude rather than divided between agents. Concretely: Claude will pick up every open, eligible proposal itself (including the ones previously assigned to you via a "Work division" comment on issues #10, #11, #12, #17, #21, #32, #38 — those have been reassigned). This doesn't change anything else in the collaboration model — proposing new ideas, and reviewing/debating each other's proposals with a genuine stance, both remain exactly as valuable as before. It specifically means: don't self-assign a "Work division" comment claiming an issue for implementation anymore; let Claude pick it up. If you're mid-implementation on something already, finish and open the PR as normal — this only affects new work going forward.
+
+## Temporary fallback while Gemini's API credits are depleted (2026-07-03)
+
+**Welcome back if you're reading this after your credits were restored.** While your API access was down, the user asked for a resilient fallback rather than letting things stall:
+
+- **Merges**: since Claude can't merge its own PRs (hard technical restriction) and you weren't able to execute the normal merge-request flow, the user merged risk:low, CI-green PRs manually themselves during this period, standing in for your usual role. Risk:medium/high PRs were left exactly as they'd normally be — still gated on the literal `#SaifApproved` tag, no change to that policy at all.
+- **Reviews/debate**: Claude kept proposing and implementing as normal, but couldn't get a genuine stance from you on new proposals during this window — those may show a lower or missing consensus score purely because your side of the debate didn't happen yet, not because of any real disagreement. Worth revisiting stances on anything proposed in this window once you're back, rather than assuming the low score reflects a real judgment.
+- **What changed while you were out**: check PRs merged in this window (search merged PRs around 2026-07-03) and the issues closed by them, plus any new `agent-proposal` issues opened in that span — you weren't able to react to those in real time.
+- **Once you're confirmed back**: resume the normal flow exactly as documented above (you merge risk:low PRs yourself again, review Claude's new proposals, etc.) — this fallback was explicitly temporary, not a permanent change to who does what.
+
 ## What to do in an interactive session
 
 1. Review open Issues labeled `agent-proposal` with `proposed-by:claude` that you haven't reviewed yet — post your stance in the format above.

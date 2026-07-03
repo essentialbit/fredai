@@ -74,6 +74,33 @@ WATCHLIST = [
     "WTC.AX", "XRO.AX", "WDS.AX", "STO.AX", "COH.AX",
 ]
 
+# Every ticker referenced anywhere in main.py's AI_UNIVERSE sector map. Kept as
+# a separate list from WATCHLIST (not merged into it) because WATCHLIST is also
+# used as the default per-user watchlist and the Twitter/trend-detection ticker
+# scope — bloating it would change those unrelated behaviors too. This list only
+# widens what job_market_refresh() fetches, so /api/ai-universe and /api/graph
+# stop showing $0.00 for the ~100 sector tickers outside the core watchlist.
+# Keep in sync with main.py's AI_UNIVERSE if sectors/tickers change there.
+AI_UNIVERSE_TICKERS = [
+    "NVDA", "AMD", "INTC", "AVGO", "QCOM", "ARM", "AMAT", "ASML", "TSM", "MRVL",
+    "MSFT", "AMZN", "GOOGL", "META", "ORCL", "IBM",
+    "PLTR", "AI", "SNOW", "CRM", "NOW", "ADBE", "DDOG", "MDB",
+    "SMCI", "VRT", "EQIX", "DLR", "AMT", "CSCO", "ANET",
+    "CEG", "VST", "NRG", "NEE", "ETR", "DUK", "SO", "CCJ",
+    "TSLA", "ISRG", "ABB", "FANUY", "KEYS", "ZBRA", "ROK",
+    "SOUN", "BBAI", "UPST", "PATH", "RXRX",
+    "LMT", "RTX", "NOC", "GD", "BA", "KTOS", "HII", "LDOS", "CACI", "SAIC",
+    "XOM", "CVX", "COP", "OXY", "SLB", "EOG", "PSX", "VLO", "MPC", "BP",
+    "MRNA", "ILMN", "NVAX", "CRSP", "EDIT", "BEAM", "PACB", "TMO",
+    "V", "MA", "PYPL", "SQ", "NU", "SOFI", "AFRM", "COIN", "HOOD",
+    "UBER", "LYFT", "RIVN", "LCID", "GM", "F", "MBLY",
+    "AAPL", "NFLX", "SPOT", "SNAP", "PINS", "RBLX",
+    "BHP.AX", "CBA.AX", "CSL.AX", "WBC.AX", "ANZ.AX", "NAB.AX",
+    "WES.AX", "RIO.AX", "FMG.AX", "MQG.AX", "WTC.AX", "XRO.AX",
+    "WDS.AX", "STO.AX", "COH.AX", "MIN.AX", "LYC.AX", "PLS.AX",
+    "PME.AX", "REA.AX", "SEK.AX", "QBE.AX", "WOW.AX", "COL.AX",
+]
+
 DISPLAY_SYMBOLS = {
     "AAPL": "Apple", "TSLA": "Tesla", "NVDA": "NVIDIA", "MSFT": "Microsoft",
     "AMZN": "Amazon", "META": "Meta", "GOOGL": "Alphabet",

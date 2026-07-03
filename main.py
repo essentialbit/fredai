@@ -18,7 +18,7 @@ from memory_store import (
     get_watchlist, add_to_watchlist, remove_from_watchlist,
     get_portfolio, upsert_portfolio,
     get_user_interests, bump_interest, decay_interests,
-    get_trending_assets,
+    get_trending_assets, get_signals_with_fallback, get_trending_assets_with_fallback, get_sentiment_snapshot,
     verify_user, create_user, get_user,
     get_user_by_oauth, create_oauth_user,
     log_consent, has_consent, export_user_data, delete_user_data, prune_old_data,
@@ -691,7 +691,7 @@ def api_init():
     portfolio = calculate_portfolio_value(holdings, quotes)
     watchlist = get_watchlist(uid)
     watchlist_symbols = [w["symbol"] for w in watchlist]
-    signals = get_signals(hours=4, limit=50)
+    signals = get_signals_with_fallback(hours=4, limit=50)
     stats = compute_sentiment_stats(signals)
     summary = get_latest_summary()
     timeline = get_sentiment_timeline(hours=24)
@@ -699,7 +699,7 @@ def api_init():
     sector = get_sector_snapshot(quotes)
     risk = get_risk_level(stats, alerts)
     interests = get_user_interests(uid, limit=10)
-    trending = get_trending_assets(hours=4, limit=15)
+    trending = get_trending_assets_with_fallback(hours=4, limit=15)
     next_scan = (_last_scan + timedelta(hours=SCAN_INTERVAL_HOURS)).isoformat() if _last_scan > datetime.min else None
 
     news_preview = get_news(hours=24, limit=6)
@@ -753,7 +753,7 @@ def api_summaries():
 @login_required
 def api_trending():
     hours = min(max(int(request.args.get("hours", 4)), 1), 168)
-    trending = get_trending_assets(hours=hours, limit=20)
+    trending = get_trending_assets_with_fallback(hours=hours, limit=20)
     quotes = _quotes_cache or {}
     for t in trending:
         q = quotes.get(t["asset"])
@@ -783,12 +783,16 @@ def api_watchlist():
         return jsonify({"status": "ok"})
     wl = get_watchlist(uid)
     quotes = _quotes_cache or {}
+    sentiment = get_sentiment_snapshot([w["symbol"] for w in wl], hours=24)
     result = []
     for w in wl:
         entry = dict(w)
         q = quotes.get(w["symbol"])
         if q:
             entry.update(q)
+        s = sentiment.get(w["symbol"])
+        if s:
+            entry["sentiment"] = s
         result.append(entry)
     return jsonify(result)
 
@@ -812,11 +816,15 @@ def api_portfolio():
         return jsonify({"status": "ok"})
     holdings = get_portfolio(uid)
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    sentiment = get_sentiment_snapshot([p["symbol"] for p in portfolio.get("positions", [])], hours=24)
     for pos in portfolio.get("positions", []):
         si = get_latest_short_interest(pos["symbol"])
         if si:
             pos["short_float_pct"] = si["short_float_pct"]
             pos["short_ratio"] = si["short_ratio"]
+        s = sentiment.get(pos["symbol"])
+        if s:
+            pos["sentiment"] = s
     return jsonify(portfolio)
 
 
@@ -1641,18 +1649,24 @@ def api_ai_universe():
     for name, meta in AI_UNIVERSE.items():
         all_syms.extend(meta["tickers"])
 
+    sentiment = get_sentiment_snapshot(list(set(all_syms)), hours=24)
+
     # Add quotes for all AI universe tickers present in cache
     for name, meta in AI_UNIVERSE.items():
         tickers = []
         for sym in meta["tickers"]:
             q = _quotes_cache.get(sym, {})
-            tickers.append({
+            entry = {
                 "symbol": sym,
                 "name": q.get("name", sym),
                 "price": q.get("price", 0),
                 "change_pct": q.get("change_pct", 0),
                 "change": q.get("change", 0),
-            })
+            }
+            s = sentiment.get(sym)
+            if s:
+                entry["sentiment"] = s
+            tickers.append(entry)
         sectors.append({
             "name": name,
             "color": meta["color"],
@@ -2070,12 +2084,12 @@ def job_market_refresh():
     try:
         quotes = fetch_quotes()
         _quotes_cache = quotes
-        signals_4h = get_signals(hours=4)
+        signals_4h = get_signals_with_fallback(hours=4)
         stats = compute_sentiment_stats(signals_4h)
         alerts = get_recent_alerts(limit=5)
         risk = get_risk_level(stats, alerts)
         sector = get_sector_snapshot(quotes)
-        trending = get_trending_assets(hours=4, limit=15)
+        trending = get_trending_assets_with_fallback(hours=4, limit=15)
 
         # Nasdaq macro data (cached 1h)
         try:
@@ -2127,7 +2141,7 @@ def job_scan_cycle():
             for alert in alerts:
                 socketio.emit("alert", alert)
 
-            all_signals = get_signals(hours=4)
+            all_signals = get_signals_with_fallback(hours=4)
             summary_text = generate_summary(all_signals, quotes)
             stats = compute_sentiment_stats(all_signals)
             risk = get_risk_level(stats, alerts)
@@ -2144,7 +2158,7 @@ def job_scan_cycle():
                 signal_count=len(all_signals),
             )
 
-            trending = get_trending_assets(hours=4, limit=15)
+            trending = get_trending_assets_with_fallback(hours=4, limit=15)
             timeline = get_sentiment_timeline(hours=24)
 
             try:

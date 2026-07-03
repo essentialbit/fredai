@@ -513,6 +513,121 @@ def get_trending_assets(hours: int = 4, limit: int = 20) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def get_news_as_signals(hours: int = 4, asset: str = None, limit: int = 200) -> list[dict]:
+    """Derive signal-shaped records from news_items (RSS feeds -- free, no
+    paywall, already sentiment-scored via FinBERT/VADER) for use when
+    X/Twitter signal volume is too sparse to be meaningful (e.g. an invalid/
+    expired X bearer token). news_items can reference multiple tickers via a
+    comma-separated `tickers` field; each (item, ticker) pair becomes one
+    signal-shaped record here so downstream code (compute_sentiment_stats,
+    trending aggregation) can treat this exactly like a real signals row."""
+    items = get_news(hours=hours, limit=limit)
+    results = []
+    for item in items:
+        tickers = [t.strip() for t in (item.get("tickers") or "").split(",") if t.strip()]
+        if asset:
+            if asset not in tickers:
+                continue
+            tickers = [asset]
+        score = item.get("sentiment_score") or 0.0
+        sig_type = "bullish" if score >= 0.05 else "bearish" if score <= -0.05 else "neutral"
+        for t in tickers:
+            results.append({
+                "timestamp": item.get("published_at"),
+                "source": f"news:{item.get('source') or 'unknown'}",
+                "asset": t,
+                "content": item.get("title"),
+                "author": item.get("source"),
+                "sentiment_score": score,
+                "signal_type": sig_type,
+                "sentiment_model": item.get("sentiment_model", "vader"),
+            })
+    return results[:limit]
+
+
+def get_signals_with_fallback(hours: int = 4, asset: str = None, limit: int = 200, min_real: int = 5) -> list[dict]:
+    """Real X/Twitter signals when there's enough volume to be meaningful;
+    supplemented with news-derived signals (get_news_as_signals) when
+    Twitter volume is too sparse -- e.g. an invalid/expired X bearer token
+    shouldn't leave Overview/Trending/etc showing empty for a user whose
+    own X credentials aren't the issue."""
+    real = get_signals(hours=hours, asset=asset, limit=limit)
+    if len(real) >= min_real:
+        return real
+    news_signals = get_news_as_signals(hours=hours, asset=asset, limit=limit)
+    combined = real + news_signals
+    return combined[:limit]
+
+
+def get_trending_assets_with_fallback(hours: int = 4, limit: int = 20, min_real: int = 5) -> list[dict]:
+    """Same fallback reasoning as get_signals_with_fallback, applied to the
+    trending-assets aggregation (ranked by signal volume + sentiment)."""
+    real = get_signals(hours=hours, limit=1000)
+    if len(real) >= min_real:
+        return get_trending_assets(hours=hours, limit=limit)
+
+    combined = real + get_news_as_signals(hours=hours, limit=1000)
+    agg: dict = {}
+    for s in combined:
+        a = s.get("asset")
+        if not a:
+            continue
+        d = agg.setdefault(a, {"scores": [], "bullish": 0, "total": 0, "latest": ""})
+        d["scores"].append(s.get("sentiment_score") or 0)
+        d["total"] += 1
+        if s.get("signal_type") == "bullish":
+            d["bullish"] += 1
+        ts = s.get("timestamp") or ""
+        if ts > d["latest"]:
+            d["latest"] = ts
+
+    rows = [
+        {
+            "asset": a,
+            "signal_count": d["total"],
+            "avg_sentiment": sum(d["scores"]) / len(d["scores"]) if d["scores"] else 0,
+            "bullish_pct": d["bullish"] * 100.0 / d["total"] if d["total"] else 0,
+            "latest": d["latest"],
+        }
+        for a, d in agg.items()
+    ]
+    rows.sort(key=lambda r: r["signal_count"], reverse=True)
+    return rows[:limit]
+
+
+def get_sentiment_snapshot(symbols: list[str], hours: int = 24, min_real: int = 5) -> dict[str, dict]:
+    """Per-symbol {avg_sentiment, signal_type, signal_count} for Watchlist/
+    Portfolio/AI Universe sentiment overlays -- one shared query covering all
+    requested symbols (via get_signals_with_fallback's real-or-news blend)
+    rather than a separate DB round-trip per symbol."""
+    if not symbols:
+        return {}
+    combined = get_signals_with_fallback(hours=hours, limit=2000, min_real=min_real)
+    wanted = set(symbols)
+    agg: dict = {}
+    for s in combined:
+        a = s.get("asset")
+        if a not in wanted:
+            continue
+        d = agg.setdefault(a, {"scores": [], "bullish": 0, "bearish": 0, "total": 0})
+        d["scores"].append(s.get("sentiment_score") or 0)
+        d["total"] += 1
+        if s.get("signal_type") == "bullish":
+            d["bullish"] += 1
+        elif s.get("signal_type") == "bearish":
+            d["bearish"] += 1
+
+    result = {}
+    for sym in symbols:
+        d = agg.get(sym)
+        if not d or not d["total"]:
+            continue
+        avg = sum(d["scores"]) / len(d["scores"])
+        sig_type = "bullish" if d["bullish"] > d["bearish"] else "bearish" if d["bearish"] > d["bullish"] else "neutral"
+        result[sym] = {"avg_sentiment": round(avg, 3), "signal_type": sig_type, "signal_count": d["total"]}
+    return result
+
+
 def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
     since = datetime.utcnow() - timedelta(hours=hours)
     with get_conn() as conn:
@@ -969,7 +1084,11 @@ def get_news(category: str = None, ticker: str = None, hours: int = 24,
     from datetime import datetime, timedelta
     cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
     with get_conn() as conn:
-        base = "SELECT * FROM news_items WHERE published_at > ?"
+        # REPLACE normalizes published_at's two coexisting separator formats
+        # ("2026-07-03 15:50:00" vs "2026-07-03T15:50:00") before comparing --
+        # see prune_stale_news's docstring for why naive string comparison is
+        # wrong here (space < 'T' lexicographically regardless of actual time).
+        base = "SELECT * FROM news_items WHERE REPLACE(published_at, 'T', ' ') > ?"
         params: list = [cutoff]
         if category and category != "all":
             base += " AND category=?"
@@ -986,7 +1105,7 @@ def count_news(category: str = None, ticker: str = None, hours: int = 24) -> int
     from datetime import datetime, timedelta
     cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
     with get_conn() as conn:
-        base = "SELECT COUNT(*) FROM news_items WHERE published_at > ?"
+        base = "SELECT COUNT(*) FROM news_items WHERE REPLACE(published_at, 'T', ' ') > ?"
         params: list = [cutoff]
         if category and category != "all":
             base += " AND category=?"

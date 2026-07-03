@@ -3,7 +3,13 @@ import os
 import time
 import requests
 from datetime import datetime, timezone
-from config import WATCHLIST, DISPLAY_SYMBOLS
+from config import WATCHLIST, DISPLAY_SYMBOLS, AI_UNIVERSE_TICKERS
+
+# Full scheduled-refresh target: core watchlist plus every AI_UNIVERSE sector
+# ticker, deduped. Kept separate from WATCHLIST itself (see config.py comment)
+# so this only affects what the scheduler fetches, not the default per-user
+# watchlist / Twitter ticker scope / trend detection.
+_FULL_REFRESH_TARGET = list(dict.fromkeys(WATCHLIST + AI_UNIVERSE_TICKERS))
 
 _cache: dict = {}
 
@@ -264,7 +270,7 @@ def _chart(symbol: str, interval: str = "1d", period: str = "5d") -> dict | None
 
 
 def fetch_quotes(symbols: list[str] = None) -> dict:
-    target = symbols or WATCHLIST
+    target = symbols or _FULL_REFRESH_TARGET
 
     # For full-watchlist fetches, try disk cache first
     if not symbols:

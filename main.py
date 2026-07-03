@@ -39,6 +39,7 @@ from memory_store import (
     get_ticker_info, upsert_ticker_info,
     insert_trend, get_trend_history,
     get_latest_correlation_matrix,
+    get_latest_short_interest,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -48,6 +49,7 @@ from cascade_engine import cascade_for_event, run_cascade_check, detect_major_mo
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from correlation_engine import refresh_correlation_matrix
+from finviz_client import refresh_short_interest
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -141,7 +143,7 @@ AI_UNIVERSE = {
     "Autonomous Vehicles": {
         "color": "#9b59ff",
         "desc": "Self-driving, EV, and mobility AI companies",
-        "tickers": ["TSLA", "UBER", "LYFT", "RIVN", "LCID", "GM", "F", "MOBILEYE", "MBLY"],
+        "tickers": ["TSLA", "UBER", "LYFT", "RIVN", "LCID", "GM", "F", "MBLY"],
     },
     "Consumer AI": {
         "color": "#00ff88",
@@ -808,6 +810,11 @@ def api_portfolio():
         return jsonify({"status": "ok"})
     holdings = get_portfolio(uid)
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    for pos in portfolio.get("positions", []):
+        si = get_latest_short_interest(pos["symbol"])
+        if si:
+            pos["short_float_pct"] = si["short_float_pct"]
+            pos["short_ratio"] = si["short_ratio"]
     return jsonify(portfolio)
 
 
@@ -2293,6 +2300,21 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Calendar] Refresh error: {e}")
 
+    def job_short_interest_refresh():
+        """Refresh Finviz short-interest snapshots daily for portfolio + watchlist symbols."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            stored = refresh_short_interest(symbols)
+            print(f"[Finviz] Short interest refreshed — {stored}/{len(symbols)} symbols")
+        except Exception as e:
+            print(f"[Finviz] Short interest refresh error: {e}")
+
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
         try:
@@ -2376,6 +2398,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_prune, "cron", hour=2, minute=0, id="prune")
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
+    scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)

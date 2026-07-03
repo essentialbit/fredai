@@ -536,9 +536,10 @@ html[data-tier="nano"] #kpi-row { display:none }
 /* Full/Ultra: 3-column */
 html[data-tier="full"] #content.tab-overview,
 html[data-tier="ultra"] #content.tab-overview {
-  grid-template-columns:clamp(180px,16vw,260px) 1fr clamp(240px,22vw,360px);
-  grid-template-rows:1fr clamp(150px,18vh,200px);
-  gap:var(--gap);background:transparent;
+  grid-template-columns: clamp(240px, 20vw, 320px) 1fr clamp(270px, 22vw, 350px);
+  grid-template-rows: 1fr;
+  gap: var(--gap);
+  background: transparent;
 }
 html[data-tier="full"] #content.tab-watchlist,
 html[data-tier="ultra"] #content.tab-watchlist { grid-template-columns:1fr 1fr; gap:var(--gap);background:transparent }
@@ -547,19 +548,20 @@ html[data-tier="ultra"] #content.tab-portfolio { grid-template-columns:clamp(260
 html[data-tier="full"] #content.tab-trending,
 html[data-tier="ultra"] #content.tab-trending { grid-template-columns:clamp(280px,24vw,380px) 1fr; gap:var(--gap);background:transparent }
 
-/* Ultra extras: wider columns, more chart space */
+/* Ultra extras: wider sidebars */
 html[data-tier="ultra"] #content.tab-overview {
-  grid-template-columns:clamp(220px,14vw,300px) 1fr clamp(300px,20vw,440px);
-  grid-template-rows:1fr clamp(180px,20vh,240px);
+  grid-template-columns: clamp(260px, 18vw, 340px) 1fr clamp(300px, 20vw, 400px);
+  grid-template-rows: 1fr;
 }
 
-/* Standard: 2-column */
+/* Standard: 2-column (hide right panel) */
 html[data-tier="standard"] #content.tab-overview {
-  grid-template-columns:clamp(160px,22vw,220px) 1fr;
-  grid-template-rows:1fr clamp(140px,18vh,180px);
-  gap:var(--gap);background:transparent;
+  grid-template-columns: clamp(220px, 24vw, 280px) 1fr;
+  grid-template-rows: 1fr;
+  gap: var(--gap);
+  background: transparent;
 }
-html[data-tier="standard"] #content.tab-overview #ov-signals { display:none }
+html[data-tier="standard"] #content.tab-overview #ov-right-panel { display: none !important }
 html[data-tier="standard"] #content.tab-watchlist { grid-template-columns:1fr; gap:var(--gap);background:transparent }
 html[data-tier="standard"] #content.tab-portfolio { grid-template-columns:clamp(220px,28vw,300px) 1fr; gap:var(--gap);background:transparent }
 html[data-tier="standard"] #content.tab-trending { grid-template-columns:1fr; gap:var(--gap);background:transparent }
@@ -1285,6 +1287,47 @@ html[data-tier="micro"] #ticker-tape { display:none }
 }
 .news-modal-title { font-size:12px;font-weight:700;letter-spacing:1px;color:var(--t1) }
 .news-modal-body { padding:16px;overflow-y:auto }
+
+/* ══ OVERVIEW COCKPIT PANELS ══════════════════════════════════════════════ */
+.ov-sidebar {
+  display:flex;flex-direction:column;gap:var(--gap);min-height:0;overflow:hidden;
+}
+#ov-globe-stage {
+  flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;
+  background:rgba(3,8,15,0.45) !important;
+}
+.globe-stage-hdr {
+  display:flex;align-items:center;justify-content:space-between;padding:10px 16px;
+  border-bottom:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.01);
+  font-family:var(--mono);
+}
+.dash-gflt {
+  padding:2px 8px;border-radius:4px;font-size:8px;border:1px solid rgba(255,255,255,0.1);
+  color:var(--t2);background:none;cursor:pointer;transition:all 0.15s;
+}
+.dash-gflt.active {
+  border-color:var(--blue);color:var(--blue);background:rgba(0,180,255,0.06);
+}
+#ov-node-diagnostics {
+  border-top:1px solid rgba(255,255,255,0.05);background:rgba(4,12,24,0.6);
+  padding:12px 16px;font-size:11px;font-family:inherit;
+}
+
+/* Compact/Micro responsive rules */
+html[data-tier="compact"] #content.tab-overview,
+html[data-tier="micro"] #content.tab-overview {
+  display:flex !important;flex-direction:column !important;overflow-y:auto !important;
+}
+html[data-tier="compact"] #ov-left-panel,
+html[data-tier="micro"] #ov-left-panel,
+html[data-tier="compact"] #ov-right-panel,
+html[data-tier="micro"] #ov-right-panel {
+  flex-shrink:0 !important;height:auto !important;
+}
+html[data-tier="compact"] #ov-globe-stage,
+html[data-tier="micro"] #ov-globe-stage {
+  height:480px !important;flex-shrink:0 !important;
+}
 </style>
 </head>
 <body>

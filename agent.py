@@ -123,6 +123,20 @@ class _FredProvider:
                     return result
             return "[Fred error: Search Grounding requires a valid GEMINI_API_KEY]"
 
+        # Check user consent for local Ollama fallback
+        fallback_consent = True
+        try:
+            from flask import session
+            if "user_id" in session:
+                from memory_store import get_user
+                import json
+                user = get_user(session["user_id"])
+                if user:
+                    prefs = json.loads(user.get("preferences") or "{}")
+                    fallback_consent = prefs.get("fallback_consent", True)
+        except Exception:
+            pass
+
         # Default AI backend order: Anthropic Claude first, Gemini as fallback, Ollama last
         providers_to_try = ["anthropic", "gemini", "ollama"]
         errors = []
@@ -142,7 +156,7 @@ class _FredProvider:
                 if not result.startswith("[Fred Gemini error"):
                     return result
                 errors.append(f"Gemini error: {result}")
-            elif p == "ollama" and _ollama_available():
+            elif p == "ollama" and _ollama_available() and fallback_consent:
                 result = self._ollama_complete(messages, system, max_tokens, timeout=timeout)
                 if not result.startswith("[Ollama error"):
                     return result

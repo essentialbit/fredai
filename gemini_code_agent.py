@@ -249,7 +249,7 @@ After implementing, call 'done' with a summary of what changed."""
                         "messages": ollama_msgs,
                         "format": "json",
                         "stream": False
-                    }, timeout=120)
+                    }, timeout=300)
                     if ollama_res.status_code == 200:
                         reply = ollama_res.json().get("message", {}).get("content", "").strip()
                         action = json.loads(reply)

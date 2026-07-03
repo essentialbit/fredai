@@ -175,6 +175,17 @@ def _extract_tickers(text: str, watchlist: list[str]) -> str:
         sym = m.group(1) or m.group(2)
         if sym and sym in watchlist:
             found.add(sym)
+
+    if not found:
+        # News prose routinely names a company without ever using its raw
+        # ticker or a cashtag ("Apple reported strong earnings") -- NER-based
+        # linking catches that. No-op if spaCy/the model isn't available.
+        try:
+            from signal_processor import extract_and_link_tickers
+            found.update(extract_and_link_tickers(text))
+        except Exception:
+            pass
+
     return ",".join(sorted(found))
 
 

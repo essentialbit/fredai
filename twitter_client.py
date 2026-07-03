@@ -47,6 +47,18 @@ def _extract_asset(text: str) -> str | None:
             return m
         if m + "-USD" in _TICKER_SET:
             return m + "-USD"
+
+    # Cashtag convention is strong on X, but not universal -- fall back to
+    # NER-based company-name linking (e.g. "Apple" with no $AAPL) before
+    # giving up. No-op (returns []) if spaCy/the model isn't available.
+    try:
+        from signal_processor import extract_and_link_tickers
+        linked = extract_and_link_tickers(text)
+        if linked:
+            return linked[0]
+    except Exception:
+        pass
+
     return None
 
 

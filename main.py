@@ -33,7 +33,7 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
-    get_news, count_news, upsert_news_items,
+    get_news, count_news, upsert_news_items, prune_stale_news,
     get_calendar_events, upsert_calendar_events,
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
@@ -52,7 +52,7 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from finviz_client import refresh_short_interest
 from sec_client import fetch_form4_filings
-from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
+from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
 
@@ -2295,7 +2295,8 @@ if __name__ == "__main__":
                     count += len(au_items)
             except Exception as e:
                 print(f"[ASX News] Error: {e}")
-            print(f"[News] Refreshed — {count} new items (incl. AU)")
+            deleted = prune_stale_news(NEWS_RETENTION_HOURS)
+            print(f"[News] Refreshed — {count} new items (incl. AU), pruned {deleted} stale item(s) older than {NEWS_RETENTION_HOURS}h")
         except Exception as e:
             print(f"[News] Refresh error: {e}")
 

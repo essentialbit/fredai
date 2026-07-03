@@ -209,6 +209,15 @@ def init_db():
             price_at_72h REAL
         );
 
+        CREATE TABLE IF NOT EXISTS correlation_matrix (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol_a TEXT NOT NULL,
+            symbol_b TEXT NOT NULL,
+            window_days INTEGER NOT NULL,
+            correlation REAL NOT NULL,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -221,6 +230,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
         CREATE INDEX IF NOT EXISTS idx_calendar_date ON calendar_events(event_date);
         CREATE INDEX IF NOT EXISTS idx_techalerts_user ON tech_alerts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1036,3 +1046,28 @@ def upsert_ticker_info(info: dict):
                 description=excluded.description, country=excluded.country,
                 market_cap=excluded.market_cap, updated_at=CURRENT_TIMESTAMP
         """, info)
+
+
+# ── CORRELATION MATRIX ────────────────────────────────────────────────────────
+
+def store_correlation_matrix(pairs: list[dict], window_days: int):
+    """pairs: [{"symbol_a", "symbol_b", "correlation"}, ...] for one computed snapshot."""
+    with get_conn() as conn:
+        conn.executemany(
+            "INSERT INTO correlation_matrix (symbol_a, symbol_b, window_days, correlation) VALUES (?, ?, ?, ?)",
+            [(p["symbol_a"], p["symbol_b"], window_days, p["correlation"]) for p in pairs]
+        )
+
+
+def get_latest_correlation_matrix(window_days: int) -> list[dict]:
+    with get_conn() as conn:
+        latest_ts = conn.execute(
+            "SELECT MAX(computed_at) FROM correlation_matrix WHERE window_days=?", (window_days,)
+        ).fetchone()[0]
+        if not latest_ts:
+            return []
+        rows = conn.execute(
+            "SELECT * FROM correlation_matrix WHERE window_days=? AND computed_at=?",
+            (window_days, latest_ts)
+        ).fetchall()
+        return [dict(r) for r in rows]

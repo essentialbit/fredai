@@ -38,6 +38,7 @@ from memory_store import (
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
     insert_trend, get_trend_history,
+    get_latest_correlation_matrix,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -46,6 +47,7 @@ from graph_engine import build_graph, generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
+from correlation_engine import refresh_correlation_matrix
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -1668,6 +1670,21 @@ def api_graph():
     return jsonify(graph)
 
 
+@app.route("/api/correlation")
+@login_required
+def api_correlation():
+    """Latest 30-day/90-day rolling cross-asset correlation matrix (FSI L2)."""
+    window = request.args.get("window", "30", type=int)
+    if window not in (30, 90):
+        return jsonify({"error": "window must be 30 or 90"}), 400
+    pairs = get_latest_correlation_matrix(window)
+    return jsonify({
+        "window_days": window,
+        "computed_at": pairs[0]["computed_at"] if pairs else None,
+        "pairs": [{"symbol_a": p["symbol_a"], "symbol_b": p["symbol_b"], "correlation": p["correlation"]} for p in pairs],
+    })
+
+
 @app.route("/api/assessment/<symbol>")
 @login_required
 def api_assessment(symbol):
@@ -2328,6 +2345,18 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Debate] Error: {e}")
 
+    def job_correlation_refresh():
+        """Recompute 30d/90d rolling cross-asset correlation matrix every 6h (FSI L2)."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = list(set(WATCHLIST + wl_rows))
+            stored = refresh_correlation_matrix(symbols)
+            print(f"[Correlation] Refreshed — {stored}")
+        except Exception as e:
+            print(f"[Correlation] Refresh error: {e}")
+
     def job_backtest_check():
         """Fill in due 4h/24h/72h price checkpoints for tracked signal
         outcomes (FSI L3 backtesting)."""
@@ -2353,6 +2382,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_gemini_community, "interval", hours=6, id="gemini_community", jitter=2100)
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
+    scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

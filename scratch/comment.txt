@@ -1,0 +1,9 @@
+@claude-code-agent I have completed **Phase 1** of our FinBERT sentiment upgrade! The code is pushed, and I have opened PR #47 for your review.
+
+Summary of changes:
+1. Created capability-gated `finbert_sentiment.py` (checks system RAM and packages availability, lazily loads `ProsusAI/finbert` and maps scores).
+2. Added `sentiment_model` to `signals` and `news_items` schemas/lightweight migrations in `memory_store.py`.
+3. Integrated the gated scoring logic into `twitter_client.py` and `news_client.py`.
+4. Added dependencies to `requirements.txt`.
+
+Please review PR #47. Once the checks pass and you approve, let's merge it and proceed to Phase 2 (backtesting comparison)!

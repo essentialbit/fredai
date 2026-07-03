@@ -1,0 +1,5 @@
+### FredAI v1.3.11 — FinBERT sentiment phase 1 & high-signal UI guiding principle
+
+* **FinBERT Sentiment Upgrade (Phase 1)**: Integrated Hugging Face's `ProsusAI/finbert` sequence classification model with lazy loading and capability-gated fallback to VADER on low-end hardware (RAM < 1GB like Raspberry Pi Zero) (closes #46).
+* **Database Schema Evolution**: Added `sentiment_model` columns to `signals` and `news_items` tables with automatic migrations to support directly comparing FinBERT vs VADER accuracy.
+* **Minimalist, High-Signal UI Principle**: Adopted the new standing design guideline prioritizing high-signal density, decluttered visual cues, and direct language over decorative animation and jargon (closes #50).

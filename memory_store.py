@@ -209,6 +209,14 @@ def init_db():
             price_at_72h REAL
         );
 
+        CREATE TABLE IF NOT EXISTS short_interest (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            short_float_pct REAL,
+            short_ratio REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -221,6 +229,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
         CREATE INDEX IF NOT EXISTS idx_calendar_date ON calendar_events(event_date);
         CREATE INDEX IF NOT EXISTS idx_techalerts_user ON tech_alerts(user_id);
+        CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1036,3 +1045,22 @@ def upsert_ticker_info(info: dict):
                 description=excluded.description, country=excluded.country,
                 market_cap=excluded.market_cap, updated_at=CURRENT_TIMESTAMP
         """, info)
+
+
+# ── SHORT INTEREST ────────────────────────────────────────────────────────────
+
+def insert_short_interest(symbol: str, short_float_pct: float | None, short_ratio: float | None):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO short_interest (symbol, short_float_pct, short_ratio) VALUES (?, ?, ?)",
+            (symbol, short_float_pct, short_ratio)
+        )
+
+
+def get_latest_short_interest(symbol: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM short_interest WHERE symbol=? ORDER BY fetched_at DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        return dict(row) if row else None

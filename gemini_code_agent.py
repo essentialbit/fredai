@@ -194,18 +194,77 @@ After implementing, call 'done' with a summary of what changed."""
                 }
             }
 
+            data = None
             try:
-                r = requests.post(url, json=body, timeout=60)
-                if r.status_code != 200:
-                    print(f"  [Gemini API Error] {r.status_code}: {r.text}")
-                    return {"success": False, "summary": f"Gemini API returned status code {r.status_code}", "files_changed": files_changed}
-                
-                data = r.json()
-                text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                action = json.loads(text)
+                if self.api_key:
+                    r = requests.post(url, json=body, timeout=60)
+                    if r.status_code == 200:
+                        data = r.json()
+                    else:
+                        print(f"  [Gemini API Error] {r.status_code}: {r.text}")
             except Exception as e:
-                print(f"  [Gemini] Execution error: {e}")
-                return {"success": False, "summary": f"Error parsing Gemini response: {e}", "files_changed": files_changed}
+                print(f"  [Gemini] Request error: {e}")
+
+            if data is None:
+                print("  [Gemini Code Agent] Falling back to local Ollama...")
+                try:
+                    models_res = requests.get("http://localhost:11434/api/tags", timeout=5)
+                    available_models = []
+                    if models_res.status_code == 200:
+                        available_models = [m["name"] for m in models_res.json().get("models", [])]
+                    
+                    selected_model = None
+                    for pref in ["qwen3.5-hermes", "qwen3.5", "qwen3-8b-hermes", "gemma3-hermes", "gemma3:4b", "gemma4", "llama3.2"]:
+                        for m in available_models:
+                            if m.startswith(pref):
+                                selected_model = m
+                                break
+                        if selected_model:
+                            break
+                    
+                    if not selected_model and available_models:
+                        selected_model = available_models[0]
+                    if not selected_model:
+                        selected_model = "gemma3:4b"
+
+                    # Convert Gemini content format to Ollama messages format
+                    ollama_msgs = [{"role": "system", "content": SYSTEM_PROMPT}]
+                    for msg in messages:
+                        role = msg.get("role", "user")
+                        # Gemini roles are 'user' and 'model'. Ollama expects 'user' and 'assistant'
+                        if role == "model":
+                            role = "assistant"
+                        text_parts = []
+                        for part in msg.get("parts", []):
+                            if "text" in part:
+                                text_parts.append(part["text"])
+                        ollama_msgs.append({"role": role, "content": "\n".join(text_parts)})
+
+                    # Append schema constraint to user message if it's the last one
+                    if ollama_msgs[-1]["role"] == "user":
+                        ollama_msgs[-1]["content"] += f"\n\nCRITICAL: Respond ONLY with a raw JSON object matching the requested schema. No markdown wrapping. Schema:\n{json.dumps(schema, indent=2)}"
+
+                    ollama_res = requests.post("http://localhost:11434/api/chat", json={
+                        "model": selected_model,
+                        "messages": ollama_msgs,
+                        "format": "json",
+                        "stream": False
+                    }, timeout=120)
+                    if ollama_res.status_code == 200:
+                        reply = ollama_res.json().get("message", {}).get("content", "").strip()
+                        action = json.loads(reply)
+                    else:
+                        return {"success": False, "summary": f"Ollama fallback failed: {ollama_res.status_code}", "files_changed": files_changed}
+                except Exception as oe:
+                    print(f"  [Ollama Fallback Error] {oe}")
+                    return {"success": False, "summary": f"Ollama fallback error: {oe}", "files_changed": files_changed}
+            else:
+                try:
+                    text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    action = json.loads(text)
+                except Exception as e:
+                    print(f"  [Gemini] Parse error: {e}")
+                    return {"success": False, "summary": f"Error parsing Gemini response: {e}", "files_changed": files_changed}
 
             thought = action.get("thought", "")
             tool_call = action.get("tool_call", {})

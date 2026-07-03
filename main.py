@@ -1453,6 +1453,138 @@ def api_get_user_keys_status():
     })
 
 
+def test_anthropic_key(key):
+    if not key:
+        return "missing"
+    try:
+        import requests
+        headers = {
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        payload = {
+            "model": "claude-3-haiku-20240307",
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "Hello"}]
+        }
+        r = requests.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers, timeout=2.0)
+        if r.status_code == 200:
+            return "valid"
+        elif r.status_code in (401, 403):
+            return "invalid"
+        else:
+            return f"error_{r.status_code}"
+    except Exception:
+        return "network_error"
+
+
+def test_gemini_key(key):
+    if not key:
+        return "missing"
+    try:
+        import requests
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+        payload = {
+            "contents": [{"parts": [{"text": "Hello"}]}],
+            "generationConfig": {"maxOutputTokens": 1}
+        }
+        r = requests.post(url, json=payload, timeout=2.0)
+        if r.status_code == 200:
+            return "valid"
+        elif r.status_code in (400, 401, 403):
+            try:
+                err_msg = r.json().get("error", {}).get("message", "")
+                if "depleted" in err_msg.lower() or "limit" in err_msg.lower() or "quota" in err_msg.lower():
+                    return "depleted"
+            except Exception:
+                pass
+            return "invalid"
+        else:
+            return f"error_{r.status_code}"
+    except Exception:
+        return "network_error"
+
+
+def check_ollama_status():
+    try:
+        import requests
+        from config import OLLAMA_URL
+        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=1.0)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+@app.route("/api/user/keys-health", methods=["GET"])
+@login_required
+def api_get_keys_health():
+    from memory_store import get_user
+    from agent import _get_api_keys
+    import json
+    uid = session.get("user_id")
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    prefs = {}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        pass
+        
+    a_key, g_key = _get_api_keys()
+    
+    # Run tests
+    anthropic_status = test_anthropic_key(a_key)
+    gemini_status = test_gemini_key(g_key)
+    ollama_status = check_ollama_status()
+    
+    fallback_consent = prefs.get("fallback_consent", True)
+    
+    return jsonify({
+        "anthropic": {
+            "configured": bool(a_key),
+            "status": anthropic_status,
+            "source": "user" if prefs.get("user_anthropic_key") else "system"
+        },
+        "gemini": {
+            "configured": bool(g_key),
+            "status": gemini_status,
+            "source": "user" if prefs.get("user_gemini_key") else "system"
+        },
+        "ollama_available": ollama_status,
+        "fallback_consent": fallback_consent
+    })
+
+
+@app.route("/api/user/keys-health", methods=["POST"])
+@login_required
+def api_save_keys_health():
+    from memory_store import get_conn, get_user
+    import json
+    uid = session.get("user_id")
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.json or {}
+    fallback_consent = data.get("fallback_consent", True)
+    
+    prefs = {}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        pass
+        
+    prefs["fallback_consent"] = fallback_consent
+    
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), uid))
+        
+    return jsonify({"status": "ok", "fallback_consent": fallback_consent})
+
+
 @app.route("/api/news/globe-data")
 @login_required
 def api_news_globe_data():

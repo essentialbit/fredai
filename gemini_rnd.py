@@ -30,9 +30,10 @@ def run_gemini_discovery() -> list[dict]:
         f"Timestamp: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}"
     )
 
+    filtered_areas = {k: v for k, v in RND_AREAS.items() if v.get("fsi_level", 6) <= 3}
     prompt = DISCOVERY_PROMPT.format(
         current_capabilities=_get_current_capabilities(),
-        areas=json.dumps(RND_AREAS, indent=2),
+        areas=json.dumps(filtered_areas, indent=2),
         signal_stats=signal_stats,
     )
 
@@ -78,6 +79,7 @@ def run_gemini_discovery() -> list[dict]:
     }
 
     data = None
+    res_obj = None
     try:
         if api_key:
             r = requests.post(url, json=payload, timeout=60)
@@ -120,14 +122,14 @@ def run_gemini_discovery() -> list[dict]:
                 "messages": messages,
                 "format": "json",
                 "options": {
-                    "num_ctx": 4096,
+                    "num_ctx": 8192,
                     "temperature": 0.0
                 },
                 "stream": False
             }, timeout=600)
             if ollama_res.status_code == 200:
                 reply = ollama_res.json().get("message", {}).get("content", "").strip()
-                return json.loads(reply)
+                res_obj = json.loads(reply)
             else:
                 print(f"[Gemini RnD Fallback] Failed: {ollama_res.status_code} - {ollama_res.text}")
         except Exception as oe:
@@ -136,9 +138,22 @@ def run_gemini_discovery() -> list[dict]:
     if data:
         try:
             text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            return json.loads(text)
+            res_obj = json.loads(text)
         except Exception as e:
             print(f"[Gemini RnD] Parse error: {e}")
+
+    if res_obj:
+        if isinstance(res_obj, dict):
+            if "proposals" in res_obj:
+                return res_obj["proposals"]
+            elif "title" in res_obj:
+                return [res_obj]
+            else:
+                for v in res_obj.values():
+                    if isinstance(v, list):
+                        return v
+        elif isinstance(res_obj, list):
+            return res_obj
 
     return []
 

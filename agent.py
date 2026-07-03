@@ -108,15 +108,23 @@ class _FredProvider:
         return self._provider
 
     def complete(self, messages: list, system: str, *,
-                  tier: str = "chat", max_tokens: int = 1024) -> str:
+                  tier: str = "chat", max_tokens: int = 1024, grounding: bool = False) -> str:
         """
         tier: "summary" → haiku/flash | "chat" → sonnet/flash | "rnd" → opus/pro
         Falls back through available providers (Anthropic -> Gemini -> Ollama) in case of errors.
         """
+        a_key, g_key = _get_api_keys()
+
+        # If grounding is explicitly requested, bypass Claude/Ollama and use Gemini Search Grounding
+        if grounding:
+            if _key_is_valid(g_key):
+                result = self._gemini_complete(messages, system, tier, max_tokens, g_key, grounding=True)
+                if not result.startswith("[Fred Gemini error"):
+                    return result
+            return "[Fred error: Search Grounding requires a valid GEMINI_API_KEY]"
+
         # Default AI backend order: Anthropic Claude first, Gemini as fallback, Ollama last
         providers_to_try = ["anthropic", "gemini", "ollama"]
-
-        a_key, g_key = _get_api_keys()
         errors = []
         is_first = True
         for p in providers_to_try:
@@ -227,7 +235,7 @@ class _FredProvider:
         except Exception as e:
             return f"[Fred error: {e}]"
 
-    def _gemini_complete(self, messages, system, tier, max_tokens, api_key, timeout=None) -> str:
+    def _gemini_complete(self, messages, system, tier, max_tokens, api_key, timeout=None, grounding=False) -> str:
         model_map = {
             "summary": GEMINI_MODEL_SUMMARY,
             "chat": GEMINI_MODEL_CHAT,
@@ -243,6 +251,8 @@ class _FredProvider:
                 "maxOutputTokens": max_tokens
             }
         }
+        if grounding:
+            payload["tools"] = [{"googleSearch": {}}]
         try:
             import requests as _req
             r = _req.post(url, json=payload, timeout=timeout or 60)

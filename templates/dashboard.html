@@ -1679,50 +1679,7 @@ html[data-tier="micro"] #ov-globe-stage {
       <div id="ai-sectors" style="overflow-y:auto;max-height:calc(100vh - 200px)"></div>
     </div>
 
-    <!-- SIGNAL GLOBE TAB -->
-    <div class="panel" id="tab-globe-panel" style="display:none;grid-column:1/-1;padding:0;overflow:hidden;height:calc(100vh - 200px)">
-      <div style="padding:10px 16px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--blue);text-transform:uppercase">◎ Global Signal Intelligence</div>
-        <div style="font-size:10px;color:var(--t3)">Live news signals by geographic source — spin to explore</div>
-        <div id="dash-globe-stats" style="font-size:9px;color:var(--t3);margin-left:auto;font-family:var(--mono)">Loading...</div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap">
-          <button class="dash-gflt active" data-gc="all" onclick="dashGlobeFilter(this,'all')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid var(--t4);color:var(--t2);background:none;cursor:pointer;transition:.12s">All</button>
-          <button class="dash-gflt" data-gc="market" onclick="dashGlobeFilter(this,'market')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(0,180,255,.3);color:var(--blue);background:none;cursor:pointer">Markets</button>
-          <button class="dash-gflt" data-gc="ai" onclick="dashGlobeFilter(this,'ai')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(0,255,136,.3);color:var(--green);background:none;cursor:pointer">AI</button>
-          <button class="dash-gflt" data-gc="geopolitical" onclick="dashGlobeFilter(this,'geopolitical')" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(255,59,92,.3);color:var(--red);background:none;cursor:pointer">Geopolitical</button>
-        </div>
-        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-left:8px;border-left:1px solid var(--border);padding-left:10px">
-          <button class="dash-gmode active" onclick="setGlobeMode('standard',this)" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid var(--t4);color:var(--t2);background:none;cursor:pointer;transition:.12s">Standard View</button>
-          <button class="dash-gmode" onclick="setGlobeMode('monitored',this)" style="padding:3px 10px;border-radius:20px;font-size:9px;border:1px solid rgba(255,215,0,.3);color:#ffd700;background:none;cursor:pointer">Monitored Only</button>
-        </div>
-      </div>
-      <div id="dash-globe-wrap" style="flex:1;height:100%;position:relative;background:var(--bg0)">
-        <div id="dash-globe-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:var(--t3);font-size:12px;z-index:10">
-          <div style="width:28px;height:28px;border:2px solid rgba(0,180,255,.15);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite"></div>
-          Building globe...
-        </div>
-        <div id="dash-globe-canvas" style="width:100%;height:100%"></div>
-        <!-- Live HUD Harvest Feed -->
-        <div style="position:absolute;top:16px;right:16px;background:rgba(6,15,28,.85);border:1px solid var(--border);border-radius:8px;padding:12px;backdrop-filter:blur(8px);width:240px;z-index:5;display:flex;flex-direction:column;gap:6px">
-          <div style="font-size:8px;color:var(--blue);letter-spacing:1.5px;font-weight:700">◎ INTELLIGENCE FEED HUD</div>
-          <div id="globe-hud-feed" style="height:140px;font-size:9px;font-family:var(--mono);color:#00ff88;line-height:1.4;overflow-y:auto;scrollbar-width:none">
-            <div>&gt; System initialized. Ready.</div>
-          </div>
-        </div>
-        <div style="position:absolute;bottom:16px;left:16px;background:rgba(6,15,28,.85);border:1px solid var(--border);border-radius:8px;padding:10px 14px;backdrop-filter:blur(8px)">
-          <div style="font-size:8px;color:var(--t3);letter-spacing:1px;margin-bottom:6px">SIGNAL SOURCE</div>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--blue)"></div>Markets</div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--green)"></div>AI & Tech</div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--red)"></div>Geopolitical</div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:var(--gold)"></div>Central Banks</div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:#ffd700"></div>Portfolio Node</div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;background:#c684ff"></div>Watchlist Node</div>
-            <div style="display:flex;align-items:center;gap:6px;font-size:9px;color:var(--t2)"><div style="width:7px;height:7px;border-radius:50%;border:1.5px solid rgba(0,255,136,0.65);background:none"></div>Pulsing Hotspot</div>
-          </div>
-        </div>
-      </div>
-    </div>
+
 
     <!-- TRENDING TAB -->
     <div class="panel" id="tab-trending-list" style="display:none">
@@ -2597,6 +2554,7 @@ async function loadInitData() {
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
       if (d.tech_alerts) renderTechAlerts(d.tech_alerts);
+      if (!_dashGlobeInst) initDashGlobe();
     }
   } catch(e) { console.error('Init error:',e); }
 }

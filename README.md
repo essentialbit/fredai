@@ -24,49 +24,30 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.11 — FinBERT sentiment phase 1 & high-signal UI guiding principle
-- **FinBERT Sentiment Upgrade (Phase 1)**: Integrated Hugging Face's `ProsusAI/finbert` sequence classification model with lazy loading and capability-gated fallback to VADER on low-end hardware (RAM < 1GB like Raspberry Pi Zero) (closes #46).
-- **Database Schema Evolution**: Added `sentiment_model` columns to `signals` and `news_items` tables with automatic migrations to support directly comparing FinBERT vs VADER accuracy.
-- **Minimalist, High-Signal UI Principle**: Adopted the new standing design guideline prioritizing high-signal density, decluttered visual cues, and direct language over decorative animation and jargon (closes #50).
+### FredAI v1.3.18
+- feat: landing page visual uplift and notification center (Issue #51)
+- Modernized dashboard design with upgraded Outfit/JetBrains Mono typography.
+- Integrated real-time central Notification Center for critical market alerts and agent messages.
+- Re-styled layout elements for responsive high-signal-density views.
 
-### FredAI v1.3.10 — FSI sensor upgrades & auto-merge policy
-- **FSI Innovation Explorer**: Added automated scans of `MISSION.md` backlog to draft roadmaps and propose joint labor divisions between Claude and Gemini (closes #45).
-- **FSI Alignment Audit**: Integrated a strategic evaluation sensor checking checklist items against FSI levels on every CI run (closes #44).
-- **Auto-Merge Policy & Quality Bar**: Documented a streamlined `risk:low` auto-merge policy for green CI branches and added the shared quality bar lens (closes #39, #43).
-- **Assigned Taskings Sensor**: Configured the CI sensor to flag pending task allocations from Claude (closes #42).
+### FredAI v1.3.17
+- feat: implement Gmail export option for Google Workspace Integration (Issue #49)
+- Allows exporting financial briefing digests directly to Gmail for easy updates on standard consumer hardware.
 
-### FredAI v1.3.4 — installer, security & grounding hardening
-- **Version-Aware Shortcuts**: Introduced installer version checking (`FREDAI_INSTALLER_VERSION=2`) to automatically upgrade desktop/application launcher scripts. Patched Windows shortcut detection (closes #37).
-- **Financial Data Grounding**: Hardened LLM system prompt and context builders to forbid fabrication of prices, drawdown math, or analyst ratings when quotes are empty or rate-limited (closes #31).
-- **Setup & Credentials Polish**: Removed misleading static `admin / sentinel2024` credential hints from setup messages and dashboard UI, pointing instead to the one-time generated admin password (closes #34).
+### FredAI v1.3.16
+- feat: complete Phase 2 Globe Uplift with monitored node overlays, hotspot rings, and interactive details (Issue #48) (#55)
+- Elevates the 3D WebGL globe with monitored node overlays representing active server nodes.
+- Adds glowing hotspot rings around high-signal-density areas.
+- Enhances interactive details with popup info cards for geocoded stories.
 
-### FredAI v1.3.0 — Collaboration Board substrate & UI/UX glassmorphism elevation
-- **Collaboration Board & Debate Substrate**: Integrated cross-agent debate cycle verifying consensus on open proposals, with robust local Ollama fallbacks (`gemma3:4b`) to support offline debate reviews for both Claude and Gemini.
-- **Visual Overhaul & Redesign**: Elevated dashboard, news feed, timeline, and D3 graphs to a premium, ultra-modern glassmorphic dark theme using Outfit and JetBrains Mono typography, translucent panel cards, hover-lifting tile animations, and refined glowing badges.
-- **Backtesting & Signal Outcome Tracker**: Implemented FSI Level 3 backtesting engine to log predictions at $T$ and verify accuracy at 4h, 24h, and 72h intervals, minimizing yfinance rate-limiting.
-- **CNN Fear & Greed Index**: Integrated unofficial CNN Sentiment Index into the macro strip with custom browser headers and daily cache updates.
-- **Security & Fixes**: Patched stored-XSS vulnerability inside watchlist/portfolio symbols using server-side Regex validation (`_valid_symbol()`) and client-side escaping. Fixed Graph and Globe container resize scaling issues via SVG viewBox coordinate mapping and debounced resize listeners.
-- **Docs & Approval Guards**: Implemented the `#SaifApproved` human sign-off tag constraint to safely distinguish human approvals from automated AI code reviews.
+### FredAI v1.3.15
+- feat: real per-story sentiment-colored globe arcs (Phase 2 of #48) (#54)
+- Draw interactive paths on the 3D globe connecting the corporate HQ to the exchange where the asset is traded.
+- Colored globe arcs by real-time FinBERT/VADER sentiment score (green for bullish, red for bearish, gray for neutral).
 
-### FredAI v1.2.30 — Gemini integration hardening
-- `gemini_code_agent.py` hardcoded its project path to a specific machine's SSD mirror location, breaking in CI, on any fork, and even on the primary dev checkout. Now resolves relative to its own file location, matching `claude_code_agent.py`.
-- `git_push()` (used by both the Claude and Gemini self-improvement cycles) could silently skip pushing real, committed work whenever the working tree was already clean — which happens routinely since the code agents commit locally as they iterate. It now checks commits-ahead-of-upstream instead, and retries once via fetch+rebase if the push is rejected (the Claude cycle, Gemini cycle, and CI's scheduled `rnd` job all push to `main` on similar cadences and can race).
-- Added an in-process lock so Claude's and Gemini's RnD cycles can never run their write phases concurrently and interleave into each other's commits.
-
-### FredAI v1.2.29 — security hardening
-- **Password hashing migrated** from unsalted SHA-256 to werkzeug's salted hashes. Existing accounts are transparently upgraded to the new format on their next successful login.
-- **Repo-tracked pre-commit guard** (`scripts/hooks/pre-commit`, auto-wired via `core.hooksPath` on every app startup) blocks `.env`, `*.db`, and `__pycache__` from ever being committed again.
-- Purged `.env` and `data/sentinel.db` from the entire git history (all commits + tags rewritten and force-pushed) after discovering they had been tracked since the initial commit.
-- Rotated the app `SECRET_KEY`.
-
-### FredAI v1.2.8
-- Update Twitter API keys in .env file
-
-### FredAI v1.2.7
-- fix: Yahoo Finance rate-limit resilience + Nasdaq/CoinGecko primary sources
-
-### FredAI v1.2.6
-- fix: prices showing \$0.00 in Fred chat responses
+### FredAI v1.3.14
+- docs: update README.md changelog for v1.3.11 (#53)
+- Sync README changelog block.
 
 <!-- CHANGELOG_END -->
 

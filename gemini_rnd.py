@@ -111,15 +111,16 @@ def run_gemini_discovery() -> list[dict]:
             if not selected_model:
                 selected_model = "gemma3:4b"
                 
+            ollama_prompt = prompt.replace("exactly 5 proposals", "exactly 2 proposals").replace("top 5 proposals", "top 2 proposals")
             messages = [
-                {"role": "user", "content": prompt + f"\n\nCRITICAL: Respond ONLY with a raw JSON array matching this schema. No markdown code blocks. Schema:\n{json.dumps(schema, indent=2)}"}
+                {"role": "user", "content": ollama_prompt + f"\n\nCRITICAL: Respond ONLY with a raw JSON array matching this schema. No markdown code blocks. Schema:\n{json.dumps(schema, indent=2)}"}
             ]
             ollama_res = requests.post("http://localhost:11434/api/chat", json={
                 "model": selected_model,
                 "messages": messages,
                 "format": "json",
                 "stream": False
-            }, timeout=120)
+            }, timeout=300)
             if ollama_res.status_code == 200:
                 reply = ollama_res.json().get("message", {}).get("content", "").strip()
                 return json.loads(reply)

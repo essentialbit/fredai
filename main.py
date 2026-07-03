@@ -25,7 +25,7 @@ from memory_store import (
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
-from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level
+from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
@@ -40,6 +40,7 @@ from memory_store import (
     insert_trend, get_trend_history,
     get_latest_correlation_matrix,
     get_latest_short_interest,
+    get_recent_insider_transactions,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -50,6 +51,7 @@ from signal_density import compute_signal_density, invalidate as invalidate_dens
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from correlation_engine import refresh_correlation_matrix
 from finviz_client import refresh_short_interest
+from sec_client import fetch_form4_filings
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -1692,6 +1694,15 @@ def api_correlation():
     })
 
 
+@app.route("/api/insider/<ticker>")
+@login_required
+def api_insider_transactions(ticker):
+    """Recent SEC Form 4 open-market insider buy/sell transactions (FSI L2)."""
+    days = request.args.get("days", "90", type=int)
+    txns = get_recent_insider_transactions(ticker.upper(), days=days, signal_only=True)
+    return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
+
+
 @app.route("/api/assessment/<symbol>")
 @login_required
 def api_assessment(symbol):
@@ -2315,6 +2326,26 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
 
+    def job_insider_signals_refresh():
+        """Refresh SEC Form 4 insider-trading data daily for portfolio + watchlist symbols,
+        then check for buying/selling clusters (FSI L2)."""
+        try:
+            from memory_store import get_conn as _gc, insert_insider_transactions
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            total_new = 0
+            for sym in symbols:
+                txns = fetch_form4_filings(sym, limit=5)
+                total_new += insert_insider_transactions(txns)
+            alerts_fired = detect_insider_clusters(symbols)
+            print(f"[SEC] Insider signals refreshed — {total_new} new transactions, {len(alerts_fired)} cluster alert(s)")
+        except Exception as e:
+            print(f"[SEC] Insider signals refresh error: {e}")
+
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
         try:
@@ -2399,6 +2430,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
+    scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)

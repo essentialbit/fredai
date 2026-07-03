@@ -252,6 +252,7 @@ After implementing, call 'done' with a summary of what changed."""
                     }, timeout=300)
                     if ollama_res.status_code == 200:
                         reply = ollama_res.json().get("message", {}).get("content", "").strip()
+                        text = reply
                         action = json.loads(reply)
                     else:
                         return {"success": False, "summary": f"Ollama fallback failed: {ollama_res.status_code}", "files_changed": files_changed}

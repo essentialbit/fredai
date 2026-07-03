@@ -60,6 +60,10 @@ GEMINI_MODEL_RND = os.getenv("GEMINI_MODEL_RND", "gemini-2.5-pro")
 PRIVACY_MODE = os.getenv("PRIVACY_MODE", "true").lower() == "true"
 STRIP_PORTFOLIO_FROM_AI = os.getenv("STRIP_PORTFOLIO_FROM_AI", "true").lower() == "true"
 DATA_RETENTION_DAYS = int(os.getenv("DATA_RETENTION_DAYS", "90"))
+# News is fetched every 30min and is meant to drive near-term decisions --
+# 90-day GDPR-style retention leaves stale, months-old items competing with
+# actually-fresh news. Separate, much shorter window for news specifically.
+NEWS_RETENTION_HOURS = int(os.getenv("NEWS_RETENTION_HOURS", "72"))
 PRIVACY_POLICY_VERSION = "1.0"  # bump when policy changes to re-prompt consent
 
 WATCHLIST = [

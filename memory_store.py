@@ -926,6 +926,24 @@ def prune_old_data(retention_days: int = 90):
     }
 
 
+def prune_stale_news(retention_hours: int = 72) -> int:
+    """News is meant to drive near-term decisions -- a much shorter,
+    dedicated window than prune_old_data's 90-day GDPR-style retention.
+    Returns the number of rows deleted.
+
+    published_at has two coexisting formats in the wild ("2026-07-03
+    15:50:00" and "2026-07-03T15:50:00", both produced by
+    news_client.py::_parse_date at different times) -- REPLACE normalizes
+    the separator so string comparison against the cutoff is correct for
+    both, not just whichever format happens to be more common right now."""
+    from datetime import timedelta
+    cutoff = (datetime.utcnow() - timedelta(hours=retention_hours)).isoformat(sep=" ")
+    with get_conn() as conn:
+        return conn.execute(
+            "DELETE FROM news_items WHERE REPLACE(published_at, 'T', ' ') < ?", (cutoff,)
+        ).rowcount
+
+
 # ── NEWS ──────────────────────────────────────────────────────────────────────
 
 def upsert_news_items(items: list[dict]) -> int:

@@ -21,9 +21,6 @@ PROJECT_ROOT = Path("/Volumes/Iron 1TBSSD/Claude/FredAI")
 def run_gemini_discovery() -> list[dict]:
     """Run a Gemini-driven FSI discovery cycle."""
     api_key = os.getenv("GEMINI_API_KEY", "")
-    if not api_key:
-        print("[Gemini RnD] GEMINI_API_KEY not configured")
-        return []
 
     signals = get_signals(hours=24)
     trending = get_trending_assets(hours=4, limit=10)
@@ -80,15 +77,64 @@ def run_gemini_discovery() -> list[dict]:
         }
     }
 
+    data = None
     try:
-        r = requests.post(url, json=payload, timeout=60)
-        if r.status_code == 200:
-            data = r.json()
-            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-            return json.loads(text)
-        print(f"  [Gemini RnD API] Status {r.status_code}: {r.text}")
+        if api_key:
+            r = requests.post(url, json=payload, timeout=60)
+            if r.status_code == 200:
+                data = r.json()
+            else:
+                print(f"  [Gemini RnD API] Status {r.status_code}: {r.text}")
     except Exception as e:
         print(f"[Gemini RnD] Discovery error: {e}")
+
+    # Fallback to local Ollama if Gemini API is rate-limited or fails
+    if data is None:
+        print("[Gemini RnD] Falling back to local Ollama...")
+        try:
+            models_res = requests.get("http://localhost:11434/api/tags", timeout=5)
+            available_models = []
+            if models_res.status_code == 200:
+                available_models = [m["name"] for m in models_res.json().get("models", [])]
+            
+            selected_model = None
+            for pref in ["qwen3.5-hermes", "qwen3.5", "qwen3-8b-hermes", "gemma3-hermes", "gemma3:4b", "gemma4", "llama3.2"]:
+                for m in available_models:
+                    if m.startswith(pref):
+                        selected_model = m
+                        break
+                if selected_model:
+                    break
+            
+            if not selected_model and available_models:
+                selected_model = available_models[0]
+            if not selected_model:
+                selected_model = "gemma3:4b"
+                
+            messages = [
+                {"role": "user", "content": prompt + f"\n\nCRITICAL: Respond ONLY with a raw JSON array matching this schema. No markdown code blocks. Schema:\n{json.dumps(schema, indent=2)}"}
+            ]
+            ollama_res = requests.post("http://localhost:11434/api/chat", json={
+                "model": selected_model,
+                "messages": messages,
+                "format": "json",
+                "stream": False
+            }, timeout=120)
+            if ollama_res.status_code == 200:
+                reply = ollama_res.json().get("message", {}).get("content", "").strip()
+                return json.loads(reply)
+            else:
+                print(f"[Gemini RnD Fallback] Failed: {ollama_res.status_code} - {ollama_res.text}")
+        except Exception as oe:
+            print(f"[Gemini RnD Fallback] Error: {oe}")
+            
+    if data:
+        try:
+            text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return json.loads(text)
+        except Exception as e:
+            print(f"[Gemini RnD] Parse error: {e}")
+
     return []
 
 def run_gemini_rnd_cycle(implement: bool = True) -> dict:

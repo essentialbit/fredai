@@ -1696,6 +1696,35 @@ html[data-tier="micro"] #ov-globe-stage {
       <div style="padding:14px;flex:1;position:relative;min-height:0"><canvas id="trend-bar-chart"></canvas></div>
     </div>
 
+    <!-- GLOBE TAB -->
+    <div class="panel" id="tab-globe-panel" style="display:none;grid-column:1/-1;padding:0;overflow:hidden;position:relative">
+      <div style="padding:12px 16px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--blue);text-transform:uppercase">◎ Fred AI Intel Globe</div>
+        <div id="dash-globe-stats" style="font-size:10px;color:var(--t3)">Loading...</div>
+        <div style="display:flex;gap:4px;margin-left:auto">
+          <button class="dash-gmode active" onclick="setGlobeMode('standard',this)" style="font-size:9px;padding:3px 8px;border-radius:3px;background:rgba(0,180,255,.12);border:1px solid var(--border);color:var(--t2);cursor:pointer">All Signals</button>
+          <button class="dash-gmode" onclick="setGlobeMode('monitored',this)" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:var(--t2);cursor:pointer">My Holdings</button>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'all')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:rgba(0,180,255,.12);border:1px solid var(--border);color:var(--t2);cursor:pointer">All</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'market')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#00b4ff;cursor:pointer">Market</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'ai')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#00ff88;cursor:pointer">AI</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'geopolitical')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#ff3b5c;cursor:pointer">Geopolitical</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'central_bank')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#f5a623;cursor:pointer">Central Bank</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'macro')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#9b59ff;cursor:pointer">Macro</button>
+        </div>
+      </div>
+      <div style="display:flex;height:calc(100vh - 200px);min-height:400px">
+        <div id="dash-globe-canvas" style="flex:1;position:relative;min-width:0">
+          <div id="dash-globe-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading globe...</div>
+        </div>
+        <div style="width:220px;flex-shrink:0;border-left:1px solid var(--border);padding:10px;overflow:hidden;display:flex;flex-direction:column">
+          <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Live Feed</div>
+          <div id="globe-hud-feed" style="flex:1;overflow-y:auto;font-size:9px;line-height:1.6;color:var(--t3);font-family:'JetBrains Mono',monospace"></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /content -->
 
   <!-- MOBILE BOTTOM NAV -->

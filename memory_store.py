@@ -226,6 +226,22 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS insider_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            owner_name TEXT,
+            owner_title TEXT,
+            transaction_date TEXT,
+            transaction_code TEXT,
+            is_signal_code INTEGER DEFAULT 0,
+            signal_type TEXT,
+            shares REAL,
+            price_per_share REAL,
+            acquired_disposed TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -240,6 +256,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_techalerts_user ON tech_alerts(user_id);
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1099,3 +1116,34 @@ def get_latest_short_interest(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+# ── INSIDER TRANSACTIONS (SEC Form 4) ─────────────────────────────────────────
+
+def insert_insider_transactions(transactions: list[dict]) -> int:
+    """Idempotent on (ticker, owner_name, transaction_date, transaction_code, shares) —
+    safe to call repeatedly with overlapping filing history. Returns rows actually inserted."""
+    if not transactions:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO insider_transactions
+                (ticker, owner_name, owner_title, transaction_date, transaction_code,
+                 is_signal_code, signal_type, shares, price_per_share, acquired_disposed)
+            VALUES (:ticker, :owner_name, :owner_title, :transaction_date, :transaction_code,
+                    :is_signal_code, :signal_type, :shares, :price_per_share, :acquired_disposed)
+        """, [{**t, "is_signal_code": int(t["is_signal_code"])} for t in transactions])
+        return conn.total_changes - before
+
+
+def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bool = True) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    query = "SELECT * FROM insider_transactions WHERE ticker=? AND transaction_date >= ?"
+    params = [ticker, since]
+    if signal_only:
+        query += " AND is_signal_code=1"
+    query += " ORDER BY transaction_date DESC"
+    with get_conn() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]

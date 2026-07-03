@@ -121,7 +121,8 @@ class _FredProvider:
                 result = self._gemini_complete(messages, system, tier, max_tokens, g_key, grounding=True)
                 if not result.startswith("[Fred Gemini error"):
                     return result
-            return "[Fred error: Search Grounding requires a valid GEMINI_API_KEY]"
+                print(f"[FredAI] Grounding call failed: {result}")
+            return "Fred's live search isn't available right now — please try again shortly."
 
         # Default AI backend order: Anthropic Claude first, Gemini as fallback, Ollama last
         providers_to_try = ["anthropic", "gemini", "ollama"]
@@ -149,8 +150,21 @@ class _FredProvider:
                 errors.append(f"Ollama error: {result}")
 
         if errors:
-            return f"[FredAI Routing failure] All attempted providers failed:\n" + "\n".join(errors)
+            # Log full technical detail server-side for debugging; never surface raw
+            # provider error text (status codes, billing messages, stack-trace-ish
+            # strings) directly to the end user -- confirmed this was leaking as-is
+            # into the chat UI during a real Gemini credits-exhaustion incident.
+            print("[FredAI] All AI providers failed:\n" + "\n".join(errors))
+            return (
+                "Fred's AI backend is temporarily unavailable — please try again in a "
+                "few minutes. If this keeps happening, an admin may need to check the "
+                "configured API keys."
+            )
 
+        print(
+            "[FredAI] complete() called with no AI provider configured or available "
+            "(no valid ANTHROPIC_API_KEY/GEMINI_API_KEY, Ollama unreachable)."
+        )
         return (
             "[FredAI offline] No AI provider configured or available.\n"
             "Options:\n"

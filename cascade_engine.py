@@ -237,3 +237,66 @@ def run_cascade_check(quotes: dict) -> list[dict]:
                 "cascades": cascades[:6],
             })
     return results
+
+
+def get_ticker_network(tracked_symbols: list[str], quotes: dict = None, max_neighbors_per_ticker: int = 4) -> dict:
+    """A small, focused relationship graph scoped to the user's own tracked
+    tickers (portfolio + watchlist) + their nearest neighbors -- both known
+    (EDGES) and statistical (correlation_matrix), same two-tier honesty as
+    cascade_for_event. Deliberately not the full ~135-ticker universe: this
+    feeds a compact widget, not a standalone page, and a sprawling network
+    of everything is lower-signal than a focused one of what the user
+    actually holds/watches.
+    """
+    quotes = quotes or {}
+    tracked = set(s.upper() for s in tracked_symbols)
+    if not tracked:
+        return {"nodes": [], "edges": []}
+
+    nodes: dict = {}
+    edges = []
+    seen_edge_keys = set()
+
+    def _add_node(sym: str, tracked_flag: bool):
+        if sym in nodes:
+            return
+        q = quotes.get(sym, {})
+        sector = SECTORS.get(sym, "Other")
+        nodes[sym] = {
+            "id": sym,
+            "tracked": tracked_flag,
+            "sector": sector,
+            "sector_color": SECTOR_COLORS.get(sector, "#4a6380"),
+            "price": q.get("price", 0),
+            "change_pct": q.get("change_pct", 0),
+        }
+
+    for sym in tracked:
+        _add_node(sym, True)
+        known_neighbors = _ADJ.get(sym, [])[:max_neighbors_per_ticker]
+        known_targets = {n["symbol"] for n in known_neighbors}
+        for n in known_neighbors:
+            _add_node(n["symbol"], n["symbol"] in tracked)
+            key = tuple(sorted([sym, n["symbol"]])) + (n["type"],)
+            if key in seen_edge_keys:
+                continue
+            seen_edge_keys.add(key)
+            edges.append({
+                "source": sym, "target": n["symbol"], "type": n["type"],
+                "strength": n["strength"], "color": EDGE_COLORS.get(n["type"], "#4a6380"),
+                "desc": n["desc"], "data_source": "known_relationship",
+            })
+
+        for n in _correlation_neighbors(sym, known_targets)[:max_neighbors_per_ticker]:
+            _add_node(n["symbol"], n["symbol"] in tracked)
+            key = tuple(sorted([sym, n["symbol"]])) + ("correlated",)
+            if key in seen_edge_keys:
+                continue
+            seen_edge_keys.add(key)
+            edges.append({
+                "source": sym, "target": n["symbol"], "type": "correlated",
+                "strength": n["strength"], "color": EDGE_COLORS.get("correlated", "#8ba3b8"),
+                "desc": n["desc"], "data_source": "statistical_correlation",
+            })
+
+    return {"nodes": list(nodes.values()), "edges": edges}

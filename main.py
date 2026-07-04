@@ -46,7 +46,7 @@ from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
 from technical_alerts import run_technical_alerts, get_technicals
 from graph_engine import generate_assessment, _ai_assessment_cache
-from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves
+from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves, get_ticker_network
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from correlation_engine import refresh_correlation_matrix
@@ -1683,6 +1683,22 @@ def api_correlation():
         "computed_at": pairs[0]["computed_at"] if pairs else None,
         "pairs": [{"symbol_a": p["symbol_a"], "symbol_b": p["symbol_b"], "correlation": p["correlation"]} for p in pairs],
     })
+
+
+@app.route("/api/ticker-relationships")
+@login_required
+def api_ticker_relationships():
+    """Small, focused relationship network for the user's own tracked tickers
+    (portfolio + watchlist) -- both known business relationships and
+    statistically-correlated tickers, honestly distinguished."""
+    uid = session["user_id"]
+    wl_rows = get_watchlist(uid)
+    portfolio_rows = get_portfolio(uid)
+    tracked = list(set([r["symbol"] for r in wl_rows] + [r["symbol"] for r in portfolio_rows]))
+    if not tracked:
+        tracked = WATCHLIST[:6]  # sensible default for a fresh account with nothing tracked yet
+    network = get_ticker_network(tracked, quotes=_quotes_cache or {})
+    return jsonify(network)
 
 
 @app.route("/api/insider/<ticker>")

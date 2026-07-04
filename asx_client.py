@@ -17,6 +17,7 @@ import time
 import requests
 import feedparser
 from datetime import datetime
+from news_client import _is_financially_relevant
 
 _HEADERS = {
     "User-Agent": (
@@ -265,12 +266,15 @@ def fetch_au_news(watchlist_asx: list[str] = None) -> list[dict]:
                 seen_guids.add(guid)
                 pub = entry.get("published") or entry.get("updated") or ""
                 summary = _strip_html(entry.get("summary", ""))
+                title = entry.get("title", "")
+                if not _is_financially_relevant(feed["source"], f"{title} {summary}"):
+                    continue
                 tickers = _extract_asx_tickers(
-                    entry.get("title", "") + " " + summary
+                    title + " " + summary
                 )
                 all_items.append({
                     "guid": guid,
-                    "title": entry.get("title", ""),
+                    "title": title,
                     "summary": summary[:500],
                     "url": entry.get("link", ""),
                     "source": feed["source"],

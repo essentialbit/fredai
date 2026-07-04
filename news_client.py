@@ -103,11 +103,32 @@ SOURCE_COORDINATES: dict[str, tuple[float, float, str]] = {
 }
 
 _FINANCIAL_KEYWORDS = re.compile(
-    r'\b(stock|market|invest|trade|earn|revenue|profit|loss|GDP|inflation|rate|bond|'
+    # "loss" deliberately excluded -- verified live against Al Jazeera that it
+    # false-positives constantly on sports scores ("despite loss"); "profit"/
+    # "revenue"/"earn" already catch genuine P&L reporting without that risk.
+    r'\b(stock|market|invest|trade|earn|revenue|profit|GDP|inflation|rate|bond|'
     r'fed|fomc|rba|reserve bank|tariff|sanction|geopolit|war|conflict|supply chain|'
     r'semiconductor|AI|nvidia|apple|tesla|crypto|bitcoin|ethereum)\b',
     re.IGNORECASE
 )
+
+# Issue #33: SMH Business ingested a celebrity/radio-industry story with zero
+# financial relevance -- its RSS "business" section isn't purely financial.
+# Verified during rebalancing work that Al Jazeera and Nikkei Asia's broader
+# feeds do the same (a World Cup preview, a general Asian-American culture
+# piece). These are general-news outlets included specifically for their
+# real geopolitical/macro relevance (_FINANCIAL_KEYWORDS already covers
+# "geopolit|war|conflict|sanction|tariff", so genuine coverage still passes)
+# -- unlike dedicated financial outlets (Bloomberg, CNBC, Yahoo Finance, etc.)
+# where every item is inherently on-topic by the feed's own nature and
+# doesn't need this filter.
+_TOPICAL_FILTER_SOURCES = {"SMH Business", "Al Jazeera", "NHK Asia", "Nikkei Asia"}
+
+
+def _is_financially_relevant(source: str, text: str) -> bool:
+    if source not in _TOPICAL_FILTER_SOURCES:
+        return True
+    return bool(_FINANCIAL_KEYWORDS.search(text))
 
 _TICKER_MENTION = re.compile(r'\b([A-Z]{2,5})(?:\s*-\s*USD)?\b|\$([A-Z]{2,5})\b')
 
@@ -212,10 +233,12 @@ def _parse_feed(feed_meta: dict, watchlist: list[str]) -> list[dict]:
                 title = f"[Translated] {trans_title}"
                 summary = trans_summary
 
+            text = f"{title} {summary}"
+            if not _is_financially_relevant(feed_meta["source"], text):
+                continue
+
             url = entry.get("link") or ""
             guid = entry.get("id") or _guid(url, title)
-
-            text = f"{title} {summary}"
             tickers = _extract_tickers(text, watchlist)
             score, model = _score(title, summary)
 

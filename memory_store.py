@@ -1121,6 +1121,29 @@ def count_news(category: str = None, ticker: str = None, hours: int = 24) -> int
         return conn.execute(base, params).fetchone()[0]
 
 
+def get_news_diverse(category: str = None, hours: int = 24, limit: int = 6) -> list[dict]:
+    """A recency-ordered feed naturally lets whichever source posts most
+    often (Yahoo Finance is ~49% of all stored volume) crowd out everything
+    else in a small "top N" slice, which reads as a lack of real global
+    breadth regardless of how balanced the underlying source list actually
+    is. Round-robins one item per source (each source's own items still
+    ordered by recency) instead of a flat ORDER BY, so a small preview
+    genuinely reflects the diversity of what's being tracked rather than
+    whichever outlet happens to publish most frequently."""
+    pool = get_news(category=category, hours=hours, limit=limit * 8)
+    by_source: dict = {}
+    for item in pool:
+        by_source.setdefault(item["source"], []).append(item)
+    result = []
+    while len(result) < limit and any(by_source.values()):
+        for source in list(by_source.keys()):
+            if by_source[source]:
+                result.append(by_source[source].pop(0))
+                if len(result) >= limit:
+                    break
+    return result
+
+
 # ── ECONOMIC CALENDAR ─────────────────────────────────────────────────────────
 
 def upsert_calendar_events(events: list[dict]) -> int:

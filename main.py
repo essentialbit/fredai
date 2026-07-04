@@ -227,10 +227,10 @@ def _security_headers(response):
     # and same-origin everything else.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' unpkg.com cdn.jsdelivr.net fonts.googleapis.com; "
+        "script-src 'self' 'unsafe-inline' unpkg.com cdn.jsdelivr.net cdn.socket.io fonts.googleapis.com; "
         "style-src 'self' 'unsafe-inline' fonts.googleapis.com; "
         "font-src 'self' fonts.gstatic.com; "
-        "img-src 'self' data: i.ytimg.com unpkg.com; "
+        "img-src 'self' data: *.ytimg.com unpkg.com; "
         "connect-src 'self' wss: ws:; "
         "frame-src https://www.youtube.com; "
         "object-src 'none';"

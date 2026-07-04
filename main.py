@@ -45,7 +45,7 @@ from memory_store import (
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
 from technical_alerts import run_technical_alerts, get_technicals
-from graph_engine import build_graph, generate_assessment, _ai_assessment_cache
+from graph_engine import generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
@@ -1562,12 +1562,6 @@ def news_page():
     return render_template("news.html")
 
 
-@app.route("/graph")
-@login_required
-def graph_page():
-    return render_template("graph.html")
-
-
 @app.route("/api/news")
 @login_required
 def api_news():
@@ -1674,23 +1668,6 @@ def api_ai_universe():
             "tickers": tickers,
         })
     return jsonify({"sectors": sectors})
-
-
-@app.route("/api/graph")
-@login_required
-def api_graph():
-    """Return stock relationship graph for D3 force-directed layout."""
-    uid = session["user_id"]
-    wl_rows = get_watchlist(uid)
-    portfolio_rows = get_portfolio(uid)
-    watchlist = [r["symbol"] for r in wl_rows] if wl_rows else WATCHLIST
-    portfolio_syms = [r["symbol"] for r in portfolio_rows]
-    focus = list(set(watchlist + portfolio_syms))
-    # Include AI universe symbols
-    for meta in AI_UNIVERSE.values():
-        focus.extend(meta["tickers"])
-    graph = build_graph(symbols=focus, quotes=_quotes_cache)
-    return jsonify(graph)
 
 
 @app.route("/api/correlation")

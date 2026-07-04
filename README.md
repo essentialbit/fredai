@@ -513,7 +513,7 @@ cp .env.example .env
 nano .env
 ```
 
-Add your API keys. At minimum, set `ANTHROPIC_API_KEY`. Everything else is optional.
+Add at least one AI provider key (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY`, or `GROQ_API_KEY` — see [API Key Setup](#api-key-setup) below for the free options), or skip all of them and install Ollama for a fully free, offline setup. Everything else is optional.
 
 #### Step 4 — Start Fred
 
@@ -572,11 +572,17 @@ The address shown (e.g. `192.168.1.42`) is what other devices type into their br
 
 Fred uses several external APIs. Here's exactly what you need and where to get each one:
 
-### Required
+### AI provider — pick at least one (Fred tries them in this order, falls back automatically)
 
-| Key | Where to get | Free tier |
-|-----|-------------|-----------|
-| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Pay-per-use (~$0.25/1M tokens on Haiku) |
+| Key | Where to get | Cost |
+|-----|-------------|------|
+| `ANTHROPIC_API_KEY` | [console.anthropic.com](https://console.anthropic.com) | Pay-per-use (~$0.25/1M tokens on Haiku) — best quality |
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) | Free tier available (rate-limited) |
+| `XAI_API_KEY` | [console.x.ai](https://console.x.ai) | Pay-per-use — frontier-quality (Grok) |
+| `GROQ_API_KEY` | [console.groq.com](https://console.groq.com) | **Free**, no cost, cloud-hosted |
+| *(none — install Ollama instead)* | [ollama.com](https://ollama.com), then `ollama pull llama3.2` | **Free**, fully on-device, no API key needed |
+
+New to Fred? The simplest zero-cost path: install Ollama, run `ollama pull llama3.2`, set `AI_PROVIDER=ollama` in `.env`, and skip every key on this list — Fred runs entirely offline. Add any of the cloud keys above later for better quality; Fred will pick them up automatically without any other config changes.
 
 ### Highly Recommended
 
@@ -809,10 +815,13 @@ FREDAI_ADMIN_PASSWORD=
 # If unset, CI-push updates are disabled (6h poll still works)
 FREDAI_DEPLOY_SECRET=
 
-# ── AI ───────────────────────────────────────────────────────────────────────
-ANTHROPIC_API_KEY=...         # Required for Fred chat + briefings
+# ── AI (pick at least one, or install Ollama for a fully free/offline setup) ─
+ANTHROPIC_API_KEY=...         # Best quality, pay-per-use
 ANTHROPIC_MODEL=claude-sonnet-4-6
 ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001
+GEMINI_API_KEY=               # Free tier available
+XAI_API_KEY=                  # Grok, pay-per-use, frontier-quality
+GROQ_API_KEY=                 # Free, cloud-hosted, no cost
 
 # ── Market data ──────────────────────────────────────────────────────────────
 NASDAQ_API_KEY=               # Optional — Nasdaq Data Link

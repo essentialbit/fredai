@@ -68,6 +68,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script src="//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
@@ -1166,6 +1167,16 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .ops-col-title{font-size:8px;font-weight:700;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .ops-badge{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 
+/* Situation Room collapsible widgets */
+.sr-widget-header{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none}
+.sr-widget-header:hover{background:rgba(255,255,255,.02)}
+.sr-widget-toggle{font-size:9px;color:var(--t3);transition:transform .15s;width:10px;display:inline-block}
+.sr-widget.collapsed .sr-widget-toggle{transform:rotate(-90deg)}
+.sr-widget-title{font-size:var(--font-xs);font-weight:700;letter-spacing:1.5px;color:var(--blue);text-transform:uppercase}
+.sr-widget-control{font-size:9px;color:var(--t3);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer}
+.sr-widget-body{overflow:hidden}
+.sr-widget.collapsed .sr-widget-body{display:none}
+
 /* Signal density items */
 .sd-item{
   display:flex;align-items:center;gap:8px;padding:5px 0;
@@ -1430,7 +1441,7 @@ html[data-tier="micro"] #ov-globe-stage {
     <button class="nav-tab" onclick="switchTab('portfolio',this)">Portfolio</button>
     <button class="nav-tab" onclick="switchTab('trending',this)">Trending</button>
     <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
-    <button class="nav-tab" onclick="switchTab('globe',this)">◎ Globe</button>
+    <button class="nav-tab" onclick="switchTab('globe',this)">◎ Situation Room</button>
     <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
   </div>
   <!-- ── FRED QUERY BAR ── -->
@@ -1710,7 +1721,7 @@ html[data-tier="micro"] #ov-globe-stage {
     <!-- GLOBE TAB -->
     <div class="panel" id="tab-globe-panel" style="display:none;grid-column:1/-1;padding:0;overflow:hidden;position:relative">
       <div style="padding:12px 16px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--blue);text-transform:uppercase">◎ Fred AI Intel Globe</div>
+        <div style="font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--blue);text-transform:uppercase">◎ The Situation Room</div>
         <div id="dash-globe-stats" style="font-size:10px;color:var(--t3)">Loading...</div>
         <div style="display:flex;gap:4px;margin-left:auto">
           <button class="dash-gmode active" onclick="setGlobeMode('standard',this)" style="font-size:9px;padding:3px 8px;border-radius:3px;background:rgba(0,180,255,.12);border:1px solid var(--border);color:var(--t2);cursor:pointer">All Signals</button>
@@ -1725,13 +1736,46 @@ html[data-tier="micro"] #ov-globe-stage {
           <button class="dash-gflt" onclick="dashGlobeFilter(this,'macro')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#9b59ff;cursor:pointer">Macro</button>
         </div>
       </div>
-      <div style="display:flex;height:calc(100vh - 200px);min-height:400px">
-        <div id="dash-globe-canvas" style="flex:1;position:relative;min-width:0">
-          <div id="dash-globe-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading globe...</div>
+      <div style="overflow-y:auto;height:calc(100vh - 200px);min-height:400px">
+        <div style="display:flex;height:520px;flex-shrink:0">
+          <div id="dash-globe-canvas" style="flex:1;position:relative;min-width:0">
+            <div id="dash-globe-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading globe...</div>
+          </div>
+          <div style="width:220px;flex-shrink:0;border-left:1px solid var(--border);padding:10px;overflow:hidden;display:flex;flex-direction:column">
+            <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Live Feed</div>
+            <div id="globe-hud-feed" style="flex:1;overflow-y:auto;font-size:9px;line-height:1.6;color:var(--t3);font-family:'JetBrains Mono',monospace"></div>
+          </div>
         </div>
-        <div style="width:220px;flex-shrink:0;border-left:1px solid var(--border);padding:10px;overflow:hidden;display:flex;flex-direction:column">
-          <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Live Feed</div>
-          <div id="globe-hud-feed" style="flex:1;overflow-y:auto;font-size:9px;line-height:1.6;color:var(--t3);font-family:'JetBrains Mono',monospace"></div>
+
+        <!-- WIDGET: Ticker Relationship Network -->
+        <div class="sr-widget" style="border-top:1px solid var(--border)">
+          <div class="sr-widget-header" onclick="toggleSrWidget(this)">
+            <span class="sr-widget-toggle">▾</span>
+            <span class="sr-widget-title">◈ Relationship Network</span>
+            <span style="font-size:9px;color:var(--t3);margin-left:8px">Known relationships + statistical correlations for your tracked tickers</span>
+            <label class="sr-widget-control" onclick="event.stopPropagation()">
+              <input type="checkbox" id="rn-show-correlated" checked onchange="renderRelationshipNetwork()"> Show statistical correlations
+            </label>
+          </div>
+          <div class="sr-widget-body" id="rn-body">
+            <div id="rn-canvas" style="width:100%;height:380px;position:relative">
+              <div id="rn-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WIDGET: Video Intelligence -->
+        <div class="sr-widget" style="border-top:1px solid var(--border)">
+          <div class="sr-widget-header" onclick="toggleSrWidget(this)">
+            <span class="sr-widget-toggle">▾</span>
+            <span class="sr-widget-title">▶ Video Intelligence</span>
+            <span style="font-size:9px;color:var(--t3);margin-left:8px">Breaking finance news + your tracked tickers, from credible channels</span>
+          </div>
+          <div class="sr-widget-body" id="vi-body">
+            <div id="vi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:12px 16px">
+              <div style="color:var(--t3);font-size:9px">Loading...</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2667,6 +2711,8 @@ function switchTab(tab, btn) {
     content.className='tab-overview';
     g('tab-globe-panel').style.display='';
     if (!_dashGlobeInst) initDashGlobe();
+    if (!_srWidgetLoaded['rn-body']) { _srWidgetLoaded['rn-body'] = true; renderRelationshipNetwork(); }
+    if (!_srWidgetLoaded['vi-body']) { _srWidgetLoaded['vi-body'] = true; loadVideoIntelligence(); }
   }
 }
 
@@ -2908,6 +2954,123 @@ function setGlobeMode(mode, btn) {
   _dashGlobeInst.pointsData(getGlobePoints());
 }
 
+// ── SITUATION ROOM WIDGETS (collapsible, lazy-loaded on first expand) ──────
+const _srWidgetLoaded = {};
+function toggleSrWidget(headerEl) {
+  const widget = headerEl.closest('.sr-widget');
+  widget.classList.toggle('collapsed');
+  if (widget.classList.contains('collapsed')) return;
+  const bodyId = widget.querySelector('.sr-widget-body').id;
+  if (_srWidgetLoaded[bodyId]) return;
+  _srWidgetLoaded[bodyId] = true;
+  if (bodyId === 'rn-body') renderRelationshipNetwork();
+  if (bodyId === 'vi-body') loadVideoIntelligence();
+}
+
+let _rnData = null;
+async function renderRelationshipNetwork() {
+  const canvas = g('rn-canvas');
+  if (!canvas || !window.d3) return;
+  if (!_rnData) {
+    try {
+      const r = await fetch('/api/ticker-relationships');
+      _rnData = await r.json();
+    } catch(e) {
+      canvas.innerHTML = '<div style="color:var(--t3);font-size:11px;text-align:center;padding-top:40%">Relationship network unavailable</div>';
+      return;
+    }
+  }
+  const showCorrelated = g('rn-show-correlated').checked;
+  const edges = _rnData.edges.filter(e => showCorrelated || e.data_source === 'known_relationship');
+  const usedNodeIds = new Set(edges.flatMap(e => [e.source, e.target]));
+  const nodes = _rnData.nodes.filter(n => n.tracked || usedNodeIds.has(n.id));
+
+  canvas.innerHTML = '';
+  if (!nodes.length) {
+    canvas.innerHTML = '<div style="color:var(--t3);font-size:11px;text-align:center;padding-top:40%">No relationship data yet -- add symbols to your watchlist or portfolio</div>';
+    return;
+  }
+
+  const W = canvas.clientWidth || 600, H = 380;
+  const svg = d3.select(canvas).append('svg').attr('width', W).attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
+  const nodeData = nodes.map(n => ({...n}));
+  const linkData = edges.map(e => ({...e}));
+
+  const sim = d3.forceSimulation(nodeData)
+    .force('link', d3.forceLink(linkData).id(d => d.id).distance(70).strength(0.4))
+    .force('charge', d3.forceManyBody().strength(-160))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide().radius(d => d.tracked ? 22 : 14));
+
+  const link = svg.append('g').selectAll('line').data(linkData).enter().append('line')
+    .attr('stroke', d => d.color).attr('stroke-width', d => Math.max(1, d.strength / 3))
+    .attr('stroke-opacity', d => d.data_source === 'known_relationship' ? 0.7 : 0.35)
+    .attr('stroke-dasharray', d => d.data_source === 'statistical_correlation' ? '3,3' : null);
+
+  const node = svg.append('g').selectAll('g').data(nodeData).enter().append('g')
+    .call(d3.drag()
+      .on('start', (e,d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on('end', (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  node.append('circle')
+    .attr('r', d => d.tracked ? 14 : 8)
+    .attr('fill', d => d.sector_color)
+    .attr('stroke', d => d.tracked ? '#00ff88' : 'rgba(255,255,255,.2)')
+    .attr('stroke-width', d => d.tracked ? 2 : 1)
+    .style('filter', d => d.tracked ? 'drop-shadow(0 0 6px rgba(0,255,136,.6))' : 'none');
+
+  node.append('text').text(d => d.id.replace('.AX','').replace('-USD',''))
+    .attr('text-anchor', 'middle').attr('dy', d => d.tracked ? 26 : 18)
+    .attr('font-size', d => d.tracked ? '10px' : '8px')
+    .attr('font-family', "'JetBrains Mono',monospace")
+    .attr('fill', d => d.tracked ? '#e8f4ff' : 'var(--t3)');
+
+  node.append('title').text(d => {
+    const rels = linkData.filter(l => l.source.id === d.id || l.target.id === d.id);
+    return rels.map(r => r.desc).join('\n') || d.id;
+  });
+
+  sim.on('tick', () => {
+    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+async function loadVideoIntelligence() {
+  const grid = g('vi-grid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/news/youtube-channels');
+    const data = await r.json();
+    const tracked = new Set([...(window._portfolio || []), ...(window._watchlist || [])]);
+    let videos = [];
+    for (const [ch, chData] of Object.entries(data)) {
+      for (const v of (chData.videos || [])) {
+        const mentionsTracked = [...tracked].some(sym => v.title.toUpperCase().includes(sym.replace('-USD','').replace('.AX','')));
+        videos.push({...v, channel: ch, mentionsTracked});
+      }
+    }
+    videos.sort((a,b) => (b.mentionsTracked - a.mentionsTracked) || (new Date(b.published) - new Date(a.published)));
+    if (!videos.length) {
+      grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center;padding:20px">No videos available right now</div>';
+      return;
+    }
+    grid.innerHTML = videos.slice(0, 12).map(v => `
+      <div style="cursor:pointer" onclick="window.open('${v.embed_url.replace('/embed/','/watch?v=')}','_blank')">
+        <div style="position:relative">
+          <img src="${esc(v.thumbnail)}" style="width:100%;border-radius:6px;aspect-ratio:16/9;object-fit:cover" loading="lazy" onerror="this.style.background='var(--bg3)'">
+          ${v.mentionsTracked ? '<span style="position:absolute;top:4px;left:4px;background:rgba(0,255,136,.9);color:#03080f;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px">TRACKED</span>' : ''}
+        </div>
+        <div style="font-size:9px;color:var(--blue);margin-top:4px">${esc(v.channel)}</div>
+        <div style="font-size:10px;color:var(--t2);line-height:1.3;margin-top:2px">${esc(v.title)}</div>
+      </div>`).join('');
+  } catch(e) {
+    grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center">Video intelligence unavailable</div>';
+  }
+}
+
 async function initDashGlobe() {
   if (!window.Globe) return;
   const container = g('dash-globe-canvas');
@@ -3043,7 +3206,7 @@ async function initDashGlobe() {
     }, 2500);
 
   } catch(e) {
-    if (loading) loading.innerHTML = `<span style="color:var(--red)">Globe unavailable</span>`;
+    if (loading) loading.innerHTML = `<span style="color:var(--red)">Situation Room unavailable</span>`;
   }
 }
 

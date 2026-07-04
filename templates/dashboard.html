@@ -1817,6 +1817,24 @@ html[data-tier="micro"] #ov-globe-stage {
             </div>
           </div>
         </div>
+
+        <!-- WIDGET: Live TV -->
+        <div class="customizable-widget" data-widget-id="tv-widget" style="border-top:1px solid var(--border)">
+          <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+            <span class="customizable-widget-toggle">▾</span>
+            <span class="customizable-widget-title">◉ Live TV</span>
+            <span style="font-size:9px;color:var(--t3);margin-left:8px">Financial news networks, live</span>
+            <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
+              <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
+              <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
+            </span>
+          </div>
+          <div class="customizable-widget-body" id="tv-body">
+            <div id="tv-tabs" style="display:flex;gap:4px;padding:10px 16px 0"></div>
+            <div class="video-modal-frame" id="tv-player" style="aspect-ratio:16/9"></div>
+          </div>
+        </div>
         <div class="cw-add-widget" id="globe-cw-add" style="display:none" onclick="cwShowAddMenu('globe')">+ <span id="globe-cw-hidden-count">0</span> hidden widget(s) — click to restore</div>
       </div>
     </div>
@@ -2764,10 +2782,11 @@ function switchTab(tab, btn) {
     g('tab-globe-panel').style.display='';
     if (!_dashGlobeInst) initDashGlobe();
     if (!_cwLayout['globe']) {
-      initCustomizableWidgets('globe', ['rn-widget', 'vi-widget']).then(() => {
+      initCustomizableWidgets('globe', ['rn-widget', 'vi-widget', 'tv-widget']).then(() => {
         const hidden = _cwLayout['globe'].hidden;
         if (!hidden.includes('rn-widget') && !_srWidgetLoaded['rn-body']) { _srWidgetLoaded['rn-body'] = true; renderRelationshipNetwork(); }
         if (!hidden.includes('vi-widget') && !_srWidgetLoaded['vi-body']) { _srWidgetLoaded['vi-body'] = true; loadVideoIntelligence(); }
+        if (!hidden.includes('tv-widget') && !_srWidgetLoaded['tv-body']) { _srWidgetLoaded['tv-body'] = true; initLiveTV(); }
       });
     }
   }
@@ -3029,6 +3048,7 @@ function toggleCwWidget(headerEl) {
   _srWidgetLoaded[bodyId] = true;
   if (bodyId === 'rn-body') renderRelationshipNetwork();
   if (bodyId === 'vi-body') loadVideoIntelligence();
+  if (bodyId === 'tv-body') initLiveTV();
 }
 
 async function initCustomizableWidgets(page, widgetIds) {
@@ -3241,6 +3261,42 @@ async function loadVideoIntelligence() {
   } catch(e) {
     grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center">Video intelligence unavailable</div>';
   }
+}
+
+// LIVE_TV_CHANNELS: type "channel" resolves to whatever's currently live on
+// that channel (used for networks with a genuine rolling live broadcast);
+// type "video" pins a specific persistent stream (CNBC's own 24/7 "Marathon"
+// livestream is a long-running single video, not a channel-live lookup).
+const LIVE_TV_CHANNELS = [
+  {name: 'Bloomberg', type: 'channel', id: 'UCIALMKvObZNtJ6AmdCLP7Lg'},
+  {name: 'Yahoo Finance', type: 'channel', id: 'UCEAZeUIeJs0IjQiqTCdVSIg'},
+  {name: 'Schwab Network', type: 'channel', id: 'UCqoSrYgusd8ZddtMoWhjHYA'},
+  {name: 'CNBC', type: 'video', id: '9NyxcX3rhQs'},
+];
+
+function initLiveTV() {
+  const tabs = g('tv-tabs');
+  if (!tabs || tabs.dataset.init) return;
+  tabs.dataset.init = '1';
+  tabs.innerHTML = LIVE_TV_CHANNELS.map((c,i) => `
+    <button class="dash-gmode" data-tv-idx="${i}" onclick="switchLiveChannel(${i},this)"
+      style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:var(--t2);cursor:pointer">${esc(c.name)}</button>
+  `).join('');
+  switchLiveChannel(0, tabs.querySelector('button[data-tv-idx="0"]'));
+}
+
+function switchLiveChannel(i, btn) {
+  const c = LIVE_TV_CHANNELS[i];
+  if (!c) return;
+  document.querySelectorAll('#tv-tabs button').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = 'none';
+  });
+  if (btn) { btn.classList.add('active'); btn.style.background = 'rgba(0,180,255,.12)'; }
+  const src = c.type === 'channel'
+    ? `https://www.youtube.com/embed/live_stream?channel=${c.id}&autoplay=1&mute=1`
+    : `https://www.youtube.com/embed/${c.id}?autoplay=1&mute=1`;
+  g('tv-player').innerHTML = `<iframe src="${src}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
 }
 
 async function initDashGlobe() {

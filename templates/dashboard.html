@@ -3574,8 +3574,14 @@ function renderNewsPreview(items) {
 function relTime(dt) {
   if (!dt) return '';
   try {
-    const d = new Date(dt.includes('Z')?dt:dt+' UTC');
+    // published_at has two coexisting formats ("2026-07-03 15:50:00" and
+    // "2026-07-03T15:50:00", both produced by news_client.py::_parse_date at
+    // different points) -- appending " UTC" to a "T"-separated string
+    // produces an unparseable "...T15:50:00 UTC" and silently yields
+    // Invalid Date (NaN downstream), which is what rendered as "NaNd ago".
+    const d = new Date(dt.includes('Z')?dt:dt.includes('T')?dt+'Z':dt+' UTC');
     const m = Math.round((Date.now()-d.getTime())/60000);
+    if (isNaN(m)) return '';
     if (m<1) return 'now';
     if (m<60) return m+'m ago';
     if (m<1440) return Math.round(m/60)+'h ago';

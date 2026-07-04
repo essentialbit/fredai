@@ -33,7 +33,7 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
-    get_news, count_news, upsert_news_items, prune_stale_news,
+    get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
     get_calendar_events, upsert_calendar_events,
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
@@ -703,7 +703,7 @@ def api_init():
     trending = get_trending_assets_with_fallback(hours=4, limit=15)
     next_scan = (_last_scan + timedelta(hours=SCAN_INTERVAL_HOURS)).isoformat() if _last_scan > datetime.min else None
 
-    news_preview = get_news(hours=24, limit=6)
+    news_preview = get_news_diverse(hours=24, limit=6)
     calendar_preview = get_calendar_events(days=7)
     tech_alerts_user = get_tech_alerts(uid)
 

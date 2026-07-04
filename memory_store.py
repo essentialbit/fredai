@@ -1121,6 +1121,49 @@ def count_news(category: str = None, ticker: str = None, hours: int = 24) -> int
         return conn.execute(base, params).fetchone()[0]
 
 
+def get_news_diverse(category: str = None, hours: int = 24, limit: int = 6) -> list[dict]:
+    """A recency-ordered feed naturally lets whichever source posts most
+    often (Yahoo Finance is ~49% of all stored volume) crowd out everything
+    else in a small "top N" slice, which reads as a lack of real global
+    breadth regardless of how balanced the underlying source list actually
+    is. Round-robins one item per source (each source's own items still
+    ordered by recency) instead of a flat ORDER BY, so a small preview
+    genuinely reflects the diversity of what's being tracked rather than
+    whichever outlet happens to publish most frequently.
+
+    Pool must be large enough to actually contain every active source, not
+    just whichever source's items happen to cluster at the very top of the
+    recency ordering -- with ~20+ distinct sources typically active in a 24h
+    window, a small pool (e.g. limit*8) can easily be dominated by one or two
+    bursty sources before round-robin ever gets a chance to diversify anything
+    (verified empirically: a limit*8 pool of 48 items contained only 12 of the
+    ~23 active sources). Pulling a much larger pool costs one extra SQL query,
+    not extra requests, so there's no reason to under-size it."""
+    pool = get_news(category=category, hours=hours, limit=500)
+    by_source: dict = {}
+    for item in pool:
+        by_source.setdefault(item["source"], []).append(item)
+    # With ~20+ distinct sources typically active and limit usually much
+    # smaller (6 for a preview), a single round-robin pass never reaches most
+    # sources -- whichever ones happen to appear first in by_source's
+    # insertion order (i.e. whichever had the single most recent individual
+    # item) would otherwise win by pure chance, not real editorial weight.
+    # Ordering sources by their own volume in this pool first means an
+    # established, consistently-publishing outlet (Bloomberg, CNBC, Yahoo
+    # Finance) gets priority over a source that happens to have one very
+    # recent item, while round-robin still caps any single source at one
+    # slot per pass so nothing can dominate the result.
+    ordered_sources = sorted(by_source.keys(), key=lambda s: -len(by_source[s]))
+    result = []
+    while len(result) < limit and any(by_source.values()):
+        for source in ordered_sources:
+            if by_source[source]:
+                result.append(by_source[source].pop(0))
+                if len(result) >= limit:
+                    break
+    return result
+
+
 # ── ECONOMIC CALENDAR ─────────────────────────────────────────────────────────
 
 def upsert_calendar_events(events: list[dict]) -> int:

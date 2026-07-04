@@ -400,6 +400,17 @@ def build_graph(symbols: list[str] = None, quotes: dict = None) -> dict:
         lat, lng, city, country = HQ[sym]
         q = quotes.get(sym, {})
         sector = SECTORS.get(sym, "Other")
+        # A negative price raised to a fractional power (** 0.3) produces a
+        # complex number in Python -- not an exception, so it slips past this
+        # point silently and only blows up later at jsonify() with "Object of
+        # type complex is not JSON serializable", a 500 whose HTML error page
+        # breaks the frontend's r.json() call ("Failed to load graph data").
+        # Commodities/futures (CL=F is tracked here) have genuinely traded
+        # negative before (WTI crude, April 2020), and quotes.get(sym, {})
+        # can also legitimately hold an explicit price=None. abs() + a None
+        # guard make size purely a visual scaling factor, safe regardless of
+        # the real price's sign.
+        size_price = abs(q.get("price") or 1)
         nodes.append({
             "id": sym,
             "symbol": sym,
@@ -412,7 +423,7 @@ def build_graph(symbols: list[str] = None, quotes: dict = None) -> dict:
             "lng": lng,
             "city": city,
             "country": country,
-            "size": max(10, min(40, 10 + (q.get("price", 1) ** 0.3))),
+            "size": max(10, min(40, 10 + (size_price ** 0.3))),
         })
 
     node_ids = {n["id"] for n in nodes}

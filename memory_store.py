@@ -1289,3 +1289,29 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_layout_prefs(user_id: int, page: str) -> dict:
+    """Per-user, per-page widget layout: which widgets are hidden and what
+    order they render in. Stored inside users.preferences (same column/
+    pattern as saved API keys) -- no schema migration needed."""
+    user = get_user(user_id)
+    if not user:
+        return {"hidden": [], "order": {}}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        prefs = {}
+    layout = prefs.get("layout", {}).get(page, {})
+    return {"hidden": layout.get("hidden", []), "order": layout.get("order", {})}
+
+
+def save_layout_prefs(user_id: int, page: str, hidden: list, order: dict) -> None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT preferences FROM users WHERE id=?", (user_id,)).fetchone()
+        try:
+            prefs = json.loads(row["preferences"] or "{}") if row else {}
+        except Exception:
+            prefs = {}
+        prefs.setdefault("layout", {})[page] = {"hidden": hidden, "order": order}
+        conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), user_id))

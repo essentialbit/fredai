@@ -1167,15 +1167,21 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .ops-col-title{font-size:8px;font-weight:700;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .ops-badge{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 
-/* Situation Room collapsible widgets */
-.sr-widget-header{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none}
-.sr-widget-header:hover{background:rgba(255,255,255,.02)}
-.sr-widget-toggle{font-size:9px;color:var(--t3);transition:transform .15s;width:10px;display:inline-block}
-.sr-widget.collapsed .sr-widget-toggle{transform:rotate(-90deg)}
-.sr-widget-title{font-size:var(--font-xs);font-weight:700;letter-spacing:1.5px;color:var(--blue);text-transform:uppercase}
-.sr-widget-control{font-size:9px;color:var(--t3);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer}
-.sr-widget-body{overflow:hidden}
-.sr-widget.collapsed .sr-widget-body{display:none}
+/* Customizable widgets: collapsible, hideable, reorderable across every page */
+.customizable-widget-header{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none}
+.customizable-widget-header:hover{background:rgba(255,255,255,.02)}
+.customizable-widget-toggle{font-size:9px;color:var(--t3);transition:transform .15s;width:10px;display:inline-block}
+.customizable-widget.collapsed .customizable-widget-toggle{transform:rotate(-90deg)}
+.customizable-widget-title{font-size:var(--font-xs);font-weight:700;letter-spacing:1.5px;color:var(--blue);text-transform:uppercase}
+.customizable-widget-control{font-size:9px;color:var(--t3);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer}
+.customizable-widget-body{overflow:hidden}
+.customizable-widget.collapsed .customizable-widget-body{display:none}
+.cw-actions{display:flex;align-items:center;gap:2px;margin-left:8px}
+.cw-actions button{background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);font-size:10px;width:18px;height:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.cw-actions button:hover{color:var(--t1);border-color:var(--t3)}
+.cw-actions button.cw-hide:hover{color:var(--red);border-color:var(--red)}
+.cw-add-widget{font-size:9px;color:var(--blue);cursor:pointer;padding:6px 16px;border-top:1px solid var(--border)}
+.cw-add-widget:hover{background:rgba(255,255,255,.02)}
 
 /* Signal density items */
 .sd-item{
@@ -1736,7 +1742,7 @@ html[data-tier="micro"] #ov-globe-stage {
           <button class="dash-gflt" onclick="dashGlobeFilter(this,'macro')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#9b59ff;cursor:pointer">Macro</button>
         </div>
       </div>
-      <div style="overflow-y:auto;height:calc(100vh - 200px);min-height:400px">
+      <div data-cw-page="globe" style="overflow-y:auto;height:calc(100vh - 200px);min-height:400px;display:flex;flex-direction:column">
         <div style="display:flex;height:520px;flex-shrink:0">
           <div id="dash-globe-canvas" style="flex:1;position:relative;min-width:0">
             <div id="dash-globe-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading globe...</div>
@@ -1748,16 +1754,21 @@ html[data-tier="micro"] #ov-globe-stage {
         </div>
 
         <!-- WIDGET: Ticker Relationship Network -->
-        <div class="sr-widget" style="border-top:1px solid var(--border)">
-          <div class="sr-widget-header" onclick="toggleSrWidget(this)">
-            <span class="sr-widget-toggle">▾</span>
-            <span class="sr-widget-title">◈ Relationship Network</span>
+        <div class="customizable-widget" data-widget-id="rn-widget" style="border-top:1px solid var(--border)">
+          <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+            <span class="customizable-widget-toggle">▾</span>
+            <span class="customizable-widget-title">◈ Relationship Network</span>
             <span style="font-size:9px;color:var(--t3);margin-left:8px">Known relationships + statistical correlations for your tracked tickers</span>
-            <label class="sr-widget-control" onclick="event.stopPropagation()">
+            <label class="customizable-widget-control" onclick="event.stopPropagation()">
               <input type="checkbox" id="rn-show-correlated" checked onchange="renderRelationshipNetwork()"> Show statistical correlations
             </label>
+            <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
+              <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
+              <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
+            </span>
           </div>
-          <div class="sr-widget-body" id="rn-body">
+          <div class="customizable-widget-body" id="rn-body">
             <div id="rn-canvas" style="width:100%;height:380px;position:relative">
               <div id="rn-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading...</div>
             </div>
@@ -1765,18 +1776,24 @@ html[data-tier="micro"] #ov-globe-stage {
         </div>
 
         <!-- WIDGET: Video Intelligence -->
-        <div class="sr-widget" style="border-top:1px solid var(--border)">
-          <div class="sr-widget-header" onclick="toggleSrWidget(this)">
-            <span class="sr-widget-toggle">▾</span>
-            <span class="sr-widget-title">▶ Video Intelligence</span>
+        <div class="customizable-widget" data-widget-id="vi-widget" style="border-top:1px solid var(--border)">
+          <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+            <span class="customizable-widget-toggle">▾</span>
+            <span class="customizable-widget-title">▶ Video Intelligence</span>
             <span style="font-size:9px;color:var(--t3);margin-left:8px">Breaking finance news + your tracked tickers, from credible channels</span>
+            <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
+              <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
+              <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
+            </span>
           </div>
-          <div class="sr-widget-body" id="vi-body">
+          <div class="customizable-widget-body" id="vi-body">
             <div id="vi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:12px 16px">
               <div style="color:var(--t3);font-size:9px">Loading...</div>
             </div>
           </div>
         </div>
+        <div class="cw-add-widget" id="globe-cw-add" style="display:none" onclick="cwShowAddMenu('globe')">+ <span id="globe-cw-hidden-count">0</span> hidden widget(s) — click to restore</div>
       </div>
     </div>
 
@@ -2711,8 +2728,13 @@ function switchTab(tab, btn) {
     content.className='tab-overview';
     g('tab-globe-panel').style.display='';
     if (!_dashGlobeInst) initDashGlobe();
-    if (!_srWidgetLoaded['rn-body']) { _srWidgetLoaded['rn-body'] = true; renderRelationshipNetwork(); }
-    if (!_srWidgetLoaded['vi-body']) { _srWidgetLoaded['vi-body'] = true; loadVideoIntelligence(); }
+    if (!_cwLayout['globe']) {
+      initCustomizableWidgets('globe', ['rn-widget', 'vi-widget']).then(() => {
+        const hidden = _cwLayout['globe'].hidden;
+        if (!hidden.includes('rn-widget') && !_srWidgetLoaded['rn-body']) { _srWidgetLoaded['rn-body'] = true; renderRelationshipNetwork(); }
+        if (!hidden.includes('vi-widget') && !_srWidgetLoaded['vi-body']) { _srWidgetLoaded['vi-body'] = true; loadVideoIntelligence(); }
+      });
+    }
   }
 }
 
@@ -2954,17 +2976,110 @@ function setGlobeMode(mode, btn) {
   _dashGlobeInst.pointsData(getGlobePoints());
 }
 
-// ── SITUATION ROOM WIDGETS (collapsible, lazy-loaded on first expand) ──────
+// ── CUSTOMIZABLE WIDGETS (collapsible, hideable, reorderable, per-page persisted) ──
+// Show only what adds value: every widget on every page can be collapsed, hidden,
+// reordered, or restored, and the choice is remembered per-user server-side.
 const _srWidgetLoaded = {};
-function toggleSrWidget(headerEl) {
-  const widget = headerEl.closest('.sr-widget');
+const _cwLayout = {}; // page -> {hidden:[], order:{}}
+const _cwSaveTimers = {};
+
+function toggleCwWidget(headerEl) {
+  const widget = headerEl.closest('.customizable-widget');
   widget.classList.toggle('collapsed');
   if (widget.classList.contains('collapsed')) return;
-  const bodyId = widget.querySelector('.sr-widget-body').id;
+  const bodyEl = widget.querySelector('.customizable-widget-body');
+  if (!bodyEl) return;
+  const bodyId = bodyEl.id;
   if (_srWidgetLoaded[bodyId]) return;
   _srWidgetLoaded[bodyId] = true;
   if (bodyId === 'rn-body') renderRelationshipNetwork();
   if (bodyId === 'vi-body') loadVideoIntelligence();
+}
+
+async function initCustomizableWidgets(page, widgetIds) {
+  let prefs = {hidden: [], order: {}};
+  try {
+    const r = await fetch(`/api/user/layout?page=${encodeURIComponent(page)}`);
+    prefs = await r.json();
+  } catch(e) { /* fall through to defaults -- nothing saved yet */ }
+  _cwLayout[page] = prefs;
+  widgetIds.forEach((id, i) => {
+    const el = document.querySelector(`.customizable-widget[data-widget-id="${id}"]`);
+    if (!el) return;
+    el.style.order = prefs.order[id] !== undefined ? prefs.order[id] : i;
+    el.style.display = prefs.hidden.includes(id) ? 'none' : '';
+  });
+  _cwUpdateAddBar(page, widgetIds);
+}
+
+function _cwSaveLayout(page) {
+  clearTimeout(_cwSaveTimers[page]);
+  _cwSaveTimers[page] = setTimeout(() => {
+    const prefs = _cwLayout[page];
+    fetch('/api/user/layout', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({page, hidden: prefs.hidden, order: prefs.order}),
+    }).catch(() => {});
+  }, 500);
+}
+
+function _cwUpdateAddBar(page, widgetIds) {
+  const bar = g(`${page}-cw-add`), countEl = g(`${page}-cw-hidden-count`);
+  if (!bar) return;
+  const hidden = _cwLayout[page].hidden.filter(id => widgetIds.includes(id));
+  if (countEl) countEl.textContent = hidden.length;
+  bar.style.display = hidden.length ? '' : 'none';
+}
+
+function cwHideWidget(page, btnEl) {
+  const widget = btnEl.closest('.customizable-widget');
+  const id = widget.dataset.widgetId;
+  const prefs = _cwLayout[page];
+  if (!prefs.hidden.includes(id)) prefs.hidden.push(id);
+  widget.style.display = 'none';
+  const widgetIds = Array.from(document.querySelectorAll(`[data-cw-page="${page}"] .customizable-widget`)).map(w => w.dataset.widgetId);
+  _cwUpdateAddBar(page, widgetIds);
+  _cwSaveLayout(page);
+}
+
+function cwMoveWidget(page, btnEl, dir = -1) {
+  const widget = btnEl.closest('.customizable-widget');
+  const container = widget.closest('[data-cw-page]') || widget.parentElement;
+  const siblings = Array.from(container.querySelectorAll('.customizable-widget'))
+    .sort((a, b) => (parseInt(a.style.order)||0) - (parseInt(b.style.order)||0));
+  const idx = siblings.indexOf(widget);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= siblings.length) return;
+  const a = siblings[idx], b = siblings[swapIdx];
+  const orderA = parseInt(a.style.order) || 0, orderB = parseInt(b.style.order) || 0;
+  a.style.order = orderB; b.style.order = orderA;
+  const prefs = _cwLayout[page];
+  prefs.order[a.dataset.widgetId] = orderB;
+  prefs.order[b.dataset.widgetId] = orderA;
+  _cwSaveLayout(page);
+}
+
+function cwShowAddMenu(page) {
+  const bar = g(`${page}-cw-add`);
+  if (!bar) return;
+  const prefs = _cwLayout[page];
+  const hiddenIds = [...prefs.hidden];
+  if (!hiddenIds.length) return;
+  bar.innerHTML = hiddenIds.map(id => {
+    const el = document.querySelector(`.customizable-widget[data-widget-id="${id}"]`);
+    const title = el ? el.querySelector('.customizable-widget-title').textContent : id;
+    return `<span onclick="cwRestoreWidget('${page}','${id}')" style="cursor:pointer;text-decoration:underline;margin-right:12px">+ ${esc(title)}</span>`;
+  }).join('');
+}
+
+function cwRestoreWidget(page, id) {
+  const prefs = _cwLayout[page];
+  prefs.hidden = prefs.hidden.filter(h => h !== id);
+  const el = document.querySelector(`.customizable-widget[data-widget-id="${id}"]`);
+  if (el) el.style.display = '';
+  const widgetIds = Array.from(document.querySelectorAll(`[data-cw-page="${page}"] .customizable-widget`)).map(w => w.dataset.widgetId);
+  _cwUpdateAddBar(page, widgetIds);
+  _cwSaveLayout(page);
 }
 
 let _rnData = null;
@@ -3179,6 +3294,25 @@ async function initDashGlobe() {
       .ringAltitude(0.01);
 
     _dashGlobeInst.pointsData(getGlobePoints());
+    // globe.gl reads container.clientWidth/clientHeight at construction time --
+    // if the tab was just switched from display:none, the container's own
+    // layout (nested inside this panel's flex wrapper) may not have settled
+    // yet, so the canvas sizes itself to a fallback dimension (observed:
+    // 1280x720 viewport-sized canvas inside a 1034x520 container) and, since
+    // the container allows overflow, visually bleeds over content below it --
+    // including intercepting clicks meant for the widgets underneath. A
+    // single requestAnimationFrame wasn't reliably enough for the nested
+    // flex layout to resolve (observed clientWidth/Height still 0 at that
+    // point); this retries with a short delay until real dimensions appear.
+    const fixGlobeSize = (attemptsLeft = 20) => {
+      if (!_dashGlobeInst) return;
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        _dashGlobeInst.width(container.clientWidth).height(container.clientHeight);
+      } else if (attemptsLeft > 0) {
+        setTimeout(() => fixGlobeSize(attemptsLeft - 1), 100);
+      }
+    };
+    setTimeout(fixGlobeSize, 100);
     _dashGlobeInst.controls().autoRotate = true;
     _dashGlobeInst.controls().autoRotateSpeed = 0.35;
     // Captivating motion by default, but instantly responsive: any interaction

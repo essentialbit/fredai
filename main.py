@@ -41,6 +41,7 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    get_layout_prefs, save_layout_prefs,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -1699,6 +1700,34 @@ def api_ticker_relationships():
         tracked = WATCHLIST[:6]  # sensible default for a fresh account with nothing tracked yet
     network = get_ticker_network(tracked, quotes=_quotes_cache or {})
     return jsonify(network)
+
+
+@app.route("/api/user/layout", methods=["GET"])
+@login_required
+def api_get_layout():
+    """Per-page widget layout (hidden + order) -- lets users show only the
+    widgets that add value to them, per FSI institutional-grade UX bar."""
+    page = request.args.get("page", "").strip()
+    if not page:
+        return jsonify({"error": "page is required"}), 400
+    return jsonify(get_layout_prefs(session["user_id"], page))
+
+
+@app.route("/api/user/layout", methods=["POST"])
+@login_required
+def api_save_layout():
+    data = request.json or {}
+    page = str(data.get("page", "")).strip()
+    hidden = data.get("hidden", [])
+    order = data.get("order", {})
+    if not page:
+        return jsonify({"error": "page is required"}), 400
+    if not isinstance(hidden, list) or not all(isinstance(h, str) for h in hidden):
+        return jsonify({"error": "hidden must be a list of widget ids"}), 400
+    if not isinstance(order, dict) or not all(isinstance(v, int) for v in order.values()):
+        return jsonify({"error": "order must be a widget id -> position map"}), 400
+    save_layout_prefs(session["user_id"], page, hidden, order)
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/insider/<ticker>")

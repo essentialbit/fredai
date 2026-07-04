@@ -100,7 +100,6 @@ EDGES = [
     ("NVDA", "AMD",   "competitor", 9,  "Direct GPU competitors — data center and consumer segments"),
     ("NVDA", "INTC",  "competitor", 7,  "Competing in AI accelerator and data center markets"),
     ("NVDA", "GOOGL", "competitor", 6,  "NVDA chips vs Google TPUs for AI training"),
-    ("NVDA", "AMD",   "competitor", 9,  "Head-to-head in AI GPU market"),
     ("NVDA", "TSM",   "supplier",   9,  "TSMC manufactures all NVDA chips"),
     ("AMD",  "TSM",   "supplier",   9,  "TSMC manufactures AMD chips"),
     ("INTC", "AMAT",  "customer",   7,  "Intel uses AMAT equipment in fabs"),
@@ -221,6 +220,7 @@ EDGE_COLORS = {
     "ecosystem": "#4a6380",
     "musk-linked": "#aaa",
     "australia": "#ff9500",
+    "correlated": "#8ba3b8",  # cascade_engine.py's statistical (not hand-typed) relationship tier
 }
 
 _ai_assessment_cache: dict = {}

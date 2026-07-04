@@ -78,7 +78,7 @@ if ('serviceWorker' in navigator) {
   --bg0:#020408; --bg1:#050a14; --bg2:#080f1e; --bg3:#0c162b;
   --border:rgba(0, 180, 255, 0.08); --border2:rgba(0, 255, 170, 0.12);
   --green:#00ffaa; --red:#ff3366; --blue:#00d2ff;
-  --yellow:#ffb703; --purple:#8338ec; --orange:#fb5607;
+  --yellow:#ffb703; --purple:#8338ec; --orange:#fb5607; --gold:#f5a623;
   --t1:#f8f9fa; --t2:#94a3b8; --t3:#475569;
   --mono:'JetBrains Mono','Fira Code',monospace;
   --font-sans: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
@@ -1535,6 +1535,18 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- TRACK RECORD — signal-accuracy transparency -->
+    <div id="track-record">
+      <div id="ops-header">
+        <span style="font-size:14px">◎</span>
+        <div class="ops-title">Fred's Track Record</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">How often has Fred's signal direction matched reality?</span>
+      </div>
+      <div id="track-record-body" style="display:flex;gap:14px;padding:12px 16px">
+        <div style="color:var(--t3);font-size:9px">Loading...</div>
+      </div>
+    </div>
+
     <!-- OVERVIEW: Portfolio panel -->
     <div class="panel" id="ov-portfolio">
       <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
@@ -2578,6 +2590,7 @@ async function loadInitData() {
     if (!IS_NANO) {
       setTimeout(loadRecommendations, 800);
       setTimeout(loadOpsPicture, 1200);
+      setTimeout(loadTrackRecord, 1600);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -2609,7 +2622,7 @@ function tickClock() {
 setInterval(tickClock, 1000); tickClock();
 
 // ── TABS ──────────────────────────────────────────────────────────────────
-const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture'];
+const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record'];
 const WL=['tab-watchlist'];
 const PF=['tab-portfolio-left','tab-portfolio-chart'];
 const TR=['tab-trending-list','tab-trending-chart'];
@@ -3989,6 +4002,34 @@ async function loadOpsPicture() {
     _opsPictureLoaded = true;
   } catch(e) {
     console.warn('Ops picture failed:', e);
+  }
+}
+
+async function loadTrackRecord() {
+  const body = g('track-record-body');
+  if (!body) return;
+  try {
+    const r = await fetch('/api/backtest/accuracy');
+    const d = await r.json();
+    const labels = {'4h': '4 Hour', '24h': '24 Hour', '72h': '72 Hour'};
+    body.innerHTML = Object.entries(d).map(([cp, stats]) => {
+      if (!stats.total) {
+        return `<div style="flex:1;text-align:center">
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px">${labels[cp]||cp}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:6px">Not enough data yet</div>
+        </div>`;
+      }
+      const pct = stats.accuracy_pct;
+      const color = pct>=60 ? 'var(--green)' : pct>=45 ? 'var(--gold)' : 'var(--red)';
+      return `<div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px">${labels[cp]||cp}</div>
+        <div style="font-size:22px;font-weight:700;color:${color};margin-top:2px">${pct.toFixed(0)}%</div>
+        <div style="font-size:9px;color:var(--t3);margin-top:2px">${stats.correct}/${stats.total} signals, last 30d</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<div style="color:var(--t3);font-size:9px">Track record unavailable</div>';
+    console.warn('Track record failed:', e);
   }
 }
 

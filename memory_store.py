@@ -1082,7 +1082,12 @@ def upsert_news_items(items: list[dict]) -> int:
 def get_news(category: str = None, ticker: str = None, hours: int = 24,
              limit: int = 50, offset: int = 0) -> list[dict]:
     from datetime import datetime, timedelta
-    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    # Space-separated to match REPLACE(published_at, 'T', ' ') below --
+    # .isoformat() would produce a 'T' separator, and since space (0x20) sorts
+    # below 'T' (0x54) lexicographically, a same-day T-separated cutoff would
+    # always compare "less than" a space-normalized column value regardless of
+    # actual time, silently matching zero rows.
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         # REPLACE normalizes published_at's two coexisting separator formats
         # ("2026-07-03 15:50:00" vs "2026-07-03T15:50:00") before comparing --
@@ -1103,7 +1108,7 @@ def get_news(category: str = None, ticker: str = None, hours: int = 24,
 
 def count_news(category: str = None, ticker: str = None, hours: int = 24) -> int:
     from datetime import datetime, timedelta
-    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         base = "SELECT COUNT(*) FROM news_items WHERE REPLACE(published_at, 'T', ' ') > ?"
         params: list = [cutoff]

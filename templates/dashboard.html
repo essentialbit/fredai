@@ -3088,6 +3088,7 @@ async function initDashGlobe() {
       const isNegative = score < -0.05;
       const color = isPositive ? 'rgba(0, 255, 136, 0.75)' : isNegative ? 'rgba(255, 59, 92, 0.75)' : 'rgba(245, 166, 35, 0.55)';
       return {
+        ticker: s.ticker,
         startLat: s.hq_lat,
         startLng: s.hq_lng,
         endLat: s.exchange_lat,
@@ -3152,13 +3153,14 @@ async function initDashGlobe() {
       .pointColor(d => d.type === 'monitored' ? d.color : _gcol(d.category))
       .pointLabel(d => d.type === 'monitored' ? d.label : `<div style="background:rgba(6,15,28,.9);border:1px solid rgba(0,180,255,.25);border-radius:6px;padding:8px 12px;font-family:Inter,sans-serif"><div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:3px">${d.label}</div><div style="font-size:10px;color:#00b4ff;font-family:monospace">${d.count} signal${d.count!==1?'s':''}</div><div style="font-size:9px;color:#3d5a73;margin-top:2px">${d.category}</div></div>`)
       .pointsMerge(false)
-      .onPointClick(d => { 
+      .onPointClick(d => {
         if (d.type === 'monitored') {
           openAnalystReport(d.symbol);
         } else {
-          window.location.href = `/news?cat=${d.category}`; 
+          window.location.href = `/news?cat=${d.category}`;
         }
       })
+      .onPointHover(d => { container.style.cursor = d ? 'pointer' : 'grab'; })
       .arcsData(arcs)
       .arcColor('color')
       .arcDashLength(0.45)
@@ -3166,17 +3168,33 @@ async function initDashGlobe() {
       .arcDashAnimateTime(1800)
       .arcStroke(0.38)
       .arcAltitude(0.24)
+      .arcLabel(a => a.label)
+      .onArcClick(a => { if (a.ticker) openAnalystReport(a.ticker); })
+      .onArcHover(a => { container.style.cursor = a ? 'pointer' : 'grab'; })
       .ringsData(ringClusters)
       .ringColor(d => d.sentiment > 0.05 ? 'rgba(0, 255, 136, 0.55)' : (d.sentiment < -0.05 ? 'rgba(255, 59, 92, 0.55)' : 'rgba(245, 166, 35, 0.55)'))
       .ringMaxRadius(d => d.maxRadius)
       .ringPropagationSpeed(1.8)
-      .ringRepeatNum(2)
+      .ringRepeatPeriod(900)
       .ringAltitude(0.01);
 
     _dashGlobeInst.pointsData(getGlobePoints());
     _dashGlobeInst.controls().autoRotate = true;
     _dashGlobeInst.controls().autoRotateSpeed = 0.35;
-    container.addEventListener('mousedown', () => { _dashGlobeInst.controls().autoRotate = false; });
+    // Captivating motion by default, but instantly responsive: any interaction
+    // pauses rotation, and it resumes on its own after a few seconds of no
+    // further input -- so exploring the globe never fights the user, but it
+    // doesn't sit dead still forever after one touch either.
+    let _globeIdleTimer = null;
+    const pauseThenResumeRotation = () => {
+      _dashGlobeInst.controls().autoRotate = false;
+      clearTimeout(_globeIdleTimer);
+      _globeIdleTimer = setTimeout(() => {
+        if (_dashGlobeInst) _dashGlobeInst.controls().autoRotate = true;
+      }, 6000);
+    };
+    ['mousedown', 'wheel', 'touchstart'].forEach(evt =>
+      container.addEventListener(evt, pauseThenResumeRotation, { passive: true }));
 
     // HUD Live logger simulation
     const logFeed = g('globe-hud-feed');

@@ -69,6 +69,11 @@ XAI_MODEL_SUMMARY = os.getenv("XAI_MODEL_SUMMARY", "grok-4.3")
 XAI_MODEL_CHAT = os.getenv("XAI_MODEL_CHAT", "grok-4.3")
 XAI_MODEL_RND = os.getenv("XAI_MODEL_RND", "grok-4.3")
 
+# Tavily: provider-agnostic live-search grounding. Optional -- without this,
+# grounding falls back to Gemini's native search (only works when Gemini is
+# the active provider). Free tier: 1,000 credits/month, no card required.
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
 # ── PRIVACY & DATA GOVERNANCE ─────────────────────────────────────────────────
 # GDPR (EU) · Australian Privacy Act · US CCPA compliance
 # All user data lives in SQLite on this device. Nothing is transmitted to

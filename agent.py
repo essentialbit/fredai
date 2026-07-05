@@ -26,6 +26,7 @@ from config import (
     GEMINI_API_KEY, GEMINI_MODEL_SUMMARY, GEMINI_MODEL_CHAT, GEMINI_MODEL_RND,
     GROQ_API_KEY, GROQ_MODEL_SUMMARY, GROQ_MODEL_CHAT, GROQ_MODEL_RND,
     XAI_API_KEY, XAI_MODEL_SUMMARY, XAI_MODEL_CHAT, XAI_MODEL_RND,
+    TAVILY_API_KEY,
     PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI,
 )
 from memory_store import get_signals, get_latest_summary, get_recent_alerts, get_trending_assets
@@ -128,14 +129,32 @@ class _FredProvider:
         """
         a_key, g_key = _get_api_keys()
 
-        # If grounding is explicitly requested, bypass Claude/Ollama and use Gemini Search Grounding
         if grounding:
-            if _key_is_valid(g_key):
-                result = self._gemini_complete(messages, system, tier, max_tokens, g_key, grounding=True)
-                if not result.startswith("[Fred Gemini error"):
-                    return result
-                print(f"[FredAI] Grounding call failed: {result}")
-            return "Fred's live search isn't available right now — please try again shortly."
+            if _key_is_valid(TAVILY_API_KEY):
+                # Provider-agnostic: fold live search context into the system
+                # prompt, then fall through to the normal fallback chain below
+                # -- grounding works no matter which tier ends up serving the
+                # completion, unlike the Gemini-only path below (which
+                # silently stops working the moment Gemini isn't the active
+                # provider, e.g. when its credits ran out this session).
+                query = messages[-1].get("content", "") if messages else ""
+                try:
+                    from tavily_client import search_context
+                    context = search_context(query)
+                except Exception:
+                    context = None
+                if context:
+                    system = f"{system}\n\nLive search results (for grounding, use if relevant):\n{context}"
+                # falls through to the provider loop below, not an early return
+            else:
+                # No Tavily configured -- original Gemini-native grounding,
+                # unchanged, for anyone who hasn't added a Tavily key.
+                if _key_is_valid(g_key):
+                    result = self._gemini_complete(messages, system, tier, max_tokens, g_key, grounding=True)
+                    if not result.startswith("[Fred Gemini error"):
+                        return result
+                    print(f"[FredAI] Grounding call failed: {result}")
+                return "Fred's live search isn't available right now — please try again shortly."
 
         # Default AI backend order: Anthropic Claude first, Gemini, then Grok
         # (both paid, frontier-quality), then Groq (free + cloud-hosted,

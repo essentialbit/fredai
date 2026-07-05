@@ -241,6 +241,7 @@ def _security_headers(response):
 _updater.init(socketio)
 
 _quotes_cache: dict = {}
+_crypto_spread_cache: dict = {}
 _last_scan: datetime = datetime.min
 _scan_lock = threading.Lock()
 _chat_histories: dict = {}  # user_id -> list
@@ -794,6 +795,9 @@ def api_watchlist():
         s = sentiment.get(w["symbol"])
         if s:
             entry["sentiment"] = s
+        spread = _crypto_spread_cache.get(w["symbol"])
+        if spread:
+            entry["cross_exchange_spread"] = spread
         result.append(entry)
     return jsonify(result)
 
@@ -2447,6 +2451,19 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Correlation] Refresh error: {e}")
 
+    def job_crypto_spread_refresh():
+        """Cross-exchange crypto spread (BTC/ETH) via public exchange
+        tickers -- a periodic enrichment signal, not real-time, so this runs
+        on its own cadence separate from job_market_refresh's 60s interval."""
+        from ccxt_client import get_cross_exchange_spread
+        for sym in ("BTC-USD", "ETH-USD"):
+            try:
+                result = get_cross_exchange_spread(sym)
+                if result:
+                    _crypto_spread_cache[sym] = result
+            except Exception as e:
+                print(f"[CryptoSpread] {sym} error: {e}")
+
     def job_backtest_check():
         """Fill in due 4h/24h/72h price checkpoints for tracked signal
         outcomes (FSI L3 backtesting)."""
@@ -2475,6 +2492,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
+    scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

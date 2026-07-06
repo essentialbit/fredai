@@ -24,11 +24,14 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.53
+- fix: README changelog sync silently failed against protected main (#102)
+
+### FredAI v1.3.52
+- fix: GitHub Release job never actually fired since it was added (#101)
+
 ### FredAI v1.3.18
 - feat: landing page visual uplift and notification center (Issue #51)
-- Modernized dashboard design with upgraded Outfit/JetBrains Mono typography.
-- Integrated real-time central Notification Center for critical market alerts and agent messages.
-- Re-styled layout elements for responsive high-signal-density views.
 
 ### FredAI v1.3.17
 - feat: implement Gmail export option for Google Workspace Integration (Issue #49)
@@ -39,15 +42,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 - Elevates the 3D WebGL globe with monitored node overlays representing active server nodes.
 - Adds glowing hotspot rings around high-signal-density areas.
 - Enhances interactive details with popup info cards for geocoded stories.
-
-### FredAI v1.3.15
-- feat: real per-story sentiment-colored globe arcs (Phase 2 of #48) (#54)
-- Draw interactive paths on the 3D globe connecting the corporate HQ to the exchange where the asset is traded.
-- Colored globe arcs by real-time FinBERT/VADER sentiment score (green for bullish, red for bearish, gray for neutral).
-
-### FredAI v1.3.14
-- docs: update README.md changelog for v1.3.11 (#53)
-- Sync README changelog block.
 
 <!-- CHANGELOG_END -->
 

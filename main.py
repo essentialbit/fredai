@@ -833,6 +833,19 @@ def api_portfolio():
     return jsonify(portfolio)
 
 
+@app.route("/api/portfolio/risk")
+@login_required
+def api_portfolio_risk():
+    from portfolio_risk import compute_portfolio_risk
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    risk = compute_portfolio_risk(
+        portfolio.get("positions", []), portfolio.get("total_value")
+    )
+    return jsonify(risk)
+
+
 @app.route("/api/scan", methods=["POST"])
 @login_required
 def api_manual_scan():

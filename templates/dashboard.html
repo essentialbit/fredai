@@ -1708,6 +1708,7 @@ html[data-tier="micro"] #ov-globe-stage {
     <div class="panel" id="tab-portfolio-left" style="display:none">
       <div class="ph">Holdings</div>
       <div class="pnl-big"><div class="pnl-total" id="port-total-big">$0.00</div><div class="pnl-line" id="port-pnl-big">--</div></div>
+      <div id="port-risk-strip" style="display:none;grid-template-columns:repeat(3,1fr);gap:6px;padding:8px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:8px"></div>
       <div class="scroll" id="port-positions-list"></div>
       <div class="port-form">
         <div style="font-size:var(--font-xs);letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Add / Update Position</div>
@@ -3870,7 +3871,45 @@ async function addWatchlist(){const sym=g('wl-inp').value.trim().toUpperCase();i
 async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});loadWatchlist()}
 
 // ── PORTFOLIO ─────────────────────────────────────────────────────────────
-async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p)}
+async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p)}
+
+// Risk metrics load separately — first computation fetches ~1y history per
+// holding server-side, so it must never delay the positions render.
+const RISK_TIPS={
+  vol:'Annualized volatility — how much the portfolio swings in a typical year. Computed from ~1y of daily returns.',
+  sharpe:'Sharpe ratio (rf=0) — annualized return per unit of volatility. Above 1 is good, below 0 means losing money.',
+  sortino:'Sortino ratio — like Sharpe but only penalizes downside swings.',
+  maxdd:'Max drawdown — worst peak-to-trough decline over the period. What you would have lost buying the top.',
+  var:'1-day 95% VaR (historical) — on 95% of days, losses stayed below this. Not a worst case.',
+  beta:'Beta vs SPY — sensitivity to the market. 1 moves with SPY, above 1 amplifies it.'};
+async function loadPortfolioRisk(p){
+  const strip=g('port-risk-strip'); if(!strip) return;
+  if(!(p.positions||[]).length){strip.style.display='none';return}
+  try{
+    const r=await fetch('/api/portfolio/risk');const d=await r.json();
+    if(d.status==='insufficient_history'){
+      strip.style.display='grid';
+      strip.innerHTML=`<div style="grid-column:1/-1;font-size:10px;color:var(--t3)">Risk metrics need ${d.min_days}+ overlapping trading days of history (have ${d.days}).</div>`;
+      return;
+    }
+    if(d.status==='data_unavailable'){
+      strip.style.display='grid';
+      strip.innerHTML='<div style="grid-column:1/-1;font-size:10px;color:var(--t3)">Risk metrics unavailable — price history fetch is rate-limited or down. Retries automatically.</div>';
+      return;
+    }
+    if(d.status!=='ok'){strip.style.display='none';return}
+    const chip=(label,val,tip,cls)=>`<div title="${tip}" style="text-align:center;cursor:help"><div style="font-size:9px;letter-spacing:.5px;color:var(--t3);text-transform:uppercase">${label}</div><div class="${cls||''}" style="font-size:13px;font-family:var(--mono,monospace)">${val}</div></div>`;
+    strip.innerHTML=
+      chip('Vol/yr',d.annual_volatility_pct+'%',RISK_TIPS.vol)+
+      chip('Sharpe',d.sharpe??'--',RISK_TIPS.sharpe,d.sharpe!=null?(d.sharpe>=1?'pos':d.sharpe<0?'neg':''):'')+
+      chip('Sortino',d.sortino??'--',RISK_TIPS.sortino)+
+      chip('Max DD',d.max_drawdown_pct+'%',RISK_TIPS.maxdd,'neg')+
+      chip('VaR 95%',fmtD(d.var_95_1d_value),RISK_TIPS.var)+
+      chip('Beta',d.beta_spy??'--',RISK_TIPS.beta)+
+      `<div style="grid-column:1/-1;font-size:8px;color:var(--t3);text-align:right">${d.days}d daily history · rf=0 · vs ${d.benchmark}</div>`;
+    strip.style.display='grid';
+  }catch(e){strip.style.display='none'}
+}
 function renderPortfolioTab(p){
   window._portfolio=(p.positions||[]).map(x=>x.symbol);
   portData=p;updatePortfolioUI(p);

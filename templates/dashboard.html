@@ -1386,7 +1386,7 @@ html[data-tier="micro"] #ov-globe-stage {
       <button class="ltab" onclick="showAuthTab('register',this)">Register</button>
     </div>
     <div id="auth-login">
-      <div class="form-group"><label>Username</label><input id="l-user" placeholder="username" autocomplete="username"></div>
+      <div class="form-group"><label>Username</label><input id="l-user" placeholder="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
       <div class="form-group"><label>Password</label><input id="l-pass" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="login-btn" onclick="doLogin()">SIGN IN →</button>
       
@@ -1408,7 +1408,7 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
     <div id="auth-register" style="display:none">
       <div class="form-group"><label>Display Name</label><input id="r-name" placeholder="Your name" autocomplete="name"></div>
-      <div class="form-group"><label>Username</label><input id="r-user" placeholder="unique username" autocomplete="username"></div>
+      <div class="form-group"><label>Username</label><input id="r-user" placeholder="unique username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
       <div class="form-group"><label>Password</label><input id="r-pass" type="password" placeholder="min 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()"></div>
       <button class="login-btn" onclick="doRegister()">CREATE ACCOUNT →</button>
     </div>

@@ -312,9 +312,19 @@ def get_conn():
 
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
+def _normalize_username(username: str) -> str:
+    # /register stores usernames lowercased, but login used the raw input in a
+    # case-sensitive lookup — mobile keyboards auto-capitalize, so "Fred" never
+    # matched "fred" and every re-login failed with "Invalid credentials".
+    return (username or "").strip().lower()
+
+
 def verify_user(username: str, password: str) -> dict | None:
+    username = _normalize_username(username)
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=? COLLATE NOCASE", (username,)
+        ).fetchone()
         if not row:
             return None
 
@@ -335,6 +345,7 @@ def verify_user(username: str, password: str) -> dict | None:
 
 
 def create_user(username: str, password: str, display_name: str = None) -> dict | None:
+    username = _normalize_username(username)
     pw_hash = generate_password_hash(password)
     try:
         with get_conn() as conn:
@@ -355,8 +366,11 @@ def get_user(user_id: int) -> dict | None:
 
 
 def get_user_by_username(username: str) -> dict | None:
+    username = _normalize_username(username)
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=? COLLATE NOCASE", (username,)
+        ).fetchone()
     return dict(row) if row else None
 
 

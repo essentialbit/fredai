@@ -264,7 +264,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PRs opened with the default GITHUB_TOKEN never trigger workflows
+          # (GitHub's recursion guard), so the required Validate check never
+          # reports and auto-merge hangs forever -- confirmed live on the
+          # v1.3.54/55 sync PRs, which sat permanently in action_required.
+          # A fine-grained PAT (contents + pull-requests write, this repo
+          # only) makes the sync PR run CI like any human-authored PR.
+          # Falls back to GITHUB_TOKEN if the secret is missing or expired:
+          # the sync PR then opens but stays held, which is the pre-PAT
+          # behavior, not a new failure mode.
+          GH_TOKEN: ${{ secrets.FREDAI_BOT_PAT || secrets.GITHUB_TOKEN }}
 
   # ── Deploy: notify registered instances ────────────────────────
   deploy:

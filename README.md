@@ -24,21 +24,20 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.57
+- fix: release README-sync PRs now open with a PAT so CI actually runs (#114)
+
+### FredAI v1.3.56
+- fix: README-sync merges must not cut a new version (release loop guard) (#111)
+
+### FredAI v1.3.55
+- docs: sync README changelog to v1.3.54 (#110)
+
 ### FredAI v1.3.54
 - fix: case-insensitive username lookup on login (#104)
 
 ### FredAI v1.3.53
 - fix: README changelog sync silently failed against protected main (#102)
-
-### FredAI v1.3.52
-- fix: GitHub Release job never actually fired since it was added (#101)
-
-### FredAI v1.3.18
-- feat: landing page visual uplift and notification center (Issue #51)
-
-### FredAI v1.3.17
-- feat: implement Gmail export option for Google Workspace Integration (Issue #49)
-- Allows exporting financial briefing digests directly to Gmail for easy updates on standard consumer hardware.
 
 <!-- CHANGELOG_END -->
 

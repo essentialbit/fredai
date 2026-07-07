@@ -128,6 +128,16 @@ jobs:
       - name: Bump patch version and tag
         id: bump
         run: |
+          # The release job's own README-changelog commit must not cut a new
+          # version — otherwise every release spawns a docs merge that spawns
+          # another release, one orphaned readme-sync PR per cycle forever.
+          HEAD_MSG=$(git log -1 --pretty=%s)
+          case "$HEAD_MSG" in
+            "docs: sync README changelog"*)
+              echo "README-sync commit — skipping version bump (loop guard)."
+              echo "new_tag=" >> $GITHUB_OUTPUT
+              exit 0;;
+          esac
           git config user.name "FredAI"
           git config user.email "fredai-bot@users.noreply.github.com"
           LATEST=$(git tag --list 'v*' --sort=-version:refname \

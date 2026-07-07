@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.58
+- feat: portfolio risk metrics -- VaR, Sharpe/Sortino, max drawdown, beta (closes #107) (#115)
+- docs: sync README changelog to v1.3.57 (#116)
+
 ### FredAI v1.3.57
 - fix: release README-sync PRs now open with a PAT so CI actually runs (#114)
 
@@ -35,9 +39,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.54
 - fix: case-insensitive username lookup on login (#104)
-
-### FredAI v1.3.53
-- fix: README changelog sync silently failed against protected main (#102)
 
 <!-- CHANGELOG_END -->
 

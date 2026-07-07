@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.59
+- feat: backtest v2 -- per-source attribution + naive baseline (closes #108) (#118)
+- docs: sync README changelog to v1.3.58 (#117)
+
 ### FredAI v1.3.58
 - feat: portfolio risk metrics -- VaR, Sharpe/Sortino, max drawdown, beta (closes #107) (#115)
 - docs: sync README changelog to v1.3.57 (#116)
@@ -36,9 +40,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.55
 - docs: sync README changelog to v1.3.54 (#110)
-
-### FredAI v1.3.54
-- fix: case-insensitive username lookup on login (#104)
 
 <!-- CHANGELOG_END -->
 

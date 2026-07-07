@@ -24,6 +24,9 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.55
+- docs: sync README changelog to v1.3.54 (#110)
+
 ### FredAI v1.3.54
 - fix: case-insensitive username lookup on login (#104)
 
@@ -35,10 +38,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.18
 - feat: landing page visual uplift and notification center (Issue #51)
-
-### FredAI v1.3.17
-- feat: implement Gmail export option for Google Workspace Integration (Issue #49)
-- Allows exporting financial briefing digests directly to Gmail for easy updates on standard consumer hardware.
 
 <!-- CHANGELOG_END -->
 

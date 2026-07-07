@@ -267,6 +267,8 @@ def init_db():
             "ALTER TABLE users ADD COLUMN oauth_google_sub TEXT",
             "ALTER TABLE signals ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
             "ALTER TABLE news_items ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
+            "ALTER TABLE signal_outcomes ADD COLUMN source TEXT DEFAULT 'aggregate'",
+            "ALTER TABLE signal_outcomes ADD COLUMN baseline_direction TEXT",
         ):
             try:
                 conn.execute(ddl)
@@ -706,13 +708,16 @@ _OUTCOME_CHECKPOINTS = ("4h", "24h", "72h")
 
 
 def log_signal_outcome(asset: str, predicted_direction: str, signal_count: int,
-                        avg_sentiment: float, price_at_t0: float | None):
+                        avg_sentiment: float, price_at_t0: float | None,
+                        source: str = "aggregate", baseline_direction: str | None = None):
     with get_conn() as conn:
         conn.execute(
             """INSERT INTO signal_outcomes
-               (asset, predicted_direction, signal_count, avg_sentiment, price_at_t0)
-               VALUES (?,?,?,?,?)""",
-            (asset, predicted_direction, signal_count, avg_sentiment, price_at_t0)
+               (asset, predicted_direction, signal_count, avg_sentiment, price_at_t0,
+                source, baseline_direction)
+               VALUES (?,?,?,?,?,?,?)""",
+            (asset, predicted_direction, signal_count, avg_sentiment, price_at_t0,
+             source, baseline_direction)
         )
 
 
@@ -739,9 +744,29 @@ def update_outcome_price(outcome_id: int, checkpoint: str, price: float):
         conn.execute(f"UPDATE signal_outcomes SET {col}=? WHERE id=?", (price, outcome_id))
 
 
+def _score_rows(rows: list[dict], col: str, direction_field: str) -> dict | None:
+    """Shared scorer: for each row, does rows[direction_field] match the
+    actual price move at checkpoint `col`. Returns None if no row has a
+    usable value in direction_field (e.g. baseline_direction on legacy
+    pre-migration rows)."""
+    scored = [r for r in rows if r.get(direction_field)]
+    if not scored:
+        return None
+    correct = 0
+    for r in scored:
+        change = r[col] - r["price_at_t0"]
+        actual_dir = "bullish" if change > 0 else ("bearish" if change < 0 else "neutral")
+        if r[direction_field] == actual_dir:
+            correct += 1
+    return {"total": len(scored), "correct": correct, "accuracy_pct": round(correct / len(scored) * 100, 1)}
+
+
 def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict:
     """Of outcomes completed at this checkpoint within the lookback window,
-    how often did the predicted direction match the actual price move."""
+    how often did Fred's predicted direction match the actual price move --
+    broken down per signal source, and compared against the naive momentum
+    baseline recorded alongside each prediction (MISSION.md Principle #4:
+    a source only proves its worth if it beats doing nothing clever)."""
     if checkpoint not in _OUTCOME_CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
     col = f"price_at_{checkpoint}"
@@ -752,17 +777,36 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
             (since.isoformat(),)
         ).fetchall()
     rows = [dict(r) for r in rows]
-    if not rows:
-        return {"checkpoint": checkpoint, "total": 0, "correct": 0, "accuracy_pct": None}
-    correct = 0
+
+    by_source: dict[str, list[dict]] = {}
     for r in rows:
-        change = r[col] - r["price_at_t0"]
-        actual_dir = "bullish" if change > 0 else ("bearish" if change < 0 else "neutral")
-        if r["predicted_direction"] == actual_dir:
-            correct += 1
+        by_source.setdefault(r.get("source") or "aggregate", []).append(r)
+
+    sources = {}
+    for src, src_rows in by_source.items():
+        signal_score = _score_rows(src_rows, col, "predicted_direction")
+        baseline_score = _score_rows(src_rows, col, "baseline_direction")
+        if signal_score is None:
+            continue
+        entry = dict(signal_score)
+        if baseline_score:
+            entry["baseline_accuracy_pct"] = baseline_score["accuracy_pct"]
+            entry["baseline_delta_pct"] = round(signal_score["accuracy_pct"] - baseline_score["accuracy_pct"], 1)
+            entry["proving_value"] = not (entry["baseline_delta_pct"] <= 0 and entry["total"] >= 20)
+        else:
+            entry["baseline_accuracy_pct"] = None
+            entry["baseline_delta_pct"] = None
+            entry["proving_value"] = None
+        sources[src] = entry
+
+    aggregate = sources.get("aggregate", {"total": 0, "correct": 0, "accuracy_pct": None,
+                                           "baseline_accuracy_pct": None, "baseline_delta_pct": None})
     return {
-        "checkpoint": checkpoint, "total": len(rows), "correct": correct,
-        "accuracy_pct": round(correct / len(rows) * 100, 1),
+        "checkpoint": checkpoint,
+        "total": aggregate["total"], "correct": aggregate["correct"], "accuracy_pct": aggregate["accuracy_pct"],
+        "baseline_accuracy_pct": aggregate.get("baseline_accuracy_pct"),
+        "baseline_delta_pct": aggregate.get("baseline_delta_pct"),
+        "sources": sources,
     }
 
 
@@ -1315,6 +1359,27 @@ def get_latest_short_interest(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def get_short_interest_direction(symbol: str) -> str | None:
+    """Short interest alone (a static % of float) has no inherent direction --
+    the real signal is the trend: rising short_ratio means growing bearish
+    positioning, falling means short-covering (bullish). Requires two stored
+    readings; returns None (no fabricated 'neutral') when there's only one
+    or the ratio hasn't moved."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT short_ratio FROM short_interest WHERE symbol=? ORDER BY fetched_at DESC LIMIT 2",
+            (symbol,)
+        ).fetchall()
+    if len(rows) < 2 or rows[0]["short_ratio"] is None or rows[1]["short_ratio"] is None:
+        return None
+    latest, prior = rows[0]["short_ratio"], rows[1]["short_ratio"]
+    if latest > prior:
+        return "bearish"
+    if latest < prior:
+        return "bullish"
+    return None
 
 
 # ── INSIDER TRANSACTIONS (SEC Form 4) ─────────────────────────────────────────

@@ -4490,16 +4490,39 @@ async function loadTrackRecord() {
       }
       const pct = stats.accuracy_pct;
       const color = pct>=60 ? 'var(--green)' : pct>=45 ? 'var(--gold)' : 'var(--red)';
+      const delta = stats.baseline_delta_pct;
+      const deltaLine = delta==null ? '' :
+        `<div style="font-size:9px;color:${delta>0?'var(--green)':delta<0?'var(--red)':'var(--t3)'};margin-top:2px">${delta>0?'+':''}${delta.toFixed(1)}pt vs naive baseline</div>`;
       return `<div style="flex:1;text-align:center">
         <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px">${labels[cp]||cp}</div>
         <div style="font-size:22px;font-weight:700;color:${color};margin-top:2px">${pct.toFixed(0)}%</div>
         <div style="font-size:9px;color:var(--t3);margin-top:2px">${stats.correct}/${stats.total} signals, last 30d</div>
+        ${deltaLine}
       </div>`;
     }).join('');
   } catch(e) {
     body.innerHTML = '<div style="color:var(--t3);font-size:9px">Track record unavailable</div>';
     console.warn('Track record failed:', e);
   }
+  try {
+    const r2 = await fetch('/api/backtest/source-health');
+    const flagged = await r2.json();
+    let note = document.getElementById('track-record-source-health');
+    if (flagged.length) {
+      if (!note) {
+        note = document.createElement('div');
+        note.id = 'track-record-source-health';
+        note.style.cssText = 'padding:8px 16px;font-size:9px;color:var(--t3);border-top:1px solid var(--border)';
+        body.parentNode.appendChild(note);
+      }
+      const seen = new Set();
+      const bySource = flagged.filter(f => !seen.has(f.source) && seen.add(f.source));
+      note.textContent = 'Not beating naive baseline (30d): ' +
+        bySource.map(f => `${f.source} (${f.baseline_delta_pct>0?'+':''}${f.baseline_delta_pct}pt @ ${f.checkpoint}, n=${f.sample})`).join(', ');
+    } else if (note) {
+      note.remove();
+    }
+  } catch(e) { /* non-critical, silently skip */ }
 }
 
 function renderOpsPicture(d) {

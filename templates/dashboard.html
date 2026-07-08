@@ -1207,6 +1207,37 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .cw-add-widget{font-size:9px;color:var(--blue);cursor:pointer;padding:6px 16px;border-top:1px solid var(--border)}
 .cw-add-widget:hover{background:rgba(255,255,255,.02)}
 
+/* Landing Zone: adjustable widget grid — small by default, resize/reorder/hide, per-user persisted */
+.nav-tab.lz-tab-btn{color:var(--gold)}
+.nav-tab.lz-tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
+.lz-badge{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(245,166,35,.15);color:var(--gold);border:1px solid rgba(245,166,35,.4);letter-spacing:1px;margin-left:6px;vertical-align:1px}
+.lz-head{padding:clamp(6px,1vw,9px) var(--pad);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.lz-head-title{font-size:var(--font-xs);letter-spacing:2px;text-transform:uppercase;color:var(--t3)}
+.lz-head-sub{font-size:var(--font-xs);color:var(--t3);opacity:.8}
+.lz-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));grid-auto-rows:145px;gap:10px;grid-auto-flow:dense;padding:12px}
+.lz-widget{background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius);display:flex;flex-direction:column;overflow:hidden;grid-column:span 1;grid-row:span 1;transition:border-color .2s ease,transform .2s ease}
+.lz-widget:hover{border-color:rgba(0,210,255,.3)}
+.lz-widget[data-size="m"]{grid-column:span 2}
+.lz-widget[data-size="l"]{grid-column:span 2;grid-row:span 2}
+.lz-widget.collapsed{grid-row:span 1 !important}
+.lz-widget .customizable-widget-header{padding:6px 8px;gap:5px}
+.lz-widget .customizable-widget-title{font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lz-widget .customizable-widget-body{flex:1;overflow-y:auto;padding:2px 10px 8px}
+.lz-widget .cw-actions button{width:15px;height:15px;font-size:8px}
+.lz-stat-big{font-size:22px;font-weight:700;color:var(--t1);line-height:1.1;font-family:var(--mono)}
+.lz-sub{font-size:9px;color:var(--t3);margin-top:2px}
+.lz-empty{font-size:10px;color:var(--t3);padding-top:16px;text-align:center}
+.lz-row{display:flex;justify-content:space-between;font-size:10px;padding:2px 0;font-family:var(--mono)}
+.lz-grid2{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px}
+.lz-grid2>div{display:flex;justify-content:space-between;font-size:9px}
+.lz-label{color:var(--t3)}
+.lz-val{font-family:var(--mono);color:var(--t1);font-weight:600}
+.lz-heat{display:flex;flex-wrap:wrap;gap:4px}
+.lz-chip{font-size:9px;font-family:var(--mono);padding:2px 5px;border-radius:3px;white-space:nowrap}
+.lz-newsline{font-size:9.5px;color:var(--t2);padding:3px 0;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lz-newsline:last-child{border-bottom:none}
+.lz-brief{font-size:10px;color:var(--t2);line-height:1.5}
+
 /* Signal density items */
 .sd-item{
   display:flex;align-items:center;gap:8px;padding:5px 0;
@@ -1473,6 +1504,7 @@ html[data-tier="micro"] #ov-globe-stage {
     <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
     <button class="nav-tab" onclick="switchTab('globe',this)">◎ Situation Room</button>
     <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
+    <button class="nav-tab lz-tab-btn" onclick="switchTab('landingzone',this)">Landing Zone<span class="lz-badge">TEST</span></button>
   </div>
   <!-- ── FRED QUERY BAR ── -->
   <div id="fred-query-wrap">
@@ -1837,6 +1869,174 @@ html[data-tier="micro"] #ov-globe-stage {
           </div>
         </div>
         <div class="cw-add-widget" id="globe-cw-add" style="display:none" onclick="cwShowAddMenu('globe')">+ <span id="globe-cw-hidden-count">0</span> hidden widget(s) — click to restore</div>
+      </div>
+    </div>
+
+    <!-- LANDING ZONE (test) — best-of widget grid pulled from every tab -->
+    <div class="panel" id="tab-landingzone" style="display:none;grid-column:1/-1;padding:0">
+      <div class="lz-head">
+        <span class="lz-head-title">Landing Zone<span class="lz-badge">TEST</span></span>
+        <span class="lz-head-sub">Best-of every tab, in one glance — resize (⤢), reorder (←→), hide (×). Layout is remembered per user.</span>
+      </div>
+      <div class="scroll">
+        <div class="lz-grid" data-cw-page="landingzone">
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-portfolio" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">◈ Portfolio</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-portfolio-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-risk" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">◎ Risk Metrics</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-risk-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-feargreed" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">☍ Fear &amp; Greed</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-feargreed-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-accuracy" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">✓ Signal Accuracy</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-accuracy-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-trending" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">▲ Trending Now</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-trending-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-watchlist" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">◉ Watchlist Pulse</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-watchlist-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-aiuniverse" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">▣ AI Universe Heat</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-aiuniverse-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-news" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">▤ Latest News</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-news-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-globalmap" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">⊕ Global Signal Map</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-globalmap-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-briefing" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">✎ Fred's Briefing</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-briefing-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-ops" data-size="s">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">⌘ Market Ops</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-ops-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+        </div>
+        <div class="cw-add-widget" id="landingzone-cw-add" style="display:none" onclick="cwShowAddMenu('landingzone')">+ <span id="landingzone-cw-hidden-count">0</span> hidden widget(s) — click to restore</div>
       </div>
     </div>
 
@@ -2743,7 +2943,9 @@ const PF=['tab-portfolio-left','tab-portfolio-chart'];
 const TR=['tab-trending-list','tab-trending-chart'];
 const AI=['tab-ai'];
 const GB=['tab-globe-panel'];
-const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI,...GB];
+const LZ=['tab-landingzone'];
+const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI,...GB,...LZ];
+const LZ_WIDGET_IDS=['lz-portfolio','lz-risk','lz-feargreed','lz-accuracy','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops'];
 
 let _dashGlobeInst = null, _dashGlobeData = [], _dashGlobeFilter = 'all';
 
@@ -2789,6 +2991,14 @@ function switchTab(tab, btn) {
         if (!hidden.includes('vi-widget') && !_srWidgetLoaded['vi-body']) { _srWidgetLoaded['vi-body'] = true; loadVideoIntelligence(); }
         if (!hidden.includes('tv-widget') && !_srWidgetLoaded['tv-body']) { _srWidgetLoaded['tv-body'] = true; initLiveTV(); }
       });
+    }
+  } else if (tab==='landingzone') {
+    content.className='tab-overview';
+    g('tab-landingzone').style.display='';
+    if (!_cwLayout['landingzone']) {
+      initCustomizableWidgets('landingzone', LZ_WIDGET_IDS).then(loadLandingZone);
+    } else {
+      loadLandingZone();
     }
   }
 }
@@ -3053,10 +3263,11 @@ function toggleCwWidget(headerEl) {
 }
 
 async function initCustomizableWidgets(page, widgetIds) {
-  let prefs = {hidden: [], order: {}};
+  let prefs = {hidden: [], order: {}, sizes: {}};
   try {
     const r = await fetch(`/api/user/layout?page=${encodeURIComponent(page)}`);
     prefs = await r.json();
+    if (!prefs.sizes) prefs.sizes = {};
   } catch(e) { /* fall through to defaults -- nothing saved yet */ }
   _cwLayout[page] = prefs;
   widgetIds.forEach((id, i) => {
@@ -3064,6 +3275,7 @@ async function initCustomizableWidgets(page, widgetIds) {
     if (!el) return;
     el.style.order = prefs.order[id] !== undefined ? prefs.order[id] : i;
     el.style.display = prefs.hidden.includes(id) ? 'none' : '';
+    if (prefs.sizes[id]) el.dataset.size = prefs.sizes[id];
   });
   _cwUpdateAddBar(page, widgetIds);
 }
@@ -3074,9 +3286,154 @@ function _cwSaveLayout(page) {
     const prefs = _cwLayout[page];
     fetch('/api/user/layout', {
       method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({page, hidden: prefs.hidden, order: prefs.order}),
+      body: JSON.stringify({page, hidden: prefs.hidden, order: prefs.order, sizes: prefs.sizes || {}}),
     }).catch(() => {});
   }, 500);
+}
+
+const LZ_SIZES = ['s', 'm', 'l'];
+function cwCycleSize(page, btnEl) {
+  const widget = btnEl.closest('.customizable-widget');
+  const cur = widget.dataset.size || 's';
+  const next = LZ_SIZES[(LZ_SIZES.indexOf(cur) + 1) % LZ_SIZES.length];
+  widget.dataset.size = next;
+  const prefs = _cwLayout[page];
+  prefs.sizes = prefs.sizes || {};
+  prefs.sizes[widget.dataset.widgetId] = next;
+  _cwSaveLayout(page);
+}
+
+// ── LANDING ZONE (test) — lightweight best-of readouts, one fetch per widget ──
+function loadLandingZone() {
+  loadLzPortfolio(); loadLzRisk(); loadLzFearGreed(); loadLzAccuracy();
+  loadLzTrending(); loadLzWatchlist(); loadLzAiUniverse(); loadLzNews();
+  loadLzGlobalMap(); loadLzBriefing(); loadLzOps();
+}
+
+async function loadLzPortfolio() {
+  const body = g('lz-portfolio-body');
+  try {
+    const r = await fetch('/api/portfolio'); const d = await r.json();
+    if (!d.positions || !d.positions.length) { body.innerHTML = '<div class="lz-empty">No holdings yet</div>'; return; }
+    const cls = d.total_pnl >= 0 ? 'pos' : 'neg';
+    body.innerHTML = `<div class="lz-stat-big">${fmtD(d.total_value)}</div>
+      <div class="${cls}" style="font-size:11px">${d.total_pnl>=0?'+':'-'}${fmtD(Math.abs(d.total_pnl))} (${d.total_pnl_pct>=0?'+':''}${d.total_pnl_pct}%)</div>
+      <div class="lz-sub">${d.positions.length} position${d.positions.length===1?'':'s'}</div>`;
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzRisk() {
+  const body = g('lz-risk-body');
+  try {
+    const r = await fetch('/api/portfolio/risk'); const d = await r.json();
+    if (d.status !== 'ok') {
+      body.innerHTML = `<div class="lz-empty">${d.status==='no_positions'?'No holdings yet':'Needs more price history'}</div>`;
+      return;
+    }
+    body.innerHTML = `<div class="lz-grid2">
+      <div><span class="lz-label">Sharpe</span><span class="lz-val">${d.sharpe ?? '--'}</span></div>
+      <div><span class="lz-label">Sortino</span><span class="lz-val">${d.sortino ?? '--'}</span></div>
+      <div><span class="lz-label">Max DD</span><span class="lz-val neg">${d.max_drawdown_pct}%</span></div>
+      <div><span class="lz-label">VaR 95%</span><span class="lz-val">${d.var_95_1d_pct}%</span></div>
+    </div>`;
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzFearGreed() {
+  const body = g('lz-feargreed-body');
+  try {
+    const r = await fetch('/api/fear-greed'); const d = await r.json();
+    if (d.status !== 'ok') { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; return; }
+    const score = Math.round(d.score);
+    const color = score>=75?'var(--green)':score>=55?'#8ecf7a':score>=45?'var(--t2)':score>=25?'var(--gold)':'var(--red)';
+    body.innerHTML = `<div class="lz-stat-big" style="color:${color}">${score}</div>
+      <div class="lz-sub" style="color:${color};text-transform:uppercase;letter-spacing:1px">${esc(d.rating||'')}</div>`;
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzAccuracy() {
+  const body = g('lz-accuracy-body');
+  try {
+    const r = await fetch('/api/backtest/accuracy'); const d = await r.json();
+    const day = d['24h'];
+    if (!day || day.accuracy_pct == null) { body.innerHTML = '<div class="lz-empty">Not enough data yet</div>'; return; }
+    const delta = day.baseline_delta_pct;
+    body.innerHTML = `<div class="lz-stat-big">${day.accuracy_pct}%</div>
+      <div class="lz-sub">24h direction accuracy · ${day.total} signals</div>
+      ${delta!=null?`<div class="${delta>=0?'pos':'neg'}" style="font-size:10px">${delta>=0?'+':''}${delta}pp vs naive baseline</div>`:''}`;
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzTrending() {
+  const body = g('lz-trending-body');
+  try {
+    const r = await fetch('/api/trending?hours=4'); const d = await r.json();
+    if (!d.length) { body.innerHTML = '<div class="lz-empty">No trending signals</div>'; return; }
+    body.innerHTML = d.slice(0,5).map(t => `<div class="lz-row"><span>${esc(t.asset)}</span><span class="${(t.change_pct||0)>=0?'pos':'neg'}">${t.change_pct!=null?(t.change_pct>=0?'+':'')+t.change_pct.toFixed(2)+'%':'--'}</span></div>`).join('');
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzWatchlist() {
+  const body = g('lz-watchlist-body');
+  try {
+    const r = await fetch('/api/watchlist'); const d = await r.json();
+    if (!d.length) { body.innerHTML = '<div class="lz-empty">Watchlist is empty</div>'; return; }
+    body.innerHTML = d.slice(0,6).map(w => `<div class="lz-row"><span>${esc(w.symbol)}</span><span class="${(w.change_pct||0)>=0?'pos':'neg'}">${w.price!=null?fmtPrice(w.price):'--'}</span></div>`).join('');
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzAiUniverse() {
+  const body = g('lz-aiuniverse-body');
+  try {
+    const r = await fetch('/api/ai-universe'); const d = await r.json();
+    const all = (d.sectors||[]).flatMap(s => s.tickers);
+    const top = all.filter(t=>t.price).sort((a,b)=>Math.abs(b.change_pct||0)-Math.abs(a.change_pct||0)).slice(0,8);
+    if (!top.length) { body.innerHTML = '<div class="lz-empty">No data yet</div>'; return; }
+    body.innerHTML = `<div class="lz-heat">${top.map(t=>{
+      const up = (t.change_pct||0) >= 0;
+      return `<span class="lz-chip" style="background:${up?'rgba(0,255,170,.12)':'rgba(255,51,102,.12)'};color:${up?'var(--green)':'var(--red)'}">${esc(t.symbol)} ${up?'+':''}${(t.change_pct||0).toFixed(1)}%</span>`;
+    }).join('')}</div>`;
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzNews() {
+  const body = g('lz-news-body');
+  try {
+    const r = await fetch('/api/news?limit=5'); const d = await r.json();
+    const items = d.items || [];
+    if (!items.length) { body.innerHTML = '<div class="lz-empty">No recent news</div>'; return; }
+    body.innerHTML = items.slice(0,5).map(n => `<div class="lz-newsline" title="${esc(n.title)}">${esc(n.title)}</div>`).join('');
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzGlobalMap() {
+  const body = g('lz-globalmap-body');
+  try {
+    const r = await fetch('/api/news/globe-data?hours=24'); const d = await r.json();
+    const points = (d.points||[]).slice().sort((a,b)=>b.count-a.count).slice(0,5);
+    if (!points.length) { body.innerHTML = '<div class="lz-empty">No geo signal yet</div>'; return; }
+    body.innerHTML = points.map(p => `<div class="lz-row"><span>${esc(p.label)}</span><span class="b">${p.count}</span></div>`).join('');
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzBriefing() {
+  const body = g('lz-briefing-body');
+  try {
+    const r = await fetch('/api/summaries'); const d = await r.json();
+    if (!d.length) { body.innerHTML = '<div class="lz-empty">No briefing yet</div>'; return; }
+    const text = (d[0].content || '').slice(0, 220);
+    body.innerHTML = `<div class="lz-brief">${esc(text)}${text.length>=220?'…':''}</div>`;
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
+}
+
+async function loadLzOps() {
+  const body = g('lz-ops-body');
+  try {
+    const r = await fetch('/api/ops-picture'); const d = await r.json();
+    const ms = d.market_status || {};
+    body.innerHTML = `<div class="lz-stat-big" style="color:${ms.color||'var(--t2)'}">${esc(ms.label||'--')}</div>
+      <div class="lz-sub">${(d.cascades||[]).length} active cascade${(d.cascades||[]).length===1?'':'s'} · ${(d.top_signals||[]).length} hot ticker${(d.top_signals||[]).length===1?'':'s'}</div>`;
+  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
 }
 
 function _cwUpdateAddBar(page, widgetIds) {

@@ -1747,13 +1747,16 @@ def api_save_layout():
     page = str(data.get("page", "")).strip()
     hidden = data.get("hidden", [])
     order = data.get("order", {})
+    sizes = data.get("sizes", {})
     if not page:
         return jsonify({"error": "page is required"}), 400
     if not isinstance(hidden, list) or not all(isinstance(h, str) for h in hidden):
         return jsonify({"error": "hidden must be a list of widget ids"}), 400
     if not isinstance(order, dict) or not all(isinstance(v, int) for v in order.values()):
         return jsonify({"error": "order must be a widget id -> position map"}), 400
-    save_layout_prefs(session["user_id"], page, hidden, order)
+    if not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values()):
+        return jsonify({"error": "sizes must be a widget id -> size string map"}), 400
+    save_layout_prefs(session["user_id"], page, hidden, order, sizes)
     return jsonify({"status": "ok"})
 
 
@@ -2066,6 +2069,16 @@ def _get_market_status() -> dict:
     if 21 <= hour < 22:
         return {"status": "AH", "label": "After Hours", "color": "#9b59ff"}
     return {"status": "CLOSED", "label": "Market Closed", "color": "#4a6380"}
+
+
+@app.route("/api/fear-greed")
+@login_required
+def api_fear_greed():
+    """CNN Fear & Greed Index -- cached 1h at the client, no key required."""
+    fg = fetch_fear_greed()
+    if not fg:
+        return jsonify({"status": "unavailable"})
+    return jsonify({"status": "ok", **fg})
 
 
 @app.route("/api/asx/quotes")

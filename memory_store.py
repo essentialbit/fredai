@@ -242,6 +242,20 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS institutional_holdings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            manager TEXT NOT NULL,
+            cik TEXT NOT NULL,
+            issuer TEXT NOT NULL,
+            ticker TEXT,
+            cusip TEXT,
+            shares REAL,
+            value_usd REAL,
+            filing_period TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(manager, cusip, filing_period, shares)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -257,6 +271,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_institutional_ticker ON institutional_holdings(ticker, filing_period);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1410,6 +1425,39 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     query += " ORDER BY transaction_date DESC"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── INSTITUTIONAL HOLDINGS (SEC Form 13F-HR) ──────────────────────────────────
+
+def insert_institutional_holdings(holdings: list[dict]) -> int:
+    """Idempotent on (manager, cusip, filing_period, shares) -- safe to call
+    repeatedly with overlapping filing history. Returns rows actually inserted."""
+    if not holdings:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO institutional_holdings
+                (manager, cik, issuer, ticker, cusip, shares, value_usd, filing_period)
+            VALUES (:manager, :cik, :issuer, :ticker, :cusip, :shares, :value_usd, :filing_period)
+        """, holdings)
+        return conn.total_changes - before
+
+
+def get_institutional_holdings_for_symbol(ticker: str) -> list[dict]:
+    """Which curated managers currently hold this ticker, per each manager's
+    own most recent filing_period on file (managers file on independent
+    schedules, so this is NOT one global latest quarter)."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT * FROM institutional_holdings h
+            WHERE h.ticker = ? AND h.filing_period = (
+                SELECT MAX(h2.filing_period) FROM institutional_holdings h2
+                WHERE h2.manager = h.manager
+            )
+            ORDER BY manager, value_usd DESC
+        """, (ticker.upper(),)).fetchall()
         return [dict(r) for r in rows]
 
 

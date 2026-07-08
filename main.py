@@ -25,7 +25,7 @@ from memory_store import (
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
-from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters
+from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters, detect_options_shifts
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
@@ -41,6 +41,7 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    get_latest_options_data,
     get_layout_prefs, save_layout_prefs,
 )
 from news_client import fetch_all_news, fetch_ticker_info
@@ -53,6 +54,7 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from finviz_client import refresh_short_interest
 from sec_client import fetch_form4_filings
+from options_data_client import refresh_options_data
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -1766,6 +1768,18 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/options/<ticker>")
+@login_required
+def api_options_data(ticker):
+    """Latest put/call ratio + ~30-day ATM implied volatility snapshot (FSI L2).
+    Cache-only -- refreshed on a schedule, not on-demand (options chains are a
+    heavier fetch than a quote and don't move meaningfully within a day)."""
+    data = get_latest_options_data(ticker.upper())
+    if not data:
+        return jsonify({"ticker": ticker.upper(), "available": False})
+    return jsonify({"ticker": ticker.upper(), "available": True, **data})
+
+
 @app.route("/api/assessment/<symbol>")
 @login_required
 def api_assessment(symbol):
@@ -2410,6 +2424,24 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_options_refresh():
+        """Refresh put/call ratio + ATM IV daily for portfolio + watchlist
+        symbols with listed options (US equities/ETFs only -- crypto and most
+        ASX tickers have no options chain), then check for positioning shifts."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            stored = refresh_options_data(symbols, quotes=_quotes_cache)
+            alerts_fired = detect_options_shifts(symbols)
+            print(f"[Options] Refreshed {stored}/{len(symbols)} symbols, {len(alerts_fired)} shift alert(s)")
+        except Exception as e:
+            print(f"[Options] Refresh error: {e}")
+
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
         try:
@@ -2508,6 +2540,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_options_refresh, "cron", hour=8, minute=0, id="options_data")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)

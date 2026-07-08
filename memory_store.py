@@ -226,6 +226,16 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS options_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            expiration TEXT,
+            put_call_volume_ratio REAL,
+            put_call_oi_ratio REAL,
+            atm_iv_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS insider_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -257,6 +267,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_options_symbol ON options_data(symbol, fetched_at);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1380,6 +1391,42 @@ def get_short_interest_direction(symbol: str) -> str | None:
     if latest < prior:
         return "bullish"
     return None
+
+
+# ── OPTIONS DATA (put/call ratio + ATM IV) ─────────────────────────────────────
+
+def insert_options_data(symbol: str, expiration: str | None, put_call_volume_ratio: float | None,
+                         put_call_oi_ratio: float | None, atm_iv_pct: float | None):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO options_data
+               (symbol, expiration, put_call_volume_ratio, put_call_oi_ratio, atm_iv_pct)
+               VALUES (?, ?, ?, ?, ?)""",
+            (symbol, expiration, put_call_volume_ratio, put_call_oi_ratio, atm_iv_pct)
+        )
+
+
+def get_latest_options_data(symbol: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM options_data WHERE symbol=? ORDER BY fetched_at DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_options_data_prior_pair(symbol: str) -> tuple[dict, dict] | None:
+    """Latest two options_data snapshots for a symbol, newest first. Returns
+    None if there's fewer than two -- shift detection needs a prior reading,
+    not just a static snapshot."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM options_data WHERE symbol=? ORDER BY fetched_at DESC LIMIT 2",
+            (symbol,)
+        ).fetchall()
+    if len(rows) < 2:
+        return None
+    return dict(rows[0]), dict(rows[1])
 
 
 # ── INSIDER TRANSACTIONS (SEC Form 4) ─────────────────────────────────────────

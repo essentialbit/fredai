@@ -242,6 +242,19 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS market_debates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            debate_date TEXT NOT NULL,
+            bull_case TEXT,
+            bear_case TEXT,
+            verdict TEXT,
+            confidence REAL,
+            signals_snapshot TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, debate_date)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -1411,6 +1424,29 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_market_debate(ticker: str, debate_date: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM market_debates WHERE ticker=? AND debate_date=?",
+            (ticker, debate_date)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_market_debate(ticker: str, debate_date: str, bull_case: str, bear_case: str,
+                        verdict: str, confidence: float, signals_snapshot: str) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO market_debates (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
+               VALUES (?,?,?,?,?,?,?)
+               ON CONFLICT(ticker, debate_date) DO UPDATE SET
+                   bull_case=excluded.bull_case, bear_case=excluded.bear_case,
+                   verdict=excluded.verdict, confidence=excluded.confidence,
+                   signals_snapshot=excluded.signals_snapshot""",
+            (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
+        )
 
 
 def get_layout_prefs(user_id: int, page: str) -> dict:

@@ -25,6 +25,7 @@ from memory_store import (
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
+from reddit_client import fetch_reddit_signals
 from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
@@ -2375,6 +2376,21 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Calendar] Refresh error: {e}")
 
+    def job_reddit_refresh():
+        """Poll r/wallstreetbets + r/investing for retail sentiment, ticker-linked
+        against WATCHLIST like every other signal source (FSI L2)."""
+        try:
+            posts = fetch_reddit_signals()
+            print(f"[Reddit] {len(posts)} new post(s) processed")
+            for p in posts:
+                for asset in p["tickers"]:
+                    socketio.emit("new_signal", {
+                        "source": "reddit", "asset": asset, "text": p["text"],
+                        "signal_type": p["signal_type"], "author": p["author"],
+                    })
+        except Exception as e:
+            print(f"[Reddit] Refresh error: {e}")
+
     def job_short_interest_refresh():
         """Refresh Finviz short-interest snapshots daily for portfolio + watchlist symbols."""
         try:
@@ -2506,6 +2522,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_prune, "cron", hour=2, minute=0, id="prune")
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
+    scheduler.add_job(job_reddit_refresh, "interval", hours=1, id="reddit", jitter=120)
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")

@@ -4071,7 +4071,7 @@ function appendMsg(role,text,imageUrl,sources){
     const counts = {};
     sources.forEach(s => counts[s] = (counts[s]||0)+1);
     const detail = Object.entries(counts).map(([n,c]) => c>1?`${n} ×${c}`:n).join(', ');
-    srcHtml = `<div style="margin-top:5px;font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace" title="${esc(detail)}">◦ ${sources.length} live lookup${sources.length>1?'s':''}: ${esc(detail)}</div>`;
+    srcHtml = `<div style="margin-top:5px;font-size:10px;color:var(--t3);font-family:var(--mono)" title="${esc(detail)}">◦ ${sources.length} live lookup${sources.length>1?'s':''}: ${esc(detail)}</div>`;
   }
   d.innerHTML=`<div class="cr">${role==='user'?'You':'Fred'}</div><div class="cb">${linkifyTickers(esc(text))}${imgHtml}${srcHtml}</div>`;
   g('fred-drawer').appendChild(d);g('fred-drawer').scrollTop=1e9;

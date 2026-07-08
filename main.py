@@ -1279,63 +1279,6 @@ def api_globe_node_risk():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/analyst/debate/<ticker>", methods=["POST"])
-@login_required
-def api_analyst_debate(ticker):
-    ticker = ticker.upper().strip()
-    if not ticker:
-        return jsonify({"error": "Invalid ticker symbol."}), 400
-
-    from agent import _provider
-    from memory_store import get_news
-    news = get_news(hours=72, limit=20)
-    ticker_news = [n for n in news if ticker in (n.get("ticker") or n.get("title") or "")]
-    news_context = "\n".join([f"- {n.get('title')}: {n.get('content')}" for n in ticker_news[:5]])
-
-    bull_prompt = f"""
-    Role: Extremely bullish investor championing {ticker}.
-    Context News:\n{news_context}
-    Write a short, highly persuasive bull thesis for {ticker} highlighting key catalysts, competitive advantages, and growth avenues. Limit to 2 bullet points.
-    """
-    bear_prompt = f"""
-    Role: Extremely bearish short-seller exposing risks for {ticker}.
-    Context News:\n{news_context}
-    Write a short, highly persuasive bear thesis for {ticker} highlighting risks, margin pressures, and head-winds. Limit to 2 bullet points.
-    """
-    
-    try:
-        bull = _provider.complete(
-            messages=[{"role": "user", "content": bull_prompt}],
-            system="You are a bullish buy-side equity analyst.",
-            tier="chat"
-        )
-        bear = _provider.complete(
-            messages=[{"role": "user", "content": bear_prompt}],
-            system="You are a skeptical short-seller research analyst.",
-            tier="chat"
-        )
-        
-        verdict_prompt = f"""
-        Analyze the following debate:
-        BULL CASE:
-        {bull}
-
-        BEAR CASE:
-        {bear}
-
-        Synthesize these cases objectively. Write a brief final committee consensus verdict recommendation for {ticker}. Limit to 2 sentences.
-        """
-        verdict = _provider.complete(
-            messages=[{"role": "user", "content": verdict_prompt}],
-            system="You are the neutral Investment Committee Chair.",
-            tier="chat"
-        )
-        
-        return jsonify({"bull": bull, "bear": bear, "verdict": verdict})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
 @app.route("/api/analyst/report/<ticker>")
 @login_required
 def api_analyst_report(ticker):

@@ -2008,9 +2008,11 @@ html[data-tier="micro"] #ov-globe-stage {
         <span>Autogenerating equity analyst report via Fred AI research stack...</span>
       </div>
       <div id="analyst-report-content" style="display:none"></div>
+      <div id="analyst-debate-content" style="display:none"></div>
     </div>
     <div class="analyst-footer">
       <button class="login-btn" id="btn-email-report" onclick="emailAnalystReport()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0 6px 0 0;display:none">Email Report</button>
+      <button class="login-btn" id="btn-toggle-debate" onclick="toggleMarketDebate()" style="background:#a78bfa;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Bull/Bear Debate</button>
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
     </div>
@@ -4927,10 +4929,16 @@ async function openAnalystReport(ticker) {
   const title = g('analyst-modal-title');
   const loading = g('analyst-loading');
   const content = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
 
   title.textContent = `EQUITY RESEARCH: ${ticker}`;
   loading.style.display = 'flex';
   content.style.display = 'none';
+  debateContent.style.display = 'none';
+  debateContent.innerHTML = '';
+  window._marketDebateLoaded = false;
+  const btnDebate = g('btn-toggle-debate');
+  if (btnDebate) btnDebate.textContent = 'Bull/Bear Debate';
   modal.classList.add('open');
 
   try {
@@ -4961,6 +4969,58 @@ function closeAnalystModal() {
   const btnEmail = g('btn-email-report');
   if (btnEmail) btnEmail.style.display = 'none';
   g('analyst-modal').classList.remove('open');
+}
+
+async function toggleMarketDebate() {
+  const ticker = window._activeAnalystTicker;
+  if (!ticker) return;
+
+  const reportContent = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
+  const btnDebate = g('btn-toggle-debate');
+  const loading = g('analyst-loading');
+
+  const showingDebate = debateContent.style.display !== 'none';
+  if (showingDebate) {
+    debateContent.style.display = 'none';
+    reportContent.style.display = 'block';
+    btnDebate.textContent = 'Bull/Bear Debate';
+    return;
+  }
+
+  reportContent.style.display = 'none';
+  debateContent.style.display = 'block';
+  btnDebate.textContent = 'Back to Report';
+
+  if (window._marketDebateLoaded) return;
+
+  loading.style.display = 'flex';
+  debateContent.innerHTML = '';
+  try {
+    const r = await fetch(`/api/market-debate/${ticker}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+
+    if (r.ok && d.verdict) {
+      window._marketDebateLoaded = true;
+      const conf = Math.round((d.confidence || 0) * 100);
+      const html = `
+        <h3>🐂 Bull Case</h3>
+        <div>${window.marked && window.marked.parse ? window.marked.parse(d.bull_case || '') : esc(d.bull_case || '')}</div>
+        <h3>🐻 Bear Case</h3>
+        <div>${window.marked && window.marked.parse ? window.marked.parse(d.bear_case || '') : esc(d.bear_case || '')}</div>
+        <h3>⚖️ Arbiter Verdict <span style="font-size:11px;color:var(--t3);font-weight:normal">(confidence ${conf}%${d.cached ? ', cached ' + esc(d.date) : ''})</span></h3>
+        <div>${window.marked && window.marked.parse ? window.marked.parse(d.verdict) : esc(d.verdict)}</div>
+        <p style="font-size:11px;color:var(--t3);margin-top:16px">Not financial advice — synthesized from Fred's own tracked signals (sentiment, insider filings, technicals, short interest, backtest accuracy).</p>
+      `;
+      debateContent.innerHTML = html;
+    } else {
+      debateContent.innerHTML = `<div class="warn">Error: ${esc(d.error || 'Failed to generate debate.')}</div>`;
+    }
+  } catch (e) {
+    loading.style.display = 'none';
+    debateContent.innerHTML = `<div class="warn">Network error requesting Fred AI debate.</div>`;
+  }
 }
 
 function printAnalystReport() {

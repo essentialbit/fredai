@@ -42,6 +42,7 @@ from memory_store import (
     get_latest_short_interest,
     get_recent_insider_transactions,
     get_layout_prefs, save_layout_prefs,
+    save_seasonal_bias, get_current_seasonality,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -53,6 +54,7 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from finviz_client import refresh_short_interest
 from sec_client import fetch_form4_filings
+from seasonality_engine import compute_seasonal_bias
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -1766,6 +1768,15 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/seasonality/<ticker>")
+@login_required
+def api_seasonality(ticker):
+    """This calendar month's + today's weekday's historical return bias (FSI L3).
+    Cache-only -- weekly job_seasonality_refresh keeps portfolio/watchlist symbols
+    warm; never fetches live so this route never blocks on Yahoo history calls."""
+    return jsonify(get_current_seasonality(ticker.upper()))
+
+
 @app.route("/api/assessment/<symbol>")
 @login_required
 def api_assessment(symbol):
@@ -2410,6 +2421,28 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_seasonality_refresh():
+        """Weekly calendar-seasonality refresh for portfolio + watchlist symbols
+        (FSI L3). Weekly, not daily -- month/day-of-week historical bias by
+        definition doesn't shift within a week, unlike the daily SEC/Finviz jobs."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = set(port_rows + wl_rows)
+            if not symbols:
+                return
+            refreshed = 0
+            for sym in symbols:
+                bias = compute_seasonal_bias(sym)
+                if bias.get("status") == "ok":
+                    save_seasonal_bias(sym, bias)
+                    refreshed += 1
+            print(f"[Seasonality] Refreshed {refreshed}/{len(symbols)} symbols")
+        except Exception as e:
+            print(f"[Seasonality] Refresh error: {e}")
+
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
         try:
@@ -2508,6 +2541,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_seasonality_refresh, "cron", day_of_week="sun", hour=8, minute=0, id="seasonality")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)

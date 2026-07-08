@@ -242,6 +242,19 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS seasonality_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            period_type TEXT NOT NULL,
+            period_value INTEGER NOT NULL,
+            period_name TEXT,
+            sample_size INTEGER,
+            avg_return_pct REAL,
+            hit_rate_pct REAL,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, period_type, period_value)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -257,6 +270,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_seasonality_ticker ON seasonality_cache(ticker, period_type);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1411,6 +1425,52 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── SEASONALITY ────────────────────────────────────────────────────────────────
+
+def save_seasonal_bias(ticker: str, bias: dict) -> None:
+    """Upserts every period in a seasonality_engine.compute_seasonal_bias()
+    result. Stores all 12 months + up to 7 weekdays so `/api/seasonality`
+    lookups are always cache-hits regardless of what day it is."""
+    if bias.get("status") != "ok":
+        return
+    rows = [("month", p) for p in bias.get("months", [])] + [("dow", p) for p in bias.get("weekdays", [])]
+    with get_conn() as conn:
+        conn.executemany("""
+            INSERT INTO seasonality_cache
+                (ticker, period_type, period_value, period_name, sample_size, avg_return_pct, hit_rate_pct, computed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(ticker, period_type, period_value) DO UPDATE SET
+                period_name=excluded.period_name,
+                sample_size=excluded.sample_size,
+                avg_return_pct=excluded.avg_return_pct,
+                hit_rate_pct=excluded.hit_rate_pct,
+                computed_at=CURRENT_TIMESTAMP
+        """, [
+            (ticker, period_type, p["period_value"], p["period_name"], p["sample_size"], p["avg_return_pct"], p["hit_rate_pct"])
+            for period_type, p in rows
+        ])
+
+
+def get_current_seasonality(ticker: str) -> dict:
+    """Cache-only: this calendar month's bias + today's day-of-week bias for
+    `ticker`. Never triggers a live fetch -- weekly refresh job keeps this warm."""
+    now = datetime.utcnow()
+    with get_conn() as conn:
+        month_row = conn.execute(
+            "SELECT * FROM seasonality_cache WHERE ticker=? AND period_type='month' AND period_value=?",
+            (ticker, now.month),
+        ).fetchone()
+        dow_row = conn.execute(
+            "SELECT * FROM seasonality_cache WHERE ticker=? AND period_type='dow' AND period_value=?",
+            (ticker, now.weekday()),
+        ).fetchone()
+    return {
+        "ticker": ticker,
+        "month": dict(month_row) if month_row else None,
+        "day_of_week": dict(dow_row) if dow_row else None,
+    }
 
 
 def get_layout_prefs(user_id: int, page: str) -> dict:

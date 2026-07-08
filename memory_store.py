@@ -242,6 +242,17 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS earnings_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            earnings_date TEXT NOT NULL,
+            eps_estimate REAL,
+            reported_eps REAL,
+            surprise_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, earnings_date)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -257,6 +268,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_earnings_history_ticker ON earnings_history(ticker, earnings_date);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1411,6 +1423,52 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── EARNINGS HISTORY (beat/miss tracking) ──────────────────────────────────────
+
+def insert_earnings_history(rows: list[dict]) -> int:
+    """Idempotent on (ticker, earnings_date) -- safe to call repeatedly with
+    overlapping quarter history. Returns rows actually inserted."""
+    if not rows:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO earnings_history
+                (ticker, earnings_date, eps_estimate, reported_eps, surprise_pct)
+            VALUES (:ticker, :earnings_date, :eps_estimate, :reported_eps, :surprise_pct)
+        """, rows)
+        return conn.total_changes - before
+
+
+def get_earnings_history(ticker: str, limit: int = 12) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM earnings_history WHERE ticker=? ORDER BY earnings_date DESC LIMIT ?",
+            (ticker, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_earnings_beat_rate(ticker: str, limit: int = 12) -> dict | None:
+    """Beat-rate base rate over the last `limit` reported quarters, e.g.
+    'beat in 9 of last 12 quarters, average surprise +4.2%'. Returns None
+    (no fabricated 0%) when there's no stored history for this ticker."""
+    history = get_earnings_history(ticker, limit=limit)
+    if not history:
+        return None
+    beats = sum(1 for h in history if (h["surprise_pct"] or 0) > 0)
+    misses = sum(1 for h in history if (h["surprise_pct"] or 0) < 0)
+    surprises = [h["surprise_pct"] for h in history if h["surprise_pct"] is not None]
+    return {
+        "quarters": len(history),
+        "beats": beats,
+        "misses": misses,
+        "inline": len(history) - beats - misses,
+        "beat_rate_pct": round(beats * 100.0 / len(history), 1),
+        "avg_surprise_pct": round(sum(surprises) / len(surprises), 2) if surprises else None,
+    }
 
 
 def get_layout_prefs(user_id: int, page: str) -> dict:

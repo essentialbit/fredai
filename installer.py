@@ -27,7 +27,12 @@ STATIC_ICONS = BASE_DIR / "static" / "icons"
 # Bump whenever a generator function's launcher-script content changes in a way
 # that existing installs should pick up (e.g. the check-if-running/auto-start
 # logic added here) — see needs_install().
-INSTALLER_VERSION = "2"
+INSTALLER_VERSION = "3"
+
+# Max seconds a launcher script polls for the server before opening the
+# browser anyway — covers cold starts on slow hardware (Raspberry Pi 4) that
+# a fixed short sleep would miss, without hanging indefinitely on failure.
+LAUNCHER_READY_TIMEOUT = 30
 
 
 # ── Result type ───────────────────────────────────────────────────────────────
@@ -173,7 +178,10 @@ def _install_macos(port: int = 8080) -> InstallResult:
         if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
             cd "{BASE_DIR}"
             ./venv/bin/python3 main.py >/dev/null 2>&1 &
-            sleep 3
+            for i in $(seq 1 {LAUNCHER_READY_TIMEOUT}); do
+                nc -z 127.0.0.1 {port} >/dev/null 2>&1 && break
+                sleep 1
+            done
         fi
         open "{url}"
     """))
@@ -269,10 +277,16 @@ def _install_windows(port: int = 8080) -> InstallResult:
             rem FREDAI_INSTALLER_VERSION={INSTALLER_VERSION}
             cd /d "{BASE_DIR}"
             netstat -ano | findstr LISTENING | findstr :{port} >nul
-            if %errorlevel% neq 0 (
-                start "" "venv\\Scripts\\python.exe" main.py
-                timeout /t 3 >nul
-            )
+            if %errorlevel% equ 0 goto fredai_ready
+            start "" "venv\\Scripts\\python.exe" main.py
+            set _fredai_wait=0
+            :fredai_wait_loop
+            timeout /t 1 >nul
+            netstat -ano | findstr LISTENING | findstr :{port} >nul
+            if %errorlevel% equ 0 goto fredai_ready
+            set /a _fredai_wait+=1
+            if %_fredai_wait% lss {LAUNCHER_READY_TIMEOUT} goto fredai_wait_loop
+            :fredai_ready
             start "" "{url}"
         """))
         actions.append(f"Created/updated startup script: {startup_script}")
@@ -346,7 +360,10 @@ def _install_linux(device: dict, port: int = 8080) -> InstallResult:
             if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
                 cd "{BASE_DIR}"
                 ./venv/bin/python3 main.py >/dev/null 2>&1 &
-                sleep 3
+                for i in $(seq 1 {LAUNCHER_READY_TIMEOUT}); do
+                    nc -z 127.0.0.1 {port} >/dev/null 2>&1 && break
+                    sleep 1
+                done
             fi
             xdg-open "{url}"
         """))

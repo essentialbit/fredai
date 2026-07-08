@@ -2499,7 +2499,8 @@ if __name__ == "__main__":
 
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
-    scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx")
+    scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx",
+                       coalesce=True, misfire_grace_time=90)
     scheduler.add_job(job_scan_cycle, "interval", hours=SCAN_INTERVAL_HOURS, id="scan")
     scheduler.add_job(job_rnd, "interval", hours=6, id="rnd")
     scheduler.add_job(job_gemini_rnd, "interval", hours=6, id="gemini_rnd", jitter=1800)

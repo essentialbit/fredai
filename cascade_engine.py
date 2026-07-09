@@ -4,13 +4,28 @@ Cascade Alert Engine — forward-propagation intelligence.
 When a major event fires on a stock (price move, earnings, high-impact news),
 traverse the relationship graph to identify downstream-affected companies and
 generate derivative alerts ranked by impact severity.
+
+Data-quality note (2026-07-04): the qualitative relationship graph below
+(EDGES) is a small, hand-curated list -- real and useful for the ~135
+tickers it covers, but not comprehensive, and it doesn't update itself.
+Cascade now also draws on the correlation_matrix (30d/90d rolling Pearson
+correlation, computed from real price history -- see correlation_engine.py)
+as a second, statistically-grounded data source, so a major move on a
+ticker with no hand-typed relationship still produces cascade coverage
+where the real data supports it. The two sources are kept honestly
+distinct in the output (relationship="correlated" vs a named business
+relationship) rather than conflated -- "these two move together" is a
+different, weaker claim than "X is Y's supplier," and presenting them
+identically would overstate what the correlation data actually tells you.
 """
 import time
 from datetime import datetime
 from graph_engine import EDGES, SECTORS, SECTOR_COLORS, EDGE_COLORS
+from memory_store import get_latest_correlation_matrix
 
 PRICE_MOVE_THRESHOLD = 3.0    # % move that triggers cascade
 NEWS_SENTIMENT_THRESHOLD = 0.7
+MIN_ABS_CORRELATION = 0.5     # below this, a correlation is too noisy to alert on
 
 # Relationship impact weights: how much of the trigger's move propagates
 IMPACT_WEIGHTS = {
@@ -48,6 +63,35 @@ _cascade_cache: dict = {}
 _CASCADE_TTL = 300
 
 
+def _correlation_neighbors(symbol: str, known_symbols: set) -> list[dict]:
+    """Statistically-correlated tickers not already covered by the hand-typed
+    EDGES relationship graph. Prefers the 30d window (more responsive to
+    current market regime); falls back to 90d only for pairs the 30d window
+    doesn't cover. Returns [] gracefully if the correlation job hasn't run
+    yet (empty table) -- no fabricated relationships."""
+    symbol = symbol.upper()
+    seen_pairs = set()
+    results = []
+    for window in (30, 90):
+        for pair in get_latest_correlation_matrix(window):
+            a, b, corr = pair["symbol_a"], pair["symbol_b"], pair["correlation"]
+            if symbol not in (a, b) or abs(corr) < MIN_ABS_CORRELATION:
+                continue
+            other = b if a == symbol else a
+            if other in known_symbols or other in seen_pairs:
+                continue  # already covered by a real relationship, or already found at a shorter window
+            seen_pairs.add(other)
+            direction = "move together" if corr > 0 else "move inversely"
+            results.append({
+                "symbol": other,
+                "type": "correlated",
+                "strength": round(abs(corr) * 10, 1),
+                "corr_value": corr,
+                "desc": f"Statistically {direction} ({window}d correlation: {corr:+.2f}) -- not a confirmed business relationship",
+            })
+    return results
+
+
 def cascade_for_event(symbol: str, event_type: str, magnitude: float,
                       description: str) -> list[dict]:
     """
@@ -62,6 +106,7 @@ def cascade_for_event(symbol: str, event_type: str, magnitude: float,
         return cached["cascades"]
 
     neighbors = _ADJ.get(symbol.upper(), [])
+    known_symbols = {n["symbol"] for n in neighbors}
     cascades = []
 
     for n in neighbors:
@@ -100,6 +145,39 @@ def cascade_for_event(symbol: str, event_type: str, magnitude: float,
             "edge_color": EDGE_COLORS.get(rel, "#4a6380"),
             "sector": sector,
             "sector_color": SECTOR_COLORS.get(sector, "#4a6380"),
+            "data_source": "known_relationship",
+            "generated_at": datetime.utcnow().isoformat(),
+        })
+
+    # Statistically-correlated tickers the hand-typed graph doesn't cover.
+    # Uses the real correlation coefficient directly as the propagation
+    # weight -- correlation's sign already encodes co-movement direction, so
+    # this needs no hand-tuned IMPACT_WEIGHTS entry the way named
+    # relationship types do.
+    for n in _correlation_neighbors(symbol, known_symbols):
+        impact_score = n["corr_value"] * (magnitude / 10.0)
+        if abs(impact_score) < 0.04:
+            continue
+        impact_direction = "positive" if impact_score > 0 else "negative"
+        sector = SECTORS.get(n["symbol"], "Other")
+        cascades.append({
+            "symbol": n["symbol"],
+            "trigger_symbol": symbol,
+            "relationship": "correlated",
+            "strength": n["strength"],
+            "impact_score": round(impact_score, 3),
+            "impact_direction": impact_direction,
+            "impact_severity": (
+                "HIGH" if abs(impact_score) > 0.5
+                else "MEDIUM" if abs(impact_score) > 0.2
+                else "LOW"
+            ),
+            "reason": f"{symbol} {'decline' if magnitude < 0 else 'surge'} ({magnitude:+.1f}%) -- {n['desc']}",
+            "edge_desc": n["desc"],
+            "edge_color": EDGE_COLORS.get("correlated", "#8ba3b8"),
+            "sector": sector,
+            "sector_color": SECTOR_COLORS.get(sector, "#4a6380"),
+            "data_source": "statistical_correlation",
             "generated_at": datetime.utcnow().isoformat(),
         })
 
@@ -159,3 +237,66 @@ def run_cascade_check(quotes: dict) -> list[dict]:
                 "cascades": cascades[:6],
             })
     return results
+
+
+def get_ticker_network(tracked_symbols: list[str], quotes: dict = None, max_neighbors_per_ticker: int = 4) -> dict:
+    """A small, focused relationship graph scoped to the user's own tracked
+    tickers (portfolio + watchlist) + their nearest neighbors -- both known
+    (EDGES) and statistical (correlation_matrix), same two-tier honesty as
+    cascade_for_event. Deliberately not the full ~135-ticker universe: this
+    feeds a compact widget, not a standalone page, and a sprawling network
+    of everything is lower-signal than a focused one of what the user
+    actually holds/watches.
+    """
+    quotes = quotes or {}
+    tracked = set(s.upper() for s in tracked_symbols)
+    if not tracked:
+        return {"nodes": [], "edges": []}
+
+    nodes: dict = {}
+    edges = []
+    seen_edge_keys = set()
+
+    def _add_node(sym: str, tracked_flag: bool):
+        if sym in nodes:
+            return
+        q = quotes.get(sym, {})
+        sector = SECTORS.get(sym, "Other")
+        nodes[sym] = {
+            "id": sym,
+            "tracked": tracked_flag,
+            "sector": sector,
+            "sector_color": SECTOR_COLORS.get(sector, "#4a6380"),
+            "price": q.get("price", 0),
+            "change_pct": q.get("change_pct", 0),
+        }
+
+    for sym in tracked:
+        _add_node(sym, True)
+        known_neighbors = _ADJ.get(sym, [])[:max_neighbors_per_ticker]
+        known_targets = {n["symbol"] for n in known_neighbors}
+        for n in known_neighbors:
+            _add_node(n["symbol"], n["symbol"] in tracked)
+            key = tuple(sorted([sym, n["symbol"]])) + (n["type"],)
+            if key in seen_edge_keys:
+                continue
+            seen_edge_keys.add(key)
+            edges.append({
+                "source": sym, "target": n["symbol"], "type": n["type"],
+                "strength": n["strength"], "color": EDGE_COLORS.get(n["type"], "#4a6380"),
+                "desc": n["desc"], "data_source": "known_relationship",
+            })
+
+        for n in _correlation_neighbors(sym, known_targets)[:max_neighbors_per_ticker]:
+            _add_node(n["symbol"], n["symbol"] in tracked)
+            key = tuple(sorted([sym, n["symbol"]])) + ("correlated",)
+            if key in seen_edge_keys:
+                continue
+            seen_edge_keys.add(key)
+            edges.append({
+                "source": sym, "target": n["symbol"], "type": "correlated",
+                "strength": n["strength"], "color": EDGE_COLORS.get("correlated", "#8ba3b8"),
+                "desc": n["desc"], "data_source": "statistical_correlation",
+            })
+
+    return {"nodes": list(nodes.values()), "edges": edges}

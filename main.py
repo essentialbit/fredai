@@ -18,14 +18,14 @@ from memory_store import (
     get_watchlist, add_to_watchlist, remove_from_watchlist,
     get_portfolio, upsert_portfolio,
     get_user_interests, bump_interest, decay_interests,
-    get_trending_assets,
+    get_trending_assets, get_signals_with_fallback, get_trending_assets_with_fallback, get_sentiment_snapshot,
     verify_user, create_user, get_user,
     get_user_by_oauth, create_oauth_user,
     log_consent, has_consent, export_user_data, delete_user_data, prune_old_data,
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
-from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level
+from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
@@ -33,24 +33,27 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
-    get_news, count_news, upsert_news_items,
+    get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
     get_calendar_events, upsert_calendar_events,
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
     insert_trend, get_trend_history,
     get_latest_correlation_matrix,
     get_latest_short_interest,
+    get_recent_insider_transactions,
+    get_layout_prefs, save_layout_prefs,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
 from technical_alerts import run_technical_alerts, get_technicals
-from graph_engine import build_graph, generate_assessment, _ai_assessment_cache
-from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves
+from graph_engine import generate_assessment, _ai_assessment_cache
+from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves, get_ticker_network
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from correlation_engine import refresh_correlation_matrix
 from finviz_client import refresh_short_interest
-from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
+from sec_client import fetch_form4_filings
+from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
 
@@ -225,10 +228,10 @@ def _security_headers(response):
     # and same-origin everything else.
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' unpkg.com cdn.jsdelivr.net fonts.googleapis.com; "
+        "script-src 'self' 'unsafe-inline' unpkg.com cdn.jsdelivr.net cdn.socket.io fonts.googleapis.com; "
         "style-src 'self' 'unsafe-inline' fonts.googleapis.com; "
         "font-src 'self' fonts.gstatic.com; "
-        "img-src 'self' data: i.ytimg.com unpkg.com; "
+        "img-src 'self' data: *.ytimg.com unpkg.com; "
         "connect-src 'self' wss: ws:; "
         "frame-src https://www.youtube.com; "
         "object-src 'none';"
@@ -238,6 +241,7 @@ def _security_headers(response):
 _updater.init(socketio)
 
 _quotes_cache: dict = {}
+_crypto_spread_cache: dict = {}
 _last_scan: datetime = datetime.min
 _scan_lock = threading.Lock()
 _chat_histories: dict = {}  # user_id -> list
@@ -689,7 +693,7 @@ def api_init():
     portfolio = calculate_portfolio_value(holdings, quotes)
     watchlist = get_watchlist(uid)
     watchlist_symbols = [w["symbol"] for w in watchlist]
-    signals = get_signals(hours=4, limit=50)
+    signals = get_signals_with_fallback(hours=4, limit=50)
     stats = compute_sentiment_stats(signals)
     summary = get_latest_summary()
     timeline = get_sentiment_timeline(hours=24)
@@ -697,10 +701,10 @@ def api_init():
     sector = get_sector_snapshot(quotes)
     risk = get_risk_level(stats, alerts)
     interests = get_user_interests(uid, limit=10)
-    trending = get_trending_assets(hours=4, limit=15)
+    trending = get_trending_assets_with_fallback(hours=4, limit=15)
     next_scan = (_last_scan + timedelta(hours=SCAN_INTERVAL_HOURS)).isoformat() if _last_scan > datetime.min else None
 
-    news_preview = get_news(hours=24, limit=6)
+    news_preview = get_news_diverse(hours=24, limit=6)
     calendar_preview = get_calendar_events(days=7)
     tech_alerts_user = get_tech_alerts(uid)
 
@@ -751,7 +755,7 @@ def api_summaries():
 @login_required
 def api_trending():
     hours = min(max(int(request.args.get("hours", 4)), 1), 168)
-    trending = get_trending_assets(hours=hours, limit=20)
+    trending = get_trending_assets_with_fallback(hours=hours, limit=20)
     quotes = _quotes_cache or {}
     for t in trending:
         q = quotes.get(t["asset"])
@@ -781,12 +785,19 @@ def api_watchlist():
         return jsonify({"status": "ok"})
     wl = get_watchlist(uid)
     quotes = _quotes_cache or {}
+    sentiment = get_sentiment_snapshot([w["symbol"] for w in wl], hours=24)
     result = []
     for w in wl:
         entry = dict(w)
         q = quotes.get(w["symbol"])
         if q:
             entry.update(q)
+        s = sentiment.get(w["symbol"])
+        if s:
+            entry["sentiment"] = s
+        spread = _crypto_spread_cache.get(w["symbol"])
+        if spread:
+            entry["cross_exchange_spread"] = spread
         result.append(entry)
     return jsonify(result)
 
@@ -810,11 +821,15 @@ def api_portfolio():
         return jsonify({"status": "ok"})
     holdings = get_portfolio(uid)
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    sentiment = get_sentiment_snapshot([p["symbol"] for p in portfolio.get("positions", [])], hours=24)
     for pos in portfolio.get("positions", []):
         si = get_latest_short_interest(pos["symbol"])
         if si:
             pos["short_float_pct"] = si["short_float_pct"]
             pos["short_ratio"] = si["short_ratio"]
+        s = sentiment.get(pos["symbol"])
+        if s:
+            pos["sentiment"] = s
     return jsonify(portfolio)
 
 
@@ -1684,12 +1699,6 @@ def news_page():
     return render_template("news.html")
 
 
-@app.route("/graph")
-@login_required
-def graph_page():
-    return render_template("graph.html")
-
-
 @app.route("/api/news")
 @login_required
 def api_news():
@@ -1771,18 +1780,24 @@ def api_ai_universe():
     for name, meta in AI_UNIVERSE.items():
         all_syms.extend(meta["tickers"])
 
+    sentiment = get_sentiment_snapshot(list(set(all_syms)), hours=24)
+
     # Add quotes for all AI universe tickers present in cache
     for name, meta in AI_UNIVERSE.items():
         tickers = []
         for sym in meta["tickers"]:
             q = _quotes_cache.get(sym, {})
-            tickers.append({
+            entry = {
                 "symbol": sym,
                 "name": q.get("name", sym),
                 "price": q.get("price", 0),
                 "change_pct": q.get("change_pct", 0),
                 "change": q.get("change", 0),
-            })
+            }
+            s = sentiment.get(sym)
+            if s:
+                entry["sentiment"] = s
+            tickers.append(entry)
         sectors.append({
             "name": name,
             "color": meta["color"],
@@ -1790,23 +1805,6 @@ def api_ai_universe():
             "tickers": tickers,
         })
     return jsonify({"sectors": sectors})
-
-
-@app.route("/api/graph")
-@login_required
-def api_graph():
-    """Return stock relationship graph for D3 force-directed layout."""
-    uid = session["user_id"]
-    wl_rows = get_watchlist(uid)
-    portfolio_rows = get_portfolio(uid)
-    watchlist = [r["symbol"] for r in wl_rows] if wl_rows else WATCHLIST
-    portfolio_syms = [r["symbol"] for r in portfolio_rows]
-    focus = list(set(watchlist + portfolio_syms))
-    # Include AI universe symbols
-    for meta in AI_UNIVERSE.values():
-        focus.extend(meta["tickers"])
-    graph = build_graph(symbols=focus, quotes=_quotes_cache)
-    return jsonify(graph)
 
 
 @app.route("/api/correlation")
@@ -1822,6 +1820,59 @@ def api_correlation():
         "computed_at": pairs[0]["computed_at"] if pairs else None,
         "pairs": [{"symbol_a": p["symbol_a"], "symbol_b": p["symbol_b"], "correlation": p["correlation"]} for p in pairs],
     })
+
+
+@app.route("/api/ticker-relationships")
+@login_required
+def api_ticker_relationships():
+    """Small, focused relationship network for the user's own tracked tickers
+    (portfolio + watchlist) -- both known business relationships and
+    statistically-correlated tickers, honestly distinguished."""
+    uid = session["user_id"]
+    wl_rows = get_watchlist(uid)
+    portfolio_rows = get_portfolio(uid)
+    tracked = list(set([r["symbol"] for r in wl_rows] + [r["symbol"] for r in portfolio_rows]))
+    if not tracked:
+        tracked = WATCHLIST[:6]  # sensible default for a fresh account with nothing tracked yet
+    network = get_ticker_network(tracked, quotes=_quotes_cache or {})
+    return jsonify(network)
+
+
+@app.route("/api/user/layout", methods=["GET"])
+@login_required
+def api_get_layout():
+    """Per-page widget layout (hidden + order) -- lets users show only the
+    widgets that add value to them, per FSI institutional-grade UX bar."""
+    page = request.args.get("page", "").strip()
+    if not page:
+        return jsonify({"error": "page is required"}), 400
+    return jsonify(get_layout_prefs(session["user_id"], page))
+
+
+@app.route("/api/user/layout", methods=["POST"])
+@login_required
+def api_save_layout():
+    data = request.json or {}
+    page = str(data.get("page", "")).strip()
+    hidden = data.get("hidden", [])
+    order = data.get("order", {})
+    if not page:
+        return jsonify({"error": "page is required"}), 400
+    if not isinstance(hidden, list) or not all(isinstance(h, str) for h in hidden):
+        return jsonify({"error": "hidden must be a list of widget ids"}), 400
+    if not isinstance(order, dict) or not all(isinstance(v, int) for v in order.values()):
+        return jsonify({"error": "order must be a widget id -> position map"}), 400
+    save_layout_prefs(session["user_id"], page, hidden, order)
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/insider/<ticker>")
+@login_required
+def api_insider_transactions(ticker):
+    """Recent SEC Form 4 open-market insider buy/sell transactions (FSI L2)."""
+    days = request.args.get("days", "90", type=int)
+    txns = get_recent_insider_transactions(ticker.upper(), days=days, signal_only=True)
+    return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
 @app.route("/api/assessment/<symbol>")
@@ -2191,12 +2242,12 @@ def job_market_refresh():
     try:
         quotes = fetch_quotes()
         _quotes_cache = quotes
-        signals_4h = get_signals(hours=4)
+        signals_4h = get_signals_with_fallback(hours=4)
         stats = compute_sentiment_stats(signals_4h)
         alerts = get_recent_alerts(limit=5)
         risk = get_risk_level(stats, alerts)
         sector = get_sector_snapshot(quotes)
-        trending = get_trending_assets(hours=4, limit=15)
+        trending = get_trending_assets_with_fallback(hours=4, limit=15)
 
         # Nasdaq macro data (cached 1h)
         try:
@@ -2248,7 +2299,7 @@ def job_scan_cycle():
             for alert in alerts:
                 socketio.emit("alert", alert)
 
-            all_signals = get_signals(hours=4)
+            all_signals = get_signals_with_fallback(hours=4)
             summary_text = generate_summary(all_signals, quotes)
             stats = compute_sentiment_stats(all_signals)
             risk = get_risk_level(stats, alerts)
@@ -2265,7 +2316,7 @@ def job_scan_cycle():
                 signal_count=len(all_signals),
             )
 
-            trending = get_trending_assets(hours=4, limit=15)
+            trending = get_trending_assets_with_fallback(hours=4, limit=15)
             timeline = get_sentiment_timeline(hours=24)
 
             try:
@@ -2416,7 +2467,8 @@ if __name__ == "__main__":
                     count += len(au_items)
             except Exception as e:
                 print(f"[ASX News] Error: {e}")
-            print(f"[News] Refreshed — {count} new items (incl. AU)")
+            deleted = prune_stale_news(NEWS_RETENTION_HOURS)
+            print(f"[News] Refreshed — {count} new items (incl. AU), pruned {deleted} stale item(s) older than {NEWS_RETENTION_HOURS}h")
         except Exception as e:
             print(f"[News] Refresh error: {e}")
 
@@ -2446,6 +2498,26 @@ if __name__ == "__main__":
             print(f"[Finviz] Short interest refreshed — {stored}/{len(symbols)} symbols")
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
+
+    def job_insider_signals_refresh():
+        """Refresh SEC Form 4 insider-trading data daily for portfolio + watchlist symbols,
+        then check for buying/selling clusters (FSI L2)."""
+        try:
+            from memory_store import get_conn as _gc, insert_insider_transactions
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            total_new = 0
+            for sym in symbols:
+                txns = fetch_form4_filings(sym, limit=5)
+                total_new += insert_insider_transactions(txns)
+            alerts_fired = detect_insider_clusters(symbols)
+            print(f"[SEC] Insider signals refreshed — {total_new} new transactions, {len(alerts_fired)} cluster alert(s)")
+        except Exception as e:
+            print(f"[SEC] Insider signals refresh error: {e}")
 
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
@@ -2511,6 +2583,19 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Correlation] Refresh error: {e}")
 
+    def job_crypto_spread_refresh():
+        """Cross-exchange crypto spread (BTC/ETH) via public exchange
+        tickers -- a periodic enrichment signal, not real-time, so this runs
+        on its own cadence separate from job_market_refresh's 60s interval."""
+        from ccxt_client import get_cross_exchange_spread
+        for sym in ("BTC-USD", "ETH-USD"):
+            try:
+                result = get_cross_exchange_spread(sym)
+                if result:
+                    _crypto_spread_cache[sym] = result
+            except Exception as e:
+                print(f"[CryptoSpread] {sym} error: {e}")
+
     def job_backtest_check():
         """Fill in due 4h/24h/72h price checkpoints for tracked signal
         outcomes (FSI L3 backtesting)."""
@@ -2531,6 +2616,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
+    scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)
@@ -2538,6 +2624,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
+    scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

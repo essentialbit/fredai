@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from memory_store import get_signals, get_sentiment_timeline, insert_trend, insert_alert
+from memory_store import get_signals, get_sentiment_timeline, insert_trend, insert_alert, get_recent_insider_transactions
 
 
 def compute_sentiment_stats(signals: list[dict]) -> dict:
@@ -76,6 +76,37 @@ def detect_trends(quotes: dict) -> list[dict]:
             direction = "surging" if pct > 0 else "dropping"
             msg = f"{q['name']} is {direction} {pct:+.2f}% today"
             alerts.append({"level": "warning" if pct < 0 else "info", "title": f"Price Move: {sym}", "message": msg, "asset": sym})
+
+    return alerts
+
+
+def detect_insider_clusters(tickers: list[str], lookback_days: int = 30, min_cluster_size: int = 2) -> list[dict]:
+    """Flag tickers with 2+ open-market insider transactions (same direction)
+    within lookback_days -- a cluster of insiders acting the same way close
+    together is a materially stronger signal than any single Form 4 filing
+    (which is routinely just compensation/diversification noise)."""
+    alerts = []
+    for ticker in tickers:
+        txns = get_recent_insider_transactions(ticker, days=lookback_days, signal_only=True)
+        if len(txns) < min_cluster_size:
+            continue
+
+        buys = [t for t in txns if t["signal_type"] == "open_market_purchase"]
+        sells = [t for t in txns if t["signal_type"] == "open_market_sale"]
+
+        if len(buys) >= min_cluster_size:
+            owners = sorted(set(t["owner_name"] for t in buys))
+            total_shares = sum(t["shares"] or 0 for t in buys)
+            msg = f"{len(buys)} insider purchases in {ticker} over {lookback_days}d ({', '.join(owners[:3])}{'...' if len(owners) > 3 else ''}), {total_shares:,.0f} shares total"
+            alerts.append({"level": "info", "title": f"${ticker} Insider Buying Cluster", "message": msg, "asset": ticker})
+            insert_alert("info", f"${ticker} Insider Buying Cluster", msg, ticker)
+
+        if len(sells) >= min_cluster_size:
+            owners = sorted(set(t["owner_name"] for t in sells))
+            total_shares = sum(t["shares"] or 0 for t in sells)
+            msg = f"{len(sells)} insider sales in {ticker} over {lookback_days}d ({', '.join(owners[:3])}{'...' if len(owners) > 3 else ''}), {total_shares:,.0f} shares total"
+            alerts.append({"level": "warning", "title": f"${ticker} Insider Selling Cluster", "message": msg, "asset": ticker})
+            insert_alert("warning", f"${ticker} Insider Selling Cluster", msg, ticker)
 
     return alerts
 

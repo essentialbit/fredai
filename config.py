@@ -52,6 +52,28 @@ GEMINI_MODEL_SUMMARY = os.getenv("GEMINI_MODEL_SUMMARY", "gemini-2.5-flash")
 GEMINI_MODEL_CHAT = os.getenv("GEMINI_MODEL_CHAT", "gemini-2.5-flash")
 GEMINI_MODEL_RND = os.getenv("GEMINI_MODEL_RND", "gemini-2.5-pro")
 
+# Groq: free, cloud-hosted fallback tier (issue #97) -- sits between Gemini and
+# Ollama, since it's free like Ollama but doesn't compete for local CPU/RAM.
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL_SUMMARY = os.getenv("GROQ_MODEL_SUMMARY", "llama-3.1-8b-instant")
+GROQ_MODEL_CHAT = os.getenv("GROQ_MODEL_CHAT", "llama-3.3-70b-versatile")
+GROQ_MODEL_RND = os.getenv("GROQ_MODEL_RND", "llama-3.3-70b-versatile")
+
+# xAI Grok: paid, frontier-quality fallback tier -- sits alongside
+# Anthropic/Gemini (before Groq/Ollama's free tiers) since it's a comparable-
+# quality paid model, not a free one. grok-4.3 used for all three tiers:
+# xAI auto-redirects any older/deprecated model name to it, so there's no
+# real "cheap/fast" variant name worth guessing at without live account access.
+XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+XAI_MODEL_SUMMARY = os.getenv("XAI_MODEL_SUMMARY", "grok-4.3")
+XAI_MODEL_CHAT = os.getenv("XAI_MODEL_CHAT", "grok-4.3")
+XAI_MODEL_RND = os.getenv("XAI_MODEL_RND", "grok-4.3")
+
+# Tavily: provider-agnostic live-search grounding. Optional -- without this,
+# grounding falls back to Gemini's native search (only works when Gemini is
+# the active provider). Free tier: 1,000 credits/month, no card required.
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY", "")
+
 # ── PRIVACY & DATA GOVERNANCE ─────────────────────────────────────────────────
 # GDPR (EU) · Australian Privacy Act · US CCPA compliance
 # All user data lives in SQLite on this device. Nothing is transmitted to
@@ -60,6 +82,10 @@ GEMINI_MODEL_RND = os.getenv("GEMINI_MODEL_RND", "gemini-2.5-pro")
 PRIVACY_MODE = os.getenv("PRIVACY_MODE", "true").lower() == "true"
 STRIP_PORTFOLIO_FROM_AI = os.getenv("STRIP_PORTFOLIO_FROM_AI", "true").lower() == "true"
 DATA_RETENTION_DAYS = int(os.getenv("DATA_RETENTION_DAYS", "90"))
+# News is fetched every 30min and is meant to drive near-term decisions --
+# 90-day GDPR-style retention leaves stale, months-old items competing with
+# actually-fresh news. Separate, much shorter window for news specifically.
+NEWS_RETENTION_HOURS = int(os.getenv("NEWS_RETENTION_HOURS", "72"))
 PRIVACY_POLICY_VERSION = "1.0"  # bump when policy changes to re-prompt consent
 
 WATCHLIST = [

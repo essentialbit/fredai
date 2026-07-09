@@ -24,6 +24,9 @@ from config import (
     OLLAMA_URL, OLLAMA_MODEL,
     ANTHROPIC_MODEL_SUMMARY, ANTHROPIC_MODEL_CHAT, ANTHROPIC_MODEL_RND,
     GEMINI_API_KEY, GEMINI_MODEL_SUMMARY, GEMINI_MODEL_CHAT, GEMINI_MODEL_RND,
+    GROQ_API_KEY, GROQ_MODEL_SUMMARY, GROQ_MODEL_CHAT, GROQ_MODEL_RND,
+    XAI_API_KEY, XAI_MODEL_SUMMARY, XAI_MODEL_CHAT, XAI_MODEL_RND,
+    TAVILY_API_KEY,
     PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI,
 )
 from memory_store import get_signals, get_latest_summary, get_recent_alerts, get_trending_assets
@@ -51,12 +54,21 @@ def _resolve_provider() -> str:
         return "anthropic" if _key_is_valid(ANTHROPIC_API_KEY) else "none"
     if AI_PROVIDER == "gemini":
         return "gemini" if _key_is_valid(GEMINI_API_KEY) else "none"
-    
-    # auto: prefer Anthropic API, fall back to Gemini API, then Ollama, then none
+    if AI_PROVIDER == "groq":
+        return "groq" if _key_is_valid(GROQ_API_KEY) else "none"
+    if AI_PROVIDER == "grok":
+        return "grok" if _key_is_valid(XAI_API_KEY) else "none"
+
+    # auto: prefer Anthropic API, fall back to Gemini, then Grok (also paid,
+    # frontier-quality), then Groq (free), then Ollama, then none
     if _key_is_valid(ANTHROPIC_API_KEY):
         return "anthropic"
     if _key_is_valid(GEMINI_API_KEY):
         return "gemini"
+    if _key_is_valid(XAI_API_KEY):
+        return "grok"
+    if _key_is_valid(GROQ_API_KEY):
+        return "groq"
     if _ollama_available():
         return "ollama"
     return "none"
@@ -100,6 +112,8 @@ class _FredProvider:
         print(f"[FredAI] AI provider: {self._provider}"
               + (f" | model: {ANTHROPIC_MODEL_CHAT}" if self._provider == "anthropic" else
                  f" | model: {GEMINI_MODEL_CHAT}" if self._provider == "gemini" else
+                 f" | model: {XAI_MODEL_CHAT}" if self._provider == "grok" else
+                 f" | model: {GROQ_MODEL_CHAT}" if self._provider == "groq" else
                  f" | model: {OLLAMA_MODEL}@{OLLAMA_URL}" if self._provider == "ollama" else
                  " | No AI provider — set ANTHROPIC_API_KEY, GEMINI_API_KEY, or start Ollama"))
 
@@ -115,14 +129,32 @@ class _FredProvider:
         """
         a_key, g_key = _get_api_keys()
 
-        # If grounding is explicitly requested, bypass Claude/Ollama and use Gemini Search Grounding
         if grounding:
-            if _key_is_valid(g_key):
-                result = self._gemini_complete(messages, system, tier, max_tokens, g_key, grounding=True)
-                if not result.startswith("[Fred Gemini error"):
-                    return result
-                print(f"[FredAI] Grounding call failed: {result}")
-            return "Fred's live search isn't available right now — please try again shortly."
+            if _key_is_valid(TAVILY_API_KEY):
+                # Provider-agnostic: fold live search context into the system
+                # prompt, then fall through to the normal fallback chain below
+                # -- grounding works no matter which tier ends up serving the
+                # completion, unlike the Gemini-only path below (which
+                # silently stops working the moment Gemini isn't the active
+                # provider, e.g. when its credits ran out this session).
+                query = messages[-1].get("content", "") if messages else ""
+                try:
+                    from tavily_client import search_context
+                    context = search_context(query)
+                except Exception:
+                    context = None
+                if context:
+                    system = f"{system}\n\nLive search results (for grounding, use if relevant):\n{context}"
+                # falls through to the provider loop below, not an early return
+            else:
+                # No Tavily configured -- original Gemini-native grounding,
+                # unchanged, for anyone who hasn't added a Tavily key.
+                if _key_is_valid(g_key):
+                    result = self._gemini_complete(messages, system, tier, max_tokens, g_key, grounding=True)
+                    if not result.startswith("[Fred Gemini error"):
+                        return result
+                    print(f"[FredAI] Grounding call failed: {result}")
+                return "Fred's live search isn't available right now — please try again shortly."
 
         # Check user consent for local Ollama fallback
         fallback_consent = True
@@ -138,15 +170,18 @@ class _FredProvider:
         except Exception:
             pass
 
-        # Default AI backend order: Anthropic Claude first, Gemini as fallback, Ollama last
-        providers_to_try = ["anthropic", "gemini", "ollama"]
+        # Default AI backend order: Anthropic Claude first, Gemini, then Grok
+        # (both paid, frontier-quality), then Groq (free + cloud-hosted,
+        # doesn't compete with Ollama for local CPU/RAM), Ollama last as the
+        # fully-offline final resort.
+        providers_to_try = ["anthropic", "gemini", "grok", "groq", "ollama"]
         errors = []
         is_first = True
         for p in providers_to_try:
             # Enforce 2.0s timeout limit on first (preferred) model to trigger immediate fallback if slow
             timeout = 2.0 if is_first else None
             is_first = False
-            
+
             if p == "anthropic" and _key_is_valid(a_key):
                 result = self._anthropic_complete(messages, system, tier, max_tokens, a_key, timeout=timeout)
                 if not result.startswith("[Fred error"):
@@ -157,6 +192,16 @@ class _FredProvider:
                 if not result.startswith("[Fred Gemini error"):
                     return result
                 errors.append(f"Gemini error: {result}")
+            elif p == "grok" and _key_is_valid(XAI_API_KEY):
+                result = self._grok_complete(messages, system, tier, max_tokens, timeout=timeout)
+                if not result.startswith("[Grok error"):
+                    return result
+                errors.append(f"Grok error: {result}")
+            elif p == "groq" and _key_is_valid(GROQ_API_KEY):
+                result = self._groq_complete(messages, system, tier, max_tokens, timeout=timeout)
+                if not result.startswith("[Groq error"):
+                    return result
+                errors.append(f"Groq error: {result}")
             elif p == "ollama" and _ollama_available() and fallback_consent:
                 result = self._ollama_complete(messages, system, max_tokens, timeout=timeout)
                 if not result.startswith("[Ollama error"):
@@ -177,14 +222,16 @@ class _FredProvider:
 
         print(
             "[FredAI] complete() called with no AI provider configured or available "
-            "(no valid ANTHROPIC_API_KEY/GEMINI_API_KEY, Ollama unreachable)."
+            "(no valid ANTHROPIC_API_KEY/GEMINI_API_KEY/XAI_API_KEY/GROQ_API_KEY, Ollama unreachable)."
         )
         return (
             "[FredAI offline] No AI provider configured or available.\n"
             "Options:\n"
             "  1. Add ANTHROPIC_API_KEY to .env for cloud inference\n"
             "  2. Add GEMINI_API_KEY to .env for cloud inference\n"
-            "  3. Install Ollama (ollama.com) and run: ollama pull llama3.2\n"
+            "  3. Add XAI_API_KEY to .env for Grok (console.x.ai, paid)\n"
+            "  4. Add GROQ_API_KEY to .env for free cloud inference (console.groq.com)\n"
+            "  5. Install Ollama (ollama.com) and run: ollama pull llama3.2\n"
             "     Then set AI_PROVIDER=ollama in .env"
         )
 
@@ -241,6 +288,26 @@ class _FredProvider:
             mapped.append(item)
         return mapped
 
+    def _map_messages_for_groq(self, messages: list) -> list:
+        # Groq's free-tier text models (llama-3.1-8b-instant, llama-3.3-70b-versatile)
+        # don't support vision -- any image attachment is silently dropped rather
+        # than sent in a format the model can't use.
+        mapped = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "assistant"
+            mapped.append({"role": role, "content": msg.get("content", "")})
+        return mapped
+
+    def _map_messages_for_grok(self, messages: list) -> list:
+        # grok-4.3 is multimodal, but vision support isn't wired in here yet --
+        # kept text-only for now (same conservative scope as Groq above) until
+        # the image content-block format can be verified against a live account.
+        mapped = []
+        for msg in messages:
+            role = "user" if msg["role"] == "user" else "assistant"
+            mapped.append({"role": role, "content": msg.get("content", "")})
+        return mapped
+
     def _anthropic_complete(self, messages, system, tier, max_tokens, api_key, timeout=None) -> str:
         model_map = {
             "summary": ANTHROPIC_MODEL_SUMMARY,
@@ -291,6 +358,60 @@ class _FredProvider:
         except Exception as e:
             return f"[Fred Gemini error: {e}]"
 
+    def _grok_complete(self, messages, system, tier, max_tokens, timeout=None) -> str:
+        model_map = {
+            "summary": XAI_MODEL_SUMMARY,
+            "chat": XAI_MODEL_CHAT,
+            "rnd": XAI_MODEL_RND,
+        }
+        model = model_map.get(tier, XAI_MODEL_CHAT)
+        mapped = self._map_messages_for_grok(messages)
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system}] + mapped,
+            "max_tokens": max_tokens,
+        }
+        try:
+            import requests as _req
+            r = _req.post(
+                "https://api.x.ai/v1/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {XAI_API_KEY}"},
+                timeout=timeout or 60,
+            )
+            if r.status_code == 200:
+                return r.json()["choices"][0]["message"]["content"]
+            return f"[Grok error: Status {r.status_code} - {r.text[:200]}]"
+        except Exception as e:
+            return f"[Grok error: {e}]"
+
+    def _groq_complete(self, messages, system, tier, max_tokens, timeout=None) -> str:
+        model_map = {
+            "summary": GROQ_MODEL_SUMMARY,
+            "chat": GROQ_MODEL_CHAT,
+            "rnd": GROQ_MODEL_RND,
+        }
+        model = model_map.get(tier, GROQ_MODEL_CHAT)
+        mapped = self._map_messages_for_groq(messages)
+        payload = {
+            "model": model,
+            "messages": [{"role": "system", "content": system}] + mapped,
+            "max_tokens": max_tokens,
+        }
+        try:
+            import requests as _req
+            r = _req.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                json=payload,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                timeout=timeout or 60,
+            )
+            if r.status_code == 200:
+                return r.json()["choices"][0]["message"]["content"]
+            return f"[Groq error: Status {r.status_code} - {r.text[:200]}]"
+        except Exception as e:
+            return f"[Groq error: {e}]"
+
     def _ollama_complete(self, messages, system, max_tokens, timeout=None) -> str:
         import re as _re, requests as _req
         mapped = self._map_messages_for_ollama(messages)
@@ -317,6 +438,8 @@ class _FredProvider:
             "model": (
                 ANTHROPIC_MODEL_CHAT if self._provider == "anthropic"
                 else GEMINI_MODEL_CHAT if self._provider == "gemini"
+                else XAI_MODEL_CHAT if self._provider == "grok"
+                else GROQ_MODEL_CHAT if self._provider == "groq"
                 else OLLAMA_MODEL if self._provider == "ollama"
                 else None
             ),
@@ -359,6 +482,12 @@ def _build_privacy_notice() -> str:
     if _provider.provider == "anthropic":
         strip = "Portfolio values anonymized before transmission." if STRIP_PORTFOLIO_FROM_AI else "Portfolio context included."
         notice += f"Market signals and anonymized context sent to Anthropic API. {strip}"
+    elif _provider.provider == "grok":
+        strip = "Portfolio values anonymized before transmission." if STRIP_PORTFOLIO_FROM_AI else "Portfolio context included."
+        notice += f"Market signals and anonymized context sent to xAI's Grok API. {strip}"
+    elif _provider.provider == "groq":
+        strip = "Portfolio values anonymized before transmission." if STRIP_PORTFOLIO_FROM_AI else "Portfolio context included."
+        notice += f"Market signals and anonymized context sent to Groq API. {strip}"
     elif _provider.provider == "ollama":
         notice += "Using local Ollama inference — no data leaves this device."
     return notice

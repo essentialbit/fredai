@@ -14,3 +14,5 @@ psutil>=5.9.0
 cryptography>=42.0.0
 torch>=2.0.0
 transformers>=4.30.0
+spacy>=3.7.0
+ccxt>=4.5.0

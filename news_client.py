@@ -38,16 +38,23 @@ MACRO_FEEDS = [
     {"url": "https://feeds.bloomberg.com/markets/news.rss", "source": "Bloomberg", "category": "market"},
     {"url": "https://www.investing.com/rss/news_301.rss", "source": "Investing.com", "category": "market"},
     {"url": "https://seekingalpha.com/market_currents.xml", "source": "Seeking Alpha", "category": "market"},
-    {"url": "https://www.wsj.com/xml/rss/3_7085.xml", "source": "WSJ Markets", "category": "market"},
+    {"url": "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", "source": "WSJ Markets", "category": "market"},
     {"url": "https://www.ft.com/rss/home", "source": "Financial Times", "category": "market"},
     # ── Central banks & macro policy ────────────────────────────────────────
     {"url": "https://www.federalreserve.gov/feeds/press_all.xml", "source": "Federal Reserve", "category": "central_bank"},
     {"url": "https://www.ecb.europa.eu/rss/press.html", "source": "ECB", "category": "central_bank"},
     {"url": "https://www.bankofengland.co.uk/rss/news", "source": "Bank of England", "category": "central_bank"},
     {"url": "https://www.cnbc.com/id/20910258/device/rss/rss.html", "source": "CNBC Economy", "category": "macro"},
-    {"url": "https://www.imf.org/en/News/rss", "source": "IMF", "category": "macro"},
+    # IMF's own RSS endpoints all 302/307-redirect without ever resolving to
+    # parseable XML (verified with feedparser directly) -- Google News' own
+    # site-scoped search RSS is a reliable, real substitute for "recent IMF
+    # coverage" without needing to reverse-engineer whatever replaced it.
+    {"url": "https://news.google.com/rss/search?q=site:imf.org+when:7d&hl=en-US&gl=US&ceid=US:en", "source": "IMF", "category": "macro"},
     # ── Global Geopolitics ───────────────────────────────────────────────────
-    {"url": "https://feeds.reuters.com/reuters/worldNews", "source": "Reuters World", "category": "geopolitical"},
+    # feeds.reuters.com was retired -- Reuters no longer serves a public RSS
+    # feed for this at all (every current candidate URL 401s or times out).
+    # Google News' World-topic feed reliably includes Reuters/AP wire content.
+    {"url": "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-US&gl=US&ceid=US:en", "source": "Global Wire (AP/Reuters)", "category": "geopolitical"},
     {"url": "https://www.cnbc.com/id/100727362/device/rss/rss.html", "source": "CNBC Politics", "category": "geopolitical"},
     {"url": "https://feeds.bbci.co.uk/news/business/rss.xml", "source": "BBC Business", "category": "geopolitical"},
     {"url": "https://www.aljazeera.com/xml/rss/all.xml", "source": "Al Jazeera", "category": "geopolitical"},
@@ -55,12 +62,14 @@ MACRO_FEEDS = [
     # ── Asia-Pacific ─────────────────────────────────────────────────────────
     {"url": "https://asia.nikkei.com/rss/feed/nar", "source": "Nikkei Asia", "category": "market"},
     {"url": "https://www.scmp.com/rss/91/feed", "source": "SCMP Business", "category": "market"},
-    {"url": "https://www.afr.com/rss", "source": "AFR", "category": "market"},
+    # AFR's RSS was retired (404 on every path checked) -- not replaced: this
+    # is Australia-specific and asx_client.py's dedicated AU coverage already
+    # exists, so losing this doesn't reduce genuine global signal.
     # ── AI & Tech (global) ───────────────────────────────────────────────────
     {"url": "https://feeds.feedburner.com/venturebeat/SZYF", "source": "VentureBeat AI", "category": "ai"},
     {"url": "https://techcrunch.com/category/artificial-intelligence/feed/", "source": "TechCrunch AI", "category": "ai"},
     {"url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml", "source": "The Verge AI", "category": "ai"},
-    {"url": "https://www.cnbc.com/id/100084241/device/rss/rss.html", "source": "CNBC Tech", "category": "ai"},
+    {"url": "https://www.cnbc.com/id/19854910/device/rss/rss.html", "source": "CNBC Tech", "category": "ai"},
     {"url": "https://www.wired.com/feed/category/business/latest/rss", "source": "Wired Business", "category": "ai"},
 ]
 
@@ -79,14 +88,13 @@ SOURCE_COORDINATES: dict[str, tuple[float, float, str]] = {
     "Bank of England":   (51.51, -0.09,  "London, UK"),
     "CNBC Economy":      (40.71, -74.01, "New York, USA"),
     "IMF":               (38.89, -77.04, "Washington D.C., USA"),
-    "Reuters World":     (51.50, -0.12,  "London, UK"),
+    "Global Wire (AP/Reuters)": (51.50, -0.12, "London, UK"),
     "CNBC Politics":     (38.89, -77.04, "Washington D.C., USA"),
     "BBC Business":      (51.51, -0.13,  "London, UK"),
     "Al Jazeera":        (25.28, 51.52,  "Doha, Qatar"),
     "NHK Asia":          (35.68, 139.76, "Tokyo, Japan"),
     "Nikkei Asia":       (35.68, 139.76, "Tokyo, Japan"),
     "SCMP Business":     (22.32, 114.17, "Hong Kong"),
-    "AFR":               (-33.87, 151.21,"Sydney, Australia"),
     "VentureBeat AI":    (37.77, -122.42,"San Francisco, USA"),
     "TechCrunch AI":     (37.77, -122.42,"San Francisco, USA"),
     "The Verge AI":      (40.71, -74.00, "New York, USA"),
@@ -95,11 +103,32 @@ SOURCE_COORDINATES: dict[str, tuple[float, float, str]] = {
 }
 
 _FINANCIAL_KEYWORDS = re.compile(
-    r'\b(stock|market|invest|trade|earn|revenue|profit|loss|GDP|inflation|rate|bond|'
+    # "loss" deliberately excluded -- verified live against Al Jazeera that it
+    # false-positives constantly on sports scores ("despite loss"); "profit"/
+    # "revenue"/"earn" already catch genuine P&L reporting without that risk.
+    r'\b(stock|market|invest|trade|earn|revenue|profit|GDP|inflation|rate|bond|'
     r'fed|fomc|rba|reserve bank|tariff|sanction|geopolit|war|conflict|supply chain|'
     r'semiconductor|AI|nvidia|apple|tesla|crypto|bitcoin|ethereum)\b',
     re.IGNORECASE
 )
+
+# Issue #33: SMH Business ingested a celebrity/radio-industry story with zero
+# financial relevance -- its RSS "business" section isn't purely financial.
+# Verified during rebalancing work that Al Jazeera and Nikkei Asia's broader
+# feeds do the same (a World Cup preview, a general Asian-American culture
+# piece). These are general-news outlets included specifically for their
+# real geopolitical/macro relevance (_FINANCIAL_KEYWORDS already covers
+# "geopolit|war|conflict|sanction|tariff", so genuine coverage still passes)
+# -- unlike dedicated financial outlets (Bloomberg, CNBC, Yahoo Finance, etc.)
+# where every item is inherently on-topic by the feed's own nature and
+# doesn't need this filter.
+_TOPICAL_FILTER_SOURCES = {"SMH Business", "Al Jazeera", "NHK Asia", "Nikkei Asia"}
+
+
+def _is_financially_relevant(source: str, text: str) -> bool:
+    if source not in _TOPICAL_FILTER_SOURCES:
+        return True
+    return bool(_FINANCIAL_KEYWORDS.search(text))
 
 _TICKER_MENTION = re.compile(r'\b([A-Z]{2,5})(?:\s*-\s*USD)?\b|\$([A-Z]{2,5})\b')
 
@@ -175,6 +204,17 @@ def _extract_tickers(text: str, watchlist: list[str]) -> str:
         sym = m.group(1) or m.group(2)
         if sym and sym in watchlist:
             found.add(sym)
+
+    if not found:
+        # News prose routinely names a company without ever using its raw
+        # ticker or a cashtag ("Apple reported strong earnings") -- NER-based
+        # linking catches that. No-op if spaCy/the model isn't available.
+        try:
+            from signal_processor import extract_and_link_tickers
+            found.update(extract_and_link_tickers(text))
+        except Exception:
+            pass
+
     return ",".join(sorted(found))
 
 
@@ -193,10 +233,12 @@ def _parse_feed(feed_meta: dict, watchlist: list[str]) -> list[dict]:
                 title = f"[Translated] {trans_title}"
                 summary = trans_summary
 
+            text = f"{title} {summary}"
+            if not _is_financially_relevant(feed_meta["source"], text):
+                continue
+
             url = entry.get("link") or ""
             guid = entry.get("id") or _guid(url, title)
-
-            text = f"{title} {summary}"
             tickers = _extract_tickers(text, watchlist)
             score, model = _score(title, summary)
 

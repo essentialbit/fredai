@@ -141,14 +141,25 @@ jobs:
           git push origin "$NEW_TAG"
           echo "new_tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
-  # ── GitHub Release (fires on any v* tag) ───────────────────────
+  # ── GitHub Release ───────────────────────────────────────────────
+  # auto-tag's tag push uses the default GITHUB_TOKEN, which GitHub
+  # deliberately excludes from triggering downstream workflow runs (an
+  # anti-recursion safeguard) -- so this job's original
+  # startsWith(github.ref, 'refs/tags/v') condition could never actually
+  # be satisfied via the automated path; it only ever fired via manual
+  # workflow_dispatch. Confirmed live: tags advanced to v1.3.51 while the
+  # last real Release stayed at v1.3.18. Fixed by reading auto-tag's
+  # new_tag *output* directly (same workflow run, no separate trigger
+  # needed) instead of depending on a second run whose ref is the tag.
   release:
     name: GitHub Release
-    needs: [validate, docker]
+    needs: [validate, docker, auto-tag]
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     if: |
+      needs.auto-tag.outputs.new_tag != '' ||
       startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'release')
     steps:
@@ -158,7 +169,9 @@ jobs:
       - name: Determine version
         id: version
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ -n "${{ needs.auto-tag.outputs.new_tag }}" ]]; then
+            VERSION="${{ needs.auto-tag.outputs.new_tag }}"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
           elif [[ -n "${{ github.event.inputs.release_version }}" ]]; then
             VERSION="${{ github.event.inputs.release_version }}"
@@ -218,12 +231,30 @@ jobs:
           git config user.name "FredAI"
           git config user.email "fredai-bot@users.noreply.github.com"
           git add README.md
-          git diff --staged --quiet || \
-            git commit -m "docs: sync README changelog to ${{ steps.version.outputs.version }}"
-          git push origin HEAD:main || true
+          if git diff --staged --quiet; then
+            echo "No README changes to sync."
+            exit 0
+          fi
+          # main has branch protection (PR + required "Validate" check) --
+          # a direct push here was silently rejected every time (git push
+          # ... || true swallowed the failure, so this step always reported
+          # success even though the change never landed). Push to a
+          # short-lived branch and open+auto-merge a PR instead, reusing
+          # the same gh pr merge --auto pattern used throughout this
+          # project's own PR-based workflow -- respects protection, no
+          # bypass needed.
+          BRANCH="docs/readme-sync-${{ steps.version.outputs.version }}"
+          git checkout -b "$BRANCH"
+          git commit -m "docs: sync README changelog to ${{ steps.version.outputs.version }}"
+          git push origin "$BRANCH"
+          gh pr create --title "docs: sync README changelog to ${{ steps.version.outputs.version }}" \
+            --body "Automated changelog sync from the GitHub Release job." \
+            --base main --head "$BRANCH"
+          gh pr merge "$BRANCH" --squash --delete-branch --auto
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ── Deploy: notify registered instances ────────────────────────
   deploy:

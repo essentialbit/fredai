@@ -68,6 +68,7 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
 <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <script src="//unpkg.com/globe.gl@2.30.0/dist/globe.gl.min.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
@@ -78,7 +79,7 @@ if ('serviceWorker' in navigator) {
   --bg0:#020408; --bg1:#050a14; --bg2:#080f1e; --bg3:#0c162b;
   --border:rgba(0, 180, 255, 0.08); --border2:rgba(0, 255, 170, 0.12);
   --green:#00ffaa; --red:#ff3366; --blue:#00d2ff;
-  --yellow:#ffb703; --purple:#8338ec; --orange:#fb5607;
+  --yellow:#ffb703; --purple:#8338ec; --orange:#fb5607; --gold:#f5a623;
   --t1:#f8f9fa; --t2:#94a3b8; --t3:#475569;
   --mono:'JetBrains Mono','Fira Code',monospace;
   --font-sans: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
@@ -368,6 +369,30 @@ html[data-tier="nano"] .install-btn{display:none!important}
   z-index: 9500;
 }
 #analyst-modal.open { display: flex; }
+#video-modal {
+  position: fixed; inset: 0; background: rgba(3, 8, 15, 0.92);
+  display: none; align-items: center; justify-content: center;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  z-index: 9500;
+}
+#video-modal.open { display: flex; }
+.video-modal-box {
+  background: rgba(10, 20, 38, 0.9);
+  border: 1px solid rgba(0, 180, 255, 0.3);
+  border-radius: 14px;
+  width: 90%; max-width: 900px;
+  box-shadow: 0 0 60px rgba(0, 180, 255, 0.15), 0 25px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.video-modal-hdr {
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(0, 180, 255, 0.2);
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(0, 180, 255, 0.03);
+}
+.video-modal-title { margin: 0; font-size: 14px; font-weight: 700; color: var(--blue); }
+.video-modal-frame { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; }
+.video-modal-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .analyst-box {
   background: rgba(10, 20, 38, 0.85);
   border: 1px solid rgba(0, 255, 136, 0.3);
@@ -1183,6 +1208,22 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .ops-col-title{font-size:8px;font-weight:700;letter-spacing:1.5px;color:var(--t3);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
 .ops-badge{width:6px;height:6px;border-radius:50%;flex-shrink:0}
 
+/* Customizable widgets: collapsible, hideable, reorderable across every page */
+.customizable-widget-header{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none}
+.customizable-widget-header:hover{background:rgba(255,255,255,.02)}
+.customizable-widget-toggle{font-size:9px;color:var(--t3);transition:transform .15s;width:10px;display:inline-block}
+.customizable-widget.collapsed .customizable-widget-toggle{transform:rotate(-90deg)}
+.customizable-widget-title{font-size:var(--font-xs);font-weight:700;letter-spacing:1.5px;color:var(--blue);text-transform:uppercase}
+.customizable-widget-control{font-size:9px;color:var(--t3);margin-left:auto;display:flex;align-items:center;gap:4px;cursor:pointer}
+.customizable-widget-body{overflow:hidden}
+.customizable-widget.collapsed .customizable-widget-body{display:none}
+.cw-actions{display:flex;align-items:center;gap:2px;margin-left:8px}
+.cw-actions button{background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);font-size:10px;width:18px;height:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.cw-actions button:hover{color:var(--t1);border-color:var(--t3)}
+.cw-actions button.cw-hide:hover{color:var(--red);border-color:var(--red)}
+.cw-add-widget{font-size:9px;color:var(--blue);cursor:pointer;padding:6px 16px;border-top:1px solid var(--border)}
+.cw-add-widget:hover{background:rgba(255,255,255,.02)}
+
 /* Signal density items */
 .sd-item{
   display:flex;align-items:center;gap:8px;padding:5px 0;
@@ -1362,7 +1403,7 @@ html[data-tier="micro"] #ov-globe-stage {
       <button class="ltab" onclick="showAuthTab('register',this)">Register</button>
     </div>
     <div id="auth-login">
-      <div class="form-group"><label>Username</label><input id="l-user" placeholder="username" autocomplete="username"></div>
+      <div class="form-group"><label>Username</label><input id="l-user" placeholder="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
       <div class="form-group"><label>Password</label><input id="l-pass" type="password" placeholder="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
       <button class="login-btn" onclick="doLogin()">SIGN IN →</button>
       
@@ -1384,7 +1425,7 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
     <div id="auth-register" style="display:none">
       <div class="form-group"><label>Display Name</label><input id="r-name" placeholder="Your name" autocomplete="name"></div>
-      <div class="form-group"><label>Username</label><input id="r-user" placeholder="unique username" autocomplete="username"></div>
+      <div class="form-group"><label>Username</label><input id="r-user" placeholder="unique username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
       <div class="form-group"><label>Password</label><input id="r-pass" type="password" placeholder="min 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()"></div>
       <button class="login-btn" onclick="doRegister()">CREATE ACCOUNT →</button>
     </div>
@@ -1447,9 +1488,8 @@ html[data-tier="micro"] #ov-globe-stage {
     <button class="nav-tab" onclick="switchTab('portfolio',this)">Portfolio</button>
     <button class="nav-tab" onclick="switchTab('trending',this)">Trending</button>
     <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
-    <button class="nav-tab" onclick="switchTab('globe',this)">◎ Globe</button>
+    <button class="nav-tab" onclick="switchTab('globe',this)">◎ Situation Room</button>
     <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
-    <button class="nav-tab" onclick="window.location='/graph'" style="color:var(--purple)">Graph ↗</button>
   </div>
   <!-- ── FRED QUERY BAR ── -->
   <div id="fred-query-wrap">
@@ -1550,6 +1590,18 @@ html[data-tier="micro"] #ov-globe-stage {
           <div class="ops-col-title"><div class="ops-badge" style="background:var(--gold)"></div>Today's Events</div>
           <div id="ops-events-list"><div style="color:var(--t3);font-size:9px">Loading...</div></div>
         </div>
+      </div>
+    </div>
+
+    <!-- TRACK RECORD — signal-accuracy transparency -->
+    <div id="track-record">
+      <div id="ops-header">
+        <span style="font-size:14px">◎</span>
+        <div class="ops-title">Fred's Track Record</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">How often has Fred's signal direction matched reality?</span>
+      </div>
+      <div id="track-record-body" style="display:flex;gap:14px;padding:12px 16px">
+        <div style="color:var(--t3);font-size:9px">Loading...</div>
       </div>
     </div>
 
@@ -1711,6 +1763,97 @@ html[data-tier="micro"] #ov-globe-stage {
     <div class="panel" id="tab-trending-chart" style="display:none">
       <div class="ph">Sentiment Distribution <span class="ptag">TOP ASSETS</span></div>
       <div style="padding:14px;flex:1;position:relative;min-height:0"><canvas id="trend-bar-chart"></canvas></div>
+    </div>
+
+    <!-- GLOBE TAB -->
+    <div class="panel" id="tab-globe-panel" style="display:none;grid-column:1/-1;padding:0;overflow:hidden;position:relative">
+      <div style="padding:12px 16px 8px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="font-size:var(--font-xs);font-weight:700;letter-spacing:2px;color:var(--blue);text-transform:uppercase">◎ The Situation Room</div>
+        <div id="dash-globe-stats" style="font-size:10px;color:var(--t3)">Loading...</div>
+        <div style="display:flex;gap:4px;margin-left:auto">
+          <button class="dash-gmode active" onclick="setGlobeMode('standard',this)" style="font-size:9px;padding:3px 8px;border-radius:3px;background:rgba(0,180,255,.12);border:1px solid var(--border);color:var(--t2);cursor:pointer">All Signals</button>
+          <button class="dash-gmode" onclick="setGlobeMode('monitored',this)" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:var(--t2);cursor:pointer">My Holdings</button>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'all')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:rgba(0,180,255,.12);border:1px solid var(--border);color:var(--t2);cursor:pointer">All</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'market')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#00b4ff;cursor:pointer">Market</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'ai')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#00ff88;cursor:pointer">AI</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'geopolitical')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#ff3b5c;cursor:pointer">Geopolitical</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'central_bank')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#f5a623;cursor:pointer">Central Bank</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'macro')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#9b59ff;cursor:pointer">Macro</button>
+        </div>
+      </div>
+      <div data-cw-page="globe" style="overflow-y:auto;height:calc(100vh - 200px);min-height:400px;display:flex;flex-direction:column">
+        <div style="display:flex;height:520px;flex-shrink:0">
+          <div id="dash-globe-canvas" style="flex:1;position:relative;min-width:0">
+            <div id="dash-globe-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading globe...</div>
+          </div>
+          <div style="width:220px;flex-shrink:0;border-left:1px solid var(--border);padding:10px;overflow:hidden;display:flex;flex-direction:column">
+            <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Live Feed</div>
+            <div id="globe-hud-feed" style="flex:1;overflow-y:auto;font-size:9px;line-height:1.6;color:var(--t3);font-family:'JetBrains Mono',monospace"></div>
+          </div>
+        </div>
+
+        <!-- WIDGET: Ticker Relationship Network -->
+        <div class="customizable-widget" data-widget-id="rn-widget" style="border-top:1px solid var(--border)">
+          <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+            <span class="customizable-widget-toggle">▾</span>
+            <span class="customizable-widget-title">◈ Relationship Network</span>
+            <span style="font-size:9px;color:var(--t3);margin-left:8px">Known relationships + statistical correlations for your tracked tickers</span>
+            <label class="customizable-widget-control" onclick="event.stopPropagation()">
+              <input type="checkbox" id="rn-show-correlated" checked onchange="renderRelationshipNetwork()"> Show statistical correlations
+            </label>
+            <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
+              <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
+              <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
+            </span>
+          </div>
+          <div class="customizable-widget-body" id="rn-body">
+            <div id="rn-canvas" style="width:100%;height:380px;position:relative">
+              <div id="rn-loading" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:11px;color:var(--t3)">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WIDGET: Video Intelligence -->
+        <div class="customizable-widget" data-widget-id="vi-widget" style="border-top:1px solid var(--border)">
+          <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+            <span class="customizable-widget-toggle">▾</span>
+            <span class="customizable-widget-title">▶ Video Intelligence</span>
+            <span style="font-size:9px;color:var(--t3);margin-left:8px">Breaking finance news + your tracked tickers, from credible channels</span>
+            <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
+              <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
+              <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
+            </span>
+          </div>
+          <div class="customizable-widget-body" id="vi-body">
+            <div id="vi-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;padding:12px 16px">
+              <div style="color:var(--t3);font-size:9px">Loading...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- WIDGET: Live TV -->
+        <div class="customizable-widget" data-widget-id="tv-widget" style="border-top:1px solid var(--border)">
+          <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+            <span class="customizable-widget-toggle">▾</span>
+            <span class="customizable-widget-title">◉ Live TV</span>
+            <span style="font-size:9px;color:var(--t3);margin-left:8px">Financial news networks, live</span>
+            <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
+              <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
+              <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
+            </span>
+          </div>
+          <div class="customizable-widget-body" id="tv-body">
+            <div id="tv-tabs" style="display:flex;gap:4px;padding:10px 16px 0"></div>
+            <div class="video-modal-frame" id="tv-player" style="aspect-ratio:16/9"></div>
+          </div>
+        </div>
+        <div class="cw-add-widget" id="globe-cw-add" style="display:none" onclick="cwShowAddMenu('globe')">+ <span id="globe-cw-hidden-count">0</span> hidden widget(s) — click to restore</div>
+      </div>
     </div>
 
   </div><!-- /content -->
@@ -1887,6 +2030,17 @@ html[data-tier="micro"] #ov-globe-stage {
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- VIDEO INTELLIGENCE PLAYER MODAL -->
+<div id="video-modal" onclick="if(event.target===this)closeVideoModal()">
+  <div class="video-modal-box">
+    <div class="video-modal-hdr">
+      <h3 class="video-modal-title" id="video-modal-title">VIDEO</h3>
+      <button class="install-close" onclick="closeVideoModal()" style="margin:0;padding:2px 8px;font-size:10px">Close</button>
+    </div>
+    <div class="video-modal-frame" id="video-modal-frame"></div>
   </div>
 </div>
 
@@ -2567,6 +2721,7 @@ async function loadInitData() {
     if (!IS_NANO) {
       setTimeout(loadRecommendations, 800);
       setTimeout(loadOpsPicture, 1200);
+      setTimeout(loadTrackRecord, 1600);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -2598,7 +2753,7 @@ function tickClock() {
 setInterval(tickClock, 1000); tickClock();
 
 // ── TABS ──────────────────────────────────────────────────────────────────
-const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture'];
+const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record'];
 const WL=['tab-watchlist'];
 const PF=['tab-portfolio-left','tab-portfolio-chart'];
 const TR=['tab-trending-list','tab-trending-chart'];
@@ -2643,6 +2798,14 @@ function switchTab(tab, btn) {
     content.className='tab-overview';
     g('tab-globe-panel').style.display='';
     if (!_dashGlobeInst) initDashGlobe();
+    if (!_cwLayout['globe']) {
+      initCustomizableWidgets('globe', ['rn-widget', 'vi-widget', 'tv-widget']).then(() => {
+        const hidden = _cwLayout['globe'].hidden;
+        if (!hidden.includes('rn-widget') && !_srWidgetLoaded['rn-body']) { _srWidgetLoaded['rn-body'] = true; renderRelationshipNetwork(); }
+        if (!hidden.includes('vi-widget') && !_srWidgetLoaded['vi-body']) { _srWidgetLoaded['vi-body'] = true; loadVideoIntelligence(); }
+        if (!hidden.includes('tv-widget') && !_srWidgetLoaded['tv-body']) { _srWidgetLoaded['tv-body'] = true; initLiveTV(); }
+      });
+    }
   }
 }
 
@@ -2673,7 +2836,129 @@ const TICKER_HQ_EXCHANGE = {
   "BHP.AX": [-37.81, 144.96, "Melbourne", "Australia", "ASX", -33.8678, 151.2073],
   "CPU.AX": [-37.81, 144.96, "Melbourne", "Australia", "ASX", -33.8678, 151.2073],
   "REA.AX": [-33.8688, 151.2093, "Sydney", "Australia", "ASX", -33.8678, 151.2073],
-  "PLS.AX": [-31.9505, 115.8605, "Perth", "Australia", "ASX", -33.8678, 151.2073]
+  "PLS.AX": [-31.9505, 115.8605, "Perth", "Australia", "ASX", -33.8678, 151.2073],
+  // Cannibalized from graph_engine.py's HQ dict (2026-07-04, Graph page retired --
+  // static/hardcoded relationship data didn't earn its keep, but this geocoding
+  // data was genuinely useful and is reused here). Exchange assignment beyond ASX
+  // is a simplification (a curated NYSE list, NASDAQ default otherwise), not a
+  // verified per-ticker lookup -- correct for the well-known names, approximate
+  // for the rest; fine for this visual/arc-drawing purpose.
+  "AVGO": [37.4220, -122.0841, "Palo Alto, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "QCOM": [32.9031, -117.2013, "San Diego, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "ARM": [51.5167, -0.7667, "Cambridge", "UK", "NASDAQ", 40.758, -73.9855],
+  "AMAT": [37.3887, -121.9779, "Santa Clara, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "MRVL": [37.3688, -122.0363, "Santa Clara, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "ORCL": [37.5309, -122.2913, "Austin, TX", "USA", "NASDAQ", 40.758, -73.9855],
+  "IBM": [41.1182, -73.7262, "Armonk, NY", "USA", "NASDAQ", 40.758, -73.9855],
+  "PLTR": [34.0221, -118.4958, "Denver, CO", "USA", "NASDAQ", 40.758, -73.9855],
+  "AI": [37.3875, -122.0282, "Redwood City, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "SNOW": [37.8715, -122.2747, "San Mateo, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "CRM": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "NOW": [37.4030, -121.9700, "Santa Clara, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "ADBE": [37.3319, -121.8939, "San Jose, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "DDOG": [40.7589, -73.9851, "New York, NY", "USA", "NASDAQ", 40.758, -73.9855],
+  "MDB": [40.7589, -73.9851, "New York, NY", "USA", "NASDAQ", 40.758, -73.9855],
+  "SMCI": [37.3688, -121.9641, "San Jose, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "VRT": [43.0481, -76.1474, "Columbus, OH", "USA", "NASDAQ", 40.758, -73.9855],
+  "EQIX": [37.5485, -122.0597, "Redwood City, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "DLR": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "AMT": [42.3601, -71.0589, "Boston, MA", "USA", "NASDAQ", 40.758, -73.9855],
+  "CSCO": [37.4080, -121.9709, "San Jose, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "ANET": [37.3875, -122.0170, "Santa Clara, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "CEG": [41.8827, -87.6233, "Chicago, IL", "USA", "NASDAQ", 40.758, -73.9855],
+  "VST": [32.7767, -96.7970, "Dallas, TX", "USA", "NASDAQ", 40.758, -73.9855],
+  "NRG": [29.7604, -95.3698, "Houston, TX", "USA", "NASDAQ", 40.758, -73.9855],
+  "NEE": [25.7617, -80.1918, "Juno Beach, FL", "USA", "NASDAQ", 40.758, -73.9855],
+  "ETR": [29.9511, -90.0715, "New Orleans, LA", "USA", "NASDAQ", 40.758, -73.9855],
+  "DUK": [35.2271, -80.8431, "Charlotte, NC", "USA", "NASDAQ", 40.758, -73.9855],
+  "SO": [33.7490, -84.3880, "Atlanta, GA", "USA", "NASDAQ", 40.758, -73.9855],
+  "CCJ": [52.1579, -106.6700, "Saskatoon", "Canada", "NASDAQ", 40.758, -73.9855],
+  "ISRG": [37.3875, -122.0580, "Sunnyvale, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "ABB": [47.3769, 8.5417, "Zurich", "Switzerland", "NASDAQ", 40.758, -73.9855],
+  "FANUY": [35.0116, 138.5858, "Yamanashi", "Japan", "NASDAQ", 40.758, -73.9855],
+  "KEYS": [37.3875, -122.0170, "Santa Rosa, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "ZBRA": [42.0334, -87.9273, "Lincolnshire, IL", "USA", "NASDAQ", 40.758, -73.9855],
+  "ROK": [43.0481, -87.9062, "Milwaukee, WI", "USA", "NASDAQ", 40.758, -73.9855],
+  "SOUN": [37.5485, -122.0597, "Santa Clara, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "BBAI": [38.9072, -77.0369, "Columbia, MD", "USA", "NASDAQ", 40.758, -73.9855],
+  "UPST": [37.4030, -122.0500, "San Mateo, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "PATH": [40.7589, -73.9851, "New York, NY", "USA", "NASDAQ", 40.758, -73.9855],
+  "RXRX": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "NFLX": [37.3382, -121.8863, "Los Gatos, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "SPOT": [59.3293, 18.0686, "Stockholm", "Sweden", "NASDAQ", 40.758, -73.9855],
+  "SNAP": [34.0195, -118.4912, "Santa Monica, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "PINS": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "RBLX": [37.3875, -122.0170, "San Mateo, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "LMT": [38.9072, -77.0369, "Bethesda, MD", "USA", "NYSE", 40.7069, -74.0113],
+  "RTX": [41.7658, -72.6851, "Arlington, VA", "USA", "NYSE", 40.7069, -74.0113],
+  "NOC": [34.0522, -118.2437, "Falls Church, VA", "USA", "NYSE", 40.7069, -74.0113],
+  "GD": [38.9072, -77.0369, "Reston, VA", "USA", "NYSE", 40.7069, -74.0113],
+  "BA": [47.6062, -122.3321, "Arlington, VA", "USA", "NYSE", 40.7069, -74.0113],
+  "KTOS": [32.7767, -96.7970, "San Diego, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "HII": [36.8468, -76.2951, "Newport News, VA", "USA", "NYSE", 40.7069, -74.0113],
+  "LDOS": [38.9072, -77.0369, "Reston, VA", "USA", "NASDAQ", 40.758, -73.9855],
+  "CACI": [38.9072, -77.0369, "Reston, VA", "USA", "NASDAQ", 40.758, -73.9855],
+  "SAIC": [38.9072, -77.0369, "Reston, VA", "USA", "NYSE", 40.7069, -74.0113],
+  "XOM": [32.7767, -96.7970, "Spring, TX", "USA", "NYSE", 40.7069, -74.0113],
+  "CVX": [37.8271, -122.2905, "San Ramon, CA", "USA", "NYSE", 40.7069, -74.0113],
+  "COP": [29.7604, -95.3698, "Houston, TX", "USA", "NYSE", 40.7069, -74.0113],
+  "OXY": [29.7604, -95.3698, "Houston, TX", "USA", "NYSE", 40.7069, -74.0113],
+  "SLB": [29.7604, -95.3698, "Houston, TX", "USA", "NYSE", 40.7069, -74.0113],
+  "EOG": [29.7604, -95.3698, "Houston, TX", "USA", "NYSE", 40.7069, -74.0113],
+  "PSX": [29.7604, -95.3698, "Houston, TX", "USA", "NYSE", 40.7069, -74.0113],
+  "VLO": [29.4241, -98.4936, "San Antonio, TX", "USA", "NYSE", 40.7069, -74.0113],
+  "MPC": [40.7500, -83.1271, "Findlay, OH", "USA", "NYSE", 40.7069, -74.0113],
+  "BP": [51.5074, -0.1278, "London", "UK", "NYSE", 40.7069, -74.0113],
+  "MRNA": [42.3601, -71.0589, "Cambridge, MA", "USA", "NASDAQ", 40.758, -73.9855],
+  "ILMN": [32.9031, -117.2013, "San Diego, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "NVAX": [38.9072, -77.0369, "Gaithersburg, MD", "USA", "NASDAQ", 40.758, -73.9855],
+  "CRSP": [47.3769, 8.5417, "Zug", "Switzerland", "NASDAQ", 40.758, -73.9855],
+  "EDIT": [42.3601, -71.0589, "Cambridge, MA", "USA", "NASDAQ", 40.758, -73.9855],
+  "BEAM": [42.3601, -71.0589, "Cambridge, MA", "USA", "NASDAQ", 40.758, -73.9855],
+  "PACB": [37.3875, -122.0170, "Menlo Park, CA", "USA", "NYSE", 40.7069, -74.0113],
+  "TMO": [42.3601, -71.0589, "Waltham, MA", "USA", "NYSE", 40.7069, -74.0113],
+  "V": [37.3875, -122.1085, "San Jose, CA", "USA", "NYSE", 40.7069, -74.0113],
+  "MA": [40.7589, -73.9851, "Purchase, NY", "USA", "NYSE", 40.7069, -74.0113],
+  "PYPL": [37.3875, -122.1085, "San Jose, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "SQ": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "NU": [-23.5505, -46.6333, "São Paulo", "Brazil", "NASDAQ", 40.758, -73.9855],
+  "SOFI": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "AFRM": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "COIN": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "HOOD": [37.3875, -122.0170, "Menlo Park, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "UBER": [37.7749, -122.4194, "San Francisco, CA", "USA", "NYSE", 40.7069, -74.0113],
+  "LYFT": [37.7749, -122.4194, "San Francisco, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "RIVN": [34.0195, -118.4912, "Irvine, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "LCID": [33.4484, -112.0740, "Newark, CA", "USA", "NASDAQ", 40.758, -73.9855],
+  "GM": [42.3314, -83.0458, "Detroit, MI", "USA", "NYSE", 40.7069, -74.0113],
+  "F": [42.3314, -83.0458, "Dearborn, MI", "USA", "NYSE", 40.7069, -74.0113],
+  "MBLY": [38.9072, -77.0369, "Jerusalem", "Israel", "NASDAQ", 40.758, -73.9855],
+  "CBA.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "CSL.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "WBC.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "ANZ.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "NAB.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "WES.AX": [-31.9505, 115.8605, "Perth, WA", "Australia", "ASX", -33.8678, 151.2073],
+  "RIO.AX": [-31.9505, 115.8605, "Perth, WA", "Australia", "ASX", -33.8678, 151.2073],
+  "FMG.AX": [-31.9505, 115.8605, "Perth, WA", "Australia", "ASX", -33.8678, 151.2073],
+  "MQG.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "WTC.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "XRO.AX": [-36.8485, 174.7633, "Auckland", "New Zealand", "ASX", -33.8678, 151.2073],
+  "WDS.AX": [-31.9505, 115.8605, "Perth, WA", "Australia", "ASX", -33.8678, 151.2073],
+  "STO.AX": [-34.9285, 138.6007, "Adelaide, SA", "Australia", "ASX", -33.8678, 151.2073],
+  "COH.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "MIN.AX": [-31.9505, 115.8605, "Perth, WA", "Australia", "ASX", -33.8678, 151.2073],
+  "LYC.AX": [-31.9505, 115.8605, "Perth, WA", "Australia", "ASX", -33.8678, 151.2073],
+  "PME.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "SEK.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "QBE.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "TCL.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "WOW.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "COL.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "JBH.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "VAS.AX": [-37.8136, 144.9631, "Melbourne, VIC", "Australia", "ASX", -33.8678, 151.2073],
+  "IOZ.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073],
+  "NDQ.AX": [-33.8688, 151.2093, "Sydney, NSW", "Australia", "ASX", -33.8678, 151.2073]
 };
 
 const ANCHOR_CITIES = [
@@ -2762,6 +3047,275 @@ function setGlobeMode(mode, btn) {
   _dashGlobeInst.pointsData(getGlobePoints());
 }
 
+// ── CUSTOMIZABLE WIDGETS (collapsible, hideable, reorderable, per-page persisted) ──
+// Show only what adds value: every widget on every page can be collapsed, hidden,
+// reordered, or restored, and the choice is remembered per-user server-side.
+const _srWidgetLoaded = {};
+const _cwLayout = {}; // page -> {hidden:[], order:{}}
+const _cwSaveTimers = {};
+
+function toggleCwWidget(headerEl) {
+  const widget = headerEl.closest('.customizable-widget');
+  widget.classList.toggle('collapsed');
+  if (widget.classList.contains('collapsed')) return;
+  const bodyEl = widget.querySelector('.customizable-widget-body');
+  if (!bodyEl) return;
+  const bodyId = bodyEl.id;
+  if (_srWidgetLoaded[bodyId]) return;
+  _srWidgetLoaded[bodyId] = true;
+  if (bodyId === 'rn-body') renderRelationshipNetwork();
+  if (bodyId === 'vi-body') loadVideoIntelligence();
+  if (bodyId === 'tv-body') initLiveTV();
+}
+
+async function initCustomizableWidgets(page, widgetIds) {
+  let prefs = {hidden: [], order: {}};
+  try {
+    const r = await fetch(`/api/user/layout?page=${encodeURIComponent(page)}`);
+    prefs = await r.json();
+  } catch(e) { /* fall through to defaults -- nothing saved yet */ }
+  _cwLayout[page] = prefs;
+  widgetIds.forEach((id, i) => {
+    const el = document.querySelector(`.customizable-widget[data-widget-id="${id}"]`);
+    if (!el) return;
+    el.style.order = prefs.order[id] !== undefined ? prefs.order[id] : i;
+    el.style.display = prefs.hidden.includes(id) ? 'none' : '';
+  });
+  _cwUpdateAddBar(page, widgetIds);
+}
+
+function _cwSaveLayout(page) {
+  clearTimeout(_cwSaveTimers[page]);
+  _cwSaveTimers[page] = setTimeout(() => {
+    const prefs = _cwLayout[page];
+    fetch('/api/user/layout', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({page, hidden: prefs.hidden, order: prefs.order}),
+    }).catch(() => {});
+  }, 500);
+}
+
+function _cwUpdateAddBar(page, widgetIds) {
+  const bar = g(`${page}-cw-add`), countEl = g(`${page}-cw-hidden-count`);
+  if (!bar) return;
+  const hidden = _cwLayout[page].hidden.filter(id => widgetIds.includes(id));
+  if (countEl) countEl.textContent = hidden.length;
+  bar.style.display = hidden.length ? '' : 'none';
+}
+
+function cwHideWidget(page, btnEl) {
+  const widget = btnEl.closest('.customizable-widget');
+  const id = widget.dataset.widgetId;
+  const prefs = _cwLayout[page];
+  if (!prefs.hidden.includes(id)) prefs.hidden.push(id);
+  widget.style.display = 'none';
+  const widgetIds = Array.from(document.querySelectorAll(`[data-cw-page="${page}"] .customizable-widget`)).map(w => w.dataset.widgetId);
+  _cwUpdateAddBar(page, widgetIds);
+  _cwSaveLayout(page);
+}
+
+function cwMoveWidget(page, btnEl, dir = -1) {
+  const widget = btnEl.closest('.customizable-widget');
+  const container = widget.closest('[data-cw-page]') || widget.parentElement;
+  const siblings = Array.from(container.querySelectorAll('.customizable-widget'))
+    .sort((a, b) => (parseInt(a.style.order)||0) - (parseInt(b.style.order)||0));
+  const idx = siblings.indexOf(widget);
+  const swapIdx = idx + dir;
+  if (swapIdx < 0 || swapIdx >= siblings.length) return;
+  const a = siblings[idx], b = siblings[swapIdx];
+  const orderA = parseInt(a.style.order) || 0, orderB = parseInt(b.style.order) || 0;
+  a.style.order = orderB; b.style.order = orderA;
+  const prefs = _cwLayout[page];
+  prefs.order[a.dataset.widgetId] = orderB;
+  prefs.order[b.dataset.widgetId] = orderA;
+  _cwSaveLayout(page);
+}
+
+function cwShowAddMenu(page) {
+  const bar = g(`${page}-cw-add`);
+  if (!bar) return;
+  const prefs = _cwLayout[page];
+  const hiddenIds = [...prefs.hidden];
+  if (!hiddenIds.length) return;
+  bar.innerHTML = hiddenIds.map(id => {
+    const el = document.querySelector(`.customizable-widget[data-widget-id="${id}"]`);
+    const title = el ? el.querySelector('.customizable-widget-title').textContent : id;
+    return `<span onclick="cwRestoreWidget('${page}','${id}')" style="cursor:pointer;text-decoration:underline;margin-right:12px">+ ${esc(title)}</span>`;
+  }).join('');
+}
+
+function cwRestoreWidget(page, id) {
+  const prefs = _cwLayout[page];
+  prefs.hidden = prefs.hidden.filter(h => h !== id);
+  const el = document.querySelector(`.customizable-widget[data-widget-id="${id}"]`);
+  if (el) el.style.display = '';
+  const widgetIds = Array.from(document.querySelectorAll(`[data-cw-page="${page}"] .customizable-widget`)).map(w => w.dataset.widgetId);
+  _cwUpdateAddBar(page, widgetIds);
+  _cwSaveLayout(page);
+}
+
+let _rnData = null;
+async function renderRelationshipNetwork() {
+  const canvas = g('rn-canvas');
+  if (!canvas || !window.d3) return;
+  if (!_rnData) {
+    try {
+      const r = await fetch('/api/ticker-relationships');
+      _rnData = await r.json();
+    } catch(e) {
+      canvas.innerHTML = '<div style="color:var(--t3);font-size:11px;text-align:center;padding-top:40%">Relationship network unavailable</div>';
+      return;
+    }
+  }
+  const showCorrelated = g('rn-show-correlated').checked;
+  const edges = _rnData.edges.filter(e => showCorrelated || e.data_source === 'known_relationship');
+  const usedNodeIds = new Set(edges.flatMap(e => [e.source, e.target]));
+  const nodes = _rnData.nodes.filter(n => n.tracked || usedNodeIds.has(n.id));
+
+  canvas.innerHTML = '';
+  if (!nodes.length) {
+    canvas.innerHTML = '<div style="color:var(--t3);font-size:11px;text-align:center;padding-top:40%">No relationship data yet -- add symbols to your watchlist or portfolio</div>';
+    return;
+  }
+
+  const W = canvas.clientWidth || 600, H = 380;
+  const svg = d3.select(canvas).append('svg').attr('width', W).attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
+  const nodeData = nodes.map(n => ({...n}));
+  const linkData = edges.map(e => ({...e}));
+
+  const sim = d3.forceSimulation(nodeData)
+    .force('link', d3.forceLink(linkData).id(d => d.id).distance(70).strength(0.4))
+    .force('charge', d3.forceManyBody().strength(-160))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide().radius(d => d.tracked ? 22 : 14));
+
+  const link = svg.append('g').selectAll('line').data(linkData).enter().append('line')
+    .attr('stroke', d => d.color).attr('stroke-width', d => Math.max(1, d.strength / 3))
+    .attr('stroke-opacity', d => d.data_source === 'known_relationship' ? 0.7 : 0.35)
+    .attr('stroke-dasharray', d => d.data_source === 'statistical_correlation' ? '3,3' : null);
+
+  const node = svg.append('g').selectAll('g').data(nodeData).enter().append('g')
+    .call(d3.drag()
+      .on('start', (e,d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag', (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on('end', (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+
+  node.append('circle')
+    .attr('r', d => d.tracked ? 14 : 8)
+    .attr('fill', d => d.sector_color)
+    .attr('stroke', d => d.tracked ? '#00ff88' : 'rgba(255,255,255,.2)')
+    .attr('stroke-width', d => d.tracked ? 2 : 1)
+    .style('filter', d => d.tracked ? 'drop-shadow(0 0 6px rgba(0,255,136,.6))' : 'none');
+
+  node.append('text').text(d => d.id.replace('.AX','').replace('-USD',''))
+    .attr('text-anchor', 'middle').attr('dy', d => d.tracked ? 26 : 18)
+    .attr('font-size', d => d.tracked ? '10px' : '8px')
+    .attr('font-family', "'JetBrains Mono',monospace")
+    .attr('fill', d => d.tracked ? '#e8f4ff' : 'var(--t3)');
+
+  node.append('title').text(d => {
+    const rels = linkData.filter(l => l.source.id === d.id || l.target.id === d.id);
+    return rels.map(r => r.desc).join('\n') || d.id;
+  });
+
+  sim.on('tick', () => {
+    link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+const VIDEO_BREAKING_HOURS = 48;
+let _videoIntelData = [];
+
+function openVideoModalByIndex(i) {
+  const v = _videoIntelData[i];
+  if (!v) return;
+  g('video-modal-title').textContent = v.title;
+  g('video-modal-frame').innerHTML = `<iframe src="${v.embed_url}&autoplay=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+  g('video-modal').classList.add('open');
+}
+function closeVideoModal() {
+  g('video-modal').classList.remove('open');
+  g('video-modal-frame').innerHTML = ''; // stop playback, don't just hide it
+}
+
+async function loadVideoIntelligence() {
+  const grid = g('vi-grid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/news/youtube-channels');
+    const data = await r.json();
+    const tracked = new Set([...(window._portfolio || []), ...(window._watchlist || [])]);
+    const breakingCutoff = Date.now() - VIDEO_BREAKING_HOURS * 3600 * 1000;
+    let videos = [];
+    for (const [ch, chData] of Object.entries(data)) {
+      for (const v of (chData.videos || [])) {
+        const mentionsTracked = [...tracked].some(sym => v.title.toUpperCase().includes(sym.replace('-USD','').replace('.AX','')));
+        const isBreaking = new Date(v.published).getTime() >= breakingCutoff;
+        videos.push({...v, channel: ch, mentionsTracked, isBreaking});
+      }
+    }
+    // Scope to what's actually relevant: tracked-ticker mentions or genuinely
+    // recent breaking news -- not just "everything these channels ever posted."
+    let relevant = videos.filter(v => v.mentionsTracked || v.isBreaking);
+    if (!relevant.length) relevant = videos; // fresh account, nothing recent -- show what exists rather than an empty widget
+    relevant.sort((a,b) => (b.mentionsTracked - a.mentionsTracked) || (new Date(b.published) - new Date(a.published)));
+    if (!relevant.length) {
+      grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center;padding:20px">No videos available right now</div>';
+      return;
+    }
+    _videoIntelData = relevant.slice(0, 12);
+    grid.innerHTML = _videoIntelData.map((v,i) => `
+      <div style="cursor:pointer" onclick="openVideoModalByIndex(${i})">
+        <div style="position:relative">
+          <img src="${esc(v.thumbnail)}" style="width:100%;border-radius:6px;aspect-ratio:16/9;object-fit:cover" loading="lazy" onerror="this.style.background='var(--bg3)'">
+          ${v.mentionsTracked ? '<span style="position:absolute;top:4px;left:4px;background:rgba(0,255,136,.9);color:#03080f;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px">TRACKED</span>' : (v.isBreaking ? '<span style="position:absolute;top:4px;left:4px;background:rgba(255,59,92,.9);color:#03080f;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px">BREAKING</span>' : '')}
+        </div>
+        <div style="font-size:9px;color:var(--blue);margin-top:4px">${esc(v.channel)}</div>
+        <div style="font-size:10px;color:var(--t2);line-height:1.3;margin-top:2px">${esc(v.title)}</div>
+      </div>`).join('');
+  } catch(e) {
+    grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center">Video intelligence unavailable</div>';
+  }
+}
+
+// LIVE_TV_CHANNELS: type "channel" resolves to whatever's currently live on
+// that channel (used for networks with a genuine rolling live broadcast);
+// type "video" pins a specific persistent stream (CNBC's own 24/7 "Marathon"
+// livestream is a long-running single video, not a channel-live lookup).
+const LIVE_TV_CHANNELS = [
+  {name: 'Bloomberg', type: 'channel', id: 'UCIALMKvObZNtJ6AmdCLP7Lg'},
+  {name: 'Yahoo Finance', type: 'channel', id: 'UCEAZeUIeJs0IjQiqTCdVSIg'},
+  {name: 'Schwab Network', type: 'channel', id: 'UCqoSrYgusd8ZddtMoWhjHYA'},
+  {name: 'CNBC', type: 'video', id: '9NyxcX3rhQs'},
+];
+
+function initLiveTV() {
+  const tabs = g('tv-tabs');
+  if (!tabs || tabs.dataset.init) return;
+  tabs.dataset.init = '1';
+  tabs.innerHTML = LIVE_TV_CHANNELS.map((c,i) => `
+    <button class="dash-gmode" data-tv-idx="${i}" onclick="switchLiveChannel(${i},this)"
+      style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:var(--t2);cursor:pointer">${esc(c.name)}</button>
+  `).join('');
+  switchLiveChannel(0, tabs.querySelector('button[data-tv-idx="0"]'));
+}
+
+function switchLiveChannel(i, btn) {
+  const c = LIVE_TV_CHANNELS[i];
+  if (!c) return;
+  document.querySelectorAll('#tv-tabs button').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = 'none';
+  });
+  if (btn) { btn.classList.add('active'); btn.style.background = 'rgba(0,180,255,.12)'; }
+  const src = c.type === 'channel'
+    ? `https://www.youtube.com/embed/live_stream?channel=${c.id}&autoplay=1&mute=1`
+    : `https://www.youtube.com/embed/${c.id}?autoplay=1&mute=1`;
+  g('tv-player').innerHTML = `<iframe src="${src}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+}
+
 async function initDashGlobe() {
   if (!window.Globe) return;
   const container = g('dash-globe-canvas');
@@ -2779,6 +3333,7 @@ async function initDashGlobe() {
       const isNegative = score < -0.05;
       const color = isPositive ? 'rgba(0, 255, 136, 0.75)' : isNegative ? 'rgba(255, 59, 92, 0.75)' : 'rgba(245, 166, 35, 0.55)';
       return {
+        ticker: s.ticker,
         startLat: s.hq_lat,
         startLng: s.hq_lng,
         endLat: s.exchange_lat,
@@ -2843,13 +3398,14 @@ async function initDashGlobe() {
       .pointColor(d => d.type === 'monitored' ? d.color : _gcol(d.category))
       .pointLabel(d => d.type === 'monitored' ? d.label : `<div style="background:rgba(6,15,28,.9);border:1px solid rgba(0,180,255,.25);border-radius:6px;padding:8px 12px;font-family:Inter,sans-serif"><div style="font-size:12px;font-weight:600;color:#e8f4ff;margin-bottom:3px">${d.label}</div><div style="font-size:10px;color:#00b4ff;font-family:monospace">${d.count} signal${d.count!==1?'s':''}</div><div style="font-size:9px;color:#3d5a73;margin-top:2px">${d.category}</div></div>`)
       .pointsMerge(false)
-      .onPointClick(d => { 
+      .onPointClick(d => {
         if (d.type === 'monitored') {
           openAnalystReport(d.symbol);
         } else {
-          window.location.href = `/news?cat=${d.category}`; 
+          window.location.href = `/news?cat=${d.category}`;
         }
       })
+      .onPointHover(d => { container.style.cursor = d ? 'pointer' : 'grab'; })
       .arcsData(arcs)
       .arcColor('color')
       .arcDashLength(0.45)
@@ -2857,17 +3413,52 @@ async function initDashGlobe() {
       .arcDashAnimateTime(1800)
       .arcStroke(0.38)
       .arcAltitude(0.24)
+      .arcLabel(a => a.label)
+      .onArcClick(a => { if (a.ticker) openAnalystReport(a.ticker); })
+      .onArcHover(a => { container.style.cursor = a ? 'pointer' : 'grab'; })
       .ringsData(ringClusters)
       .ringColor(d => d.sentiment > 0.05 ? 'rgba(0, 255, 136, 0.55)' : (d.sentiment < -0.05 ? 'rgba(255, 59, 92, 0.55)' : 'rgba(245, 166, 35, 0.55)'))
       .ringMaxRadius(d => d.maxRadius)
       .ringPropagationSpeed(1.8)
-      .ringRepeatNum(2)
+      .ringRepeatPeriod(900)
       .ringAltitude(0.01);
 
     _dashGlobeInst.pointsData(getGlobePoints());
+    // globe.gl reads container.clientWidth/clientHeight at construction time --
+    // if the tab was just switched from display:none, the container's own
+    // layout (nested inside this panel's flex wrapper) may not have settled
+    // yet, so the canvas sizes itself to a fallback dimension (observed:
+    // 1280x720 viewport-sized canvas inside a 1034x520 container) and, since
+    // the container allows overflow, visually bleeds over content below it --
+    // including intercepting clicks meant for the widgets underneath. A
+    // single requestAnimationFrame wasn't reliably enough for the nested
+    // flex layout to resolve (observed clientWidth/Height still 0 at that
+    // point); this retries with a short delay until real dimensions appear.
+    const fixGlobeSize = (attemptsLeft = 20) => {
+      if (!_dashGlobeInst) return;
+      if (container.clientWidth > 0 && container.clientHeight > 0) {
+        _dashGlobeInst.width(container.clientWidth).height(container.clientHeight);
+      } else if (attemptsLeft > 0) {
+        setTimeout(() => fixGlobeSize(attemptsLeft - 1), 100);
+      }
+    };
+    setTimeout(fixGlobeSize, 100);
     _dashGlobeInst.controls().autoRotate = true;
     _dashGlobeInst.controls().autoRotateSpeed = 0.35;
-    container.addEventListener('mousedown', () => { _dashGlobeInst.controls().autoRotate = false; });
+    // Captivating motion by default, but instantly responsive: any interaction
+    // pauses rotation, and it resumes on its own after a few seconds of no
+    // further input -- so exploring the globe never fights the user, but it
+    // doesn't sit dead still forever after one touch either.
+    let _globeIdleTimer = null;
+    const pauseThenResumeRotation = () => {
+      _dashGlobeInst.controls().autoRotate = false;
+      clearTimeout(_globeIdleTimer);
+      _globeIdleTimer = setTimeout(() => {
+        if (_dashGlobeInst) _dashGlobeInst.controls().autoRotate = true;
+      }, 6000);
+    };
+    ['mousedown', 'wheel', 'touchstart'].forEach(evt =>
+      container.addEventListener(evt, pauseThenResumeRotation, { passive: true }));
 
     // HUD Live logger simulation
     const logFeed = g('globe-hud-feed');
@@ -2897,7 +3488,7 @@ async function initDashGlobe() {
     }, 2500);
 
   } catch(e) {
-    if (loading) loading.innerHTML = `<span style="color:var(--red)">Globe unavailable</span>`;
+    if (loading) loading.innerHTML = `<span style="color:var(--red)">Situation Room unavailable</span>`;
   }
 }
 
@@ -3279,7 +3870,9 @@ function renderWatchlist(items,interests){
     const interest=im[sym]||1,pct_bar=Math.min(interest/20*100,100);
     const sentCls=getSentClass(sym);
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    const spread=w.cross_exchange_spread;
+    const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -3685,8 +4278,14 @@ function renderNewsPreview(items) {
 function relTime(dt) {
   if (!dt) return '';
   try {
-    const d = new Date(dt.includes('Z')?dt:dt+' UTC');
+    // published_at has two coexisting formats ("2026-07-03 15:50:00" and
+    // "2026-07-03T15:50:00", both produced by news_client.py::_parse_date at
+    // different points) -- appending " UTC" to a "T"-separated string
+    // produces an unparseable "...T15:50:00 UTC" and silently yields
+    // Invalid Date (NaN downstream), which is what rendered as "NaNd ago".
+    const d = new Date(dt.includes('Z')?dt:dt.includes('T')?dt+'Z':dt+' UTC');
     const m = Math.round((Date.now()-d.getTime())/60000);
+    if (isNaN(m)) return '';
     if (m<1) return 'now';
     if (m<60) return m+'m ago';
     if (m<1440) return Math.round(m/60)+'h ago';
@@ -3973,6 +4572,34 @@ async function loadOpsPicture() {
     _opsPictureLoaded = true;
   } catch(e) {
     console.warn('Ops picture failed:', e);
+  }
+}
+
+async function loadTrackRecord() {
+  const body = g('track-record-body');
+  if (!body) return;
+  try {
+    const r = await fetch('/api/backtest/accuracy');
+    const d = await r.json();
+    const labels = {'4h': '4 Hour', '24h': '24 Hour', '72h': '72 Hour'};
+    body.innerHTML = Object.entries(d).map(([cp, stats]) => {
+      if (!stats.total) {
+        return `<div style="flex:1;text-align:center">
+          <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px">${labels[cp]||cp}</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:6px">Not enough data yet</div>
+        </div>`;
+      }
+      const pct = stats.accuracy_pct;
+      const color = pct>=60 ? 'var(--green)' : pct>=45 ? 'var(--gold)' : 'var(--red)';
+      return `<div style="flex:1;text-align:center">
+        <div style="font-size:9px;color:var(--t3);text-transform:uppercase;letter-spacing:1px">${labels[cp]||cp}</div>
+        <div style="font-size:22px;font-weight:700;color:${color};margin-top:2px">${pct.toFixed(0)}%</div>
+        <div style="font-size:9px;color:var(--t3);margin-top:2px">${stats.correct}/${stats.total} signals, last 30d</div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    body.innerHTML = '<div style="color:var(--t3);font-size:9px">Track record unavailable</div>';
+    console.warn('Track record failed:', e);
   }
 }
 

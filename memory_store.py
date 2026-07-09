@@ -226,6 +226,22 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS insider_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            owner_name TEXT,
+            owner_title TEXT,
+            transaction_date TEXT,
+            transaction_code TEXT,
+            is_signal_code INTEGER DEFAULT 0,
+            signal_type TEXT,
+            shares REAL,
+            price_per_share REAL,
+            acquired_disposed TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -240,6 +256,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_techalerts_user ON tech_alerts(user_id);
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -295,9 +312,19 @@ def get_conn():
 
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
+def _normalize_username(username: str) -> str:
+    # /register stores usernames lowercased, but login used the raw input in a
+    # case-sensitive lookup — mobile keyboards auto-capitalize, so "Fred" never
+    # matched "fred" and every re-login failed with "Invalid credentials".
+    return (username or "").strip().lower()
+
+
 def verify_user(username: str, password: str) -> dict | None:
+    username = _normalize_username(username)
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=? COLLATE NOCASE", (username,)
+        ).fetchone()
         if not row:
             return None
 
@@ -318,6 +345,7 @@ def verify_user(username: str, password: str) -> dict | None:
 
 
 def create_user(username: str, password: str, display_name: str = None) -> dict | None:
+    username = _normalize_username(username)
     pw_hash = generate_password_hash(password)
     try:
         with get_conn() as conn:
@@ -338,8 +366,11 @@ def get_user(user_id: int) -> dict | None:
 
 
 def get_user_by_username(username: str) -> dict | None:
+    username = _normalize_username(username)
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM users WHERE username=?", (username,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM users WHERE username=? COLLATE NOCASE", (username,)
+        ).fetchone()
     return dict(row) if row else None
 
 
@@ -494,6 +525,121 @@ def get_trending_assets(hours: int = 4, limit: int = 20) -> list[dict]:
             (since.isoformat(), limit)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+def get_news_as_signals(hours: int = 4, asset: str = None, limit: int = 200) -> list[dict]:
+    """Derive signal-shaped records from news_items (RSS feeds -- free, no
+    paywall, already sentiment-scored via FinBERT/VADER) for use when
+    X/Twitter signal volume is too sparse to be meaningful (e.g. an invalid/
+    expired X bearer token). news_items can reference multiple tickers via a
+    comma-separated `tickers` field; each (item, ticker) pair becomes one
+    signal-shaped record here so downstream code (compute_sentiment_stats,
+    trending aggregation) can treat this exactly like a real signals row."""
+    items = get_news(hours=hours, limit=limit)
+    results = []
+    for item in items:
+        tickers = [t.strip() for t in (item.get("tickers") or "").split(",") if t.strip()]
+        if asset:
+            if asset not in tickers:
+                continue
+            tickers = [asset]
+        score = item.get("sentiment_score") or 0.0
+        sig_type = "bullish" if score >= 0.05 else "bearish" if score <= -0.05 else "neutral"
+        for t in tickers:
+            results.append({
+                "timestamp": item.get("published_at"),
+                "source": f"news:{item.get('source') or 'unknown'}",
+                "asset": t,
+                "content": item.get("title"),
+                "author": item.get("source"),
+                "sentiment_score": score,
+                "signal_type": sig_type,
+                "sentiment_model": item.get("sentiment_model", "vader"),
+            })
+    return results[:limit]
+
+
+def get_signals_with_fallback(hours: int = 4, asset: str = None, limit: int = 200, min_real: int = 5) -> list[dict]:
+    """Real X/Twitter signals when there's enough volume to be meaningful;
+    supplemented with news-derived signals (get_news_as_signals) when
+    Twitter volume is too sparse -- e.g. an invalid/expired X bearer token
+    shouldn't leave Overview/Trending/etc showing empty for a user whose
+    own X credentials aren't the issue."""
+    real = get_signals(hours=hours, asset=asset, limit=limit)
+    if len(real) >= min_real:
+        return real
+    news_signals = get_news_as_signals(hours=hours, asset=asset, limit=limit)
+    combined = real + news_signals
+    return combined[:limit]
+
+
+def get_trending_assets_with_fallback(hours: int = 4, limit: int = 20, min_real: int = 5) -> list[dict]:
+    """Same fallback reasoning as get_signals_with_fallback, applied to the
+    trending-assets aggregation (ranked by signal volume + sentiment)."""
+    real = get_signals(hours=hours, limit=1000)
+    if len(real) >= min_real:
+        return get_trending_assets(hours=hours, limit=limit)
+
+    combined = real + get_news_as_signals(hours=hours, limit=1000)
+    agg: dict = {}
+    for s in combined:
+        a = s.get("asset")
+        if not a:
+            continue
+        d = agg.setdefault(a, {"scores": [], "bullish": 0, "total": 0, "latest": ""})
+        d["scores"].append(s.get("sentiment_score") or 0)
+        d["total"] += 1
+        if s.get("signal_type") == "bullish":
+            d["bullish"] += 1
+        ts = s.get("timestamp") or ""
+        if ts > d["latest"]:
+            d["latest"] = ts
+
+    rows = [
+        {
+            "asset": a,
+            "signal_count": d["total"],
+            "avg_sentiment": sum(d["scores"]) / len(d["scores"]) if d["scores"] else 0,
+            "bullish_pct": d["bullish"] * 100.0 / d["total"] if d["total"] else 0,
+            "latest": d["latest"],
+        }
+        for a, d in agg.items()
+    ]
+    rows.sort(key=lambda r: r["signal_count"], reverse=True)
+    return rows[:limit]
+
+
+def get_sentiment_snapshot(symbols: list[str], hours: int = 24, min_real: int = 5) -> dict[str, dict]:
+    """Per-symbol {avg_sentiment, signal_type, signal_count} for Watchlist/
+    Portfolio/AI Universe sentiment overlays -- one shared query covering all
+    requested symbols (via get_signals_with_fallback's real-or-news blend)
+    rather than a separate DB round-trip per symbol."""
+    if not symbols:
+        return {}
+    combined = get_signals_with_fallback(hours=hours, limit=2000, min_real=min_real)
+    wanted = set(symbols)
+    agg: dict = {}
+    for s in combined:
+        a = s.get("asset")
+        if a not in wanted:
+            continue
+        d = agg.setdefault(a, {"scores": [], "bullish": 0, "bearish": 0, "total": 0})
+        d["scores"].append(s.get("sentiment_score") or 0)
+        d["total"] += 1
+        if s.get("signal_type") == "bullish":
+            d["bullish"] += 1
+        elif s.get("signal_type") == "bearish":
+            d["bearish"] += 1
+
+    result = {}
+    for sym in symbols:
+        d = agg.get(sym)
+        if not d or not d["total"]:
+            continue
+        avg = sum(d["scores"]) / len(d["scores"])
+        sig_type = "bullish" if d["bullish"] > d["bearish"] else "bearish" if d["bearish"] > d["bullish"] else "neutral"
+        result[sym] = {"avg_sentiment": round(avg, 3), "signal_type": sig_type, "signal_count": d["total"]}
+    return result
 
 
 def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
@@ -909,6 +1055,24 @@ def prune_old_data(retention_days: int = 90):
     }
 
 
+def prune_stale_news(retention_hours: int = 72) -> int:
+    """News is meant to drive near-term decisions -- a much shorter,
+    dedicated window than prune_old_data's 90-day GDPR-style retention.
+    Returns the number of rows deleted.
+
+    published_at has two coexisting formats in the wild ("2026-07-03
+    15:50:00" and "2026-07-03T15:50:00", both produced by
+    news_client.py::_parse_date at different times) -- REPLACE normalizes
+    the separator so string comparison against the cutoff is correct for
+    both, not just whichever format happens to be more common right now."""
+    from datetime import timedelta
+    cutoff = (datetime.utcnow() - timedelta(hours=retention_hours)).isoformat(sep=" ")
+    with get_conn() as conn:
+        return conn.execute(
+            "DELETE FROM news_items WHERE REPLACE(published_at, 'T', ' ') < ?", (cutoff,)
+        ).rowcount
+
+
 # ── NEWS ──────────────────────────────────────────────────────────────────────
 
 def upsert_news_items(items: list[dict]) -> int:
@@ -932,9 +1096,18 @@ def upsert_news_items(items: list[dict]) -> int:
 def get_news(category: str = None, ticker: str = None, hours: int = 24,
              limit: int = 50, offset: int = 0) -> list[dict]:
     from datetime import datetime, timedelta
-    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    # Space-separated to match REPLACE(published_at, 'T', ' ') below --
+    # .isoformat() would produce a 'T' separator, and since space (0x20) sorts
+    # below 'T' (0x54) lexicographically, a same-day T-separated cutoff would
+    # always compare "less than" a space-normalized column value regardless of
+    # actual time, silently matching zero rows.
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
-        base = "SELECT * FROM news_items WHERE published_at > ?"
+        # REPLACE normalizes published_at's two coexisting separator formats
+        # ("2026-07-03 15:50:00" vs "2026-07-03T15:50:00") before comparing --
+        # see prune_stale_news's docstring for why naive string comparison is
+        # wrong here (space < 'T' lexicographically regardless of actual time).
+        base = "SELECT * FROM news_items WHERE REPLACE(published_at, 'T', ' ') > ?"
         params: list = [cutoff]
         if category and category != "all":
             base += " AND category=?"
@@ -949,9 +1122,9 @@ def get_news(category: str = None, ticker: str = None, hours: int = 24,
 
 def count_news(category: str = None, ticker: str = None, hours: int = 24) -> int:
     from datetime import datetime, timedelta
-    cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+    cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
-        base = "SELECT COUNT(*) FROM news_items WHERE published_at > ?"
+        base = "SELECT COUNT(*) FROM news_items WHERE REPLACE(published_at, 'T', ' ') > ?"
         params: list = [cutoff]
         if category and category != "all":
             base += " AND category=?"
@@ -960,6 +1133,49 @@ def count_news(category: str = None, ticker: str = None, hours: int = 24) -> int
             base += " AND (tickers LIKE ? OR title LIKE ?)"
             params += [f"%{ticker}%", f"%{ticker}%"]
         return conn.execute(base, params).fetchone()[0]
+
+
+def get_news_diverse(category: str = None, hours: int = 24, limit: int = 6) -> list[dict]:
+    """A recency-ordered feed naturally lets whichever source posts most
+    often (Yahoo Finance is ~49% of all stored volume) crowd out everything
+    else in a small "top N" slice, which reads as a lack of real global
+    breadth regardless of how balanced the underlying source list actually
+    is. Round-robins one item per source (each source's own items still
+    ordered by recency) instead of a flat ORDER BY, so a small preview
+    genuinely reflects the diversity of what's being tracked rather than
+    whichever outlet happens to publish most frequently.
+
+    Pool must be large enough to actually contain every active source, not
+    just whichever source's items happen to cluster at the very top of the
+    recency ordering -- with ~20+ distinct sources typically active in a 24h
+    window, a small pool (e.g. limit*8) can easily be dominated by one or two
+    bursty sources before round-robin ever gets a chance to diversify anything
+    (verified empirically: a limit*8 pool of 48 items contained only 12 of the
+    ~23 active sources). Pulling a much larger pool costs one extra SQL query,
+    not extra requests, so there's no reason to under-size it."""
+    pool = get_news(category=category, hours=hours, limit=500)
+    by_source: dict = {}
+    for item in pool:
+        by_source.setdefault(item["source"], []).append(item)
+    # With ~20+ distinct sources typically active and limit usually much
+    # smaller (6 for a preview), a single round-robin pass never reaches most
+    # sources -- whichever ones happen to appear first in by_source's
+    # insertion order (i.e. whichever had the single most recent individual
+    # item) would otherwise win by pure chance, not real editorial weight.
+    # Ordering sources by their own volume in this pool first means an
+    # established, consistently-publishing outlet (Bloomberg, CNBC, Yahoo
+    # Finance) gets priority over a source that happens to have one very
+    # recent item, while round-robin still caps any single source at one
+    # slot per pass so nothing can dominate the result.
+    ordered_sources = sorted(by_source.keys(), key=lambda s: -len(by_source[s]))
+    result = []
+    while len(result) < limit and any(by_source.values()):
+        for source in ordered_sources:
+            if by_source[source]:
+                result.append(by_source[source].pop(0))
+                if len(result) >= limit:
+                    break
+    return result
 
 
 # ── ECONOMIC CALENDAR ─────────────────────────────────────────────────────────
@@ -1099,3 +1315,60 @@ def get_latest_short_interest(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+# ── INSIDER TRANSACTIONS (SEC Form 4) ─────────────────────────────────────────
+
+def insert_insider_transactions(transactions: list[dict]) -> int:
+    """Idempotent on (ticker, owner_name, transaction_date, transaction_code, shares) —
+    safe to call repeatedly with overlapping filing history. Returns rows actually inserted."""
+    if not transactions:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO insider_transactions
+                (ticker, owner_name, owner_title, transaction_date, transaction_code,
+                 is_signal_code, signal_type, shares, price_per_share, acquired_disposed)
+            VALUES (:ticker, :owner_name, :owner_title, :transaction_date, :transaction_code,
+                    :is_signal_code, :signal_type, :shares, :price_per_share, :acquired_disposed)
+        """, [{**t, "is_signal_code": int(t["is_signal_code"])} for t in transactions])
+        return conn.total_changes - before
+
+
+def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bool = True) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    query = "SELECT * FROM insider_transactions WHERE ticker=? AND transaction_date >= ?"
+    params = [ticker, since]
+    if signal_only:
+        query += " AND is_signal_code=1"
+    query += " ORDER BY transaction_date DESC"
+    with get_conn() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_layout_prefs(user_id: int, page: str) -> dict:
+    """Per-user, per-page widget layout: which widgets are hidden and what
+    order they render in. Stored inside users.preferences (same column/
+    pattern as saved API keys) -- no schema migration needed."""
+    user = get_user(user_id)
+    if not user:
+        return {"hidden": [], "order": {}}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        prefs = {}
+    layout = prefs.get("layout", {}).get(page, {})
+    return {"hidden": layout.get("hidden", []), "order": layout.get("order", {})}
+
+
+def save_layout_prefs(user_id: int, page: str, hidden: list, order: dict) -> None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT preferences FROM users WHERE id=?", (user_id,)).fetchone()
+        try:
+            prefs = json.loads(row["preferences"] or "{}") if row else {}
+        except Exception:
+            prefs = {}
+        prefs.setdefault("layout", {})[page] = {"hidden": hidden, "order": order}
+        conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), user_id))

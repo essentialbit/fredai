@@ -128,6 +128,16 @@ jobs:
       - name: Bump patch version and tag
         id: bump
         run: |
+          # The release job's own README-changelog commit must not cut a new
+          # version — otherwise every release spawns a docs merge that spawns
+          # another release, one orphaned readme-sync PR per cycle forever.
+          HEAD_MSG=$(git log -1 --pretty=%s)
+          case "$HEAD_MSG" in
+            "docs: sync README changelog"*)
+              echo "README-sync commit — skipping version bump (loop guard)."
+              echo "new_tag=" >> $GITHUB_OUTPUT
+              exit 0;;
+          esac
           git config user.name "FredAI"
           git config user.email "fredai-bot@users.noreply.github.com"
           LATEST=$(git tag --list 'v*' --sort=-version:refname \
@@ -254,7 +264,16 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPO: ${{ github.repository }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PRs opened with the default GITHUB_TOKEN never trigger workflows
+          # (GitHub's recursion guard), so the required Validate check never
+          # reports and auto-merge hangs forever -- confirmed live on the
+          # v1.3.54/55 sync PRs, which sat permanently in action_required.
+          # A fine-grained PAT (contents + pull-requests write, this repo
+          # only) makes the sync PR run CI like any human-authored PR.
+          # Falls back to GITHUB_TOKEN if the secret is missing or expired:
+          # the sync PR then opens but stays held, which is the pre-PAT
+          # behavior, not a new failure mode.
+          GH_TOKEN: ${{ secrets.FREDAI_BOT_PAT || secrets.GITHUB_TOKEN }}
 
   # ── Deploy: notify registered instances ────────────────────────
   deploy:

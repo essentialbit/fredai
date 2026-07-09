@@ -585,6 +585,12 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         syms = [p["symbol"].replace("-USD", "") for p in positions[:8]]
         raw = f"Holdings: {', '.join(syms)} | Total: ${portfolio.get('total_value', 0):,.0f}"
         port_block = f"\nPORTFOLIO: {_strip_portfolio(raw)}"
+        # Cache-only on purpose: chat must never block on N history fetches.
+        # Populated whenever the Portfolio tab (or /api/portfolio/risk) runs.
+        from portfolio_risk import get_cached_risk, format_risk_line
+        risk_line = format_risk_line(get_cached_risk(positions))
+        if risk_line:
+            port_block += f"\n{_strip_portfolio(risk_line)}"
 
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "

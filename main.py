@@ -833,6 +833,19 @@ def api_portfolio():
     return jsonify(portfolio)
 
 
+@app.route("/api/portfolio/risk")
+@login_required
+def api_portfolio_risk():
+    from portfolio_risk import compute_portfolio_risk
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    risk = compute_portfolio_risk(
+        portfolio.get("positions", []), portfolio.get("total_value")
+    )
+    return jsonify(risk)
+
+
 @app.route("/api/scan", methods=["POST"])
 @login_required
 def api_manual_scan():
@@ -849,10 +862,20 @@ def api_rnd_backlog():
 @app.route("/api/backtest/accuracy")
 @login_required
 def api_backtest_accuracy():
-    """Basic reporting for the signal outcome tracker (FSI L3): how often
-    Fred's aggregated per-asset signal direction matched the actual price
-    move, at each of the 4h/24h/72h checkpoints."""
+    """Reporting for the signal outcome tracker (FSI L3): how often Fred's
+    per-asset signal direction matched the actual price move, at each of
+    the 4h/24h/72h checkpoints -- per source, vs a naive momentum baseline."""
     return jsonify(get_accuracy_report())
+
+
+@app.route("/api/backtest/source-health")
+@login_required
+def api_backtest_source_health():
+    """Sources whose 30-day accuracy hasn't beaten the naive baseline at
+    a meaningful sample size (MISSION.md Principle #4). Flags only -- no
+    automatic removal, a human reviews this list."""
+    from backtesting_engine import get_underperforming_sources
+    return jsonify(get_underperforming_sources())
 
 
 @app.route("/api/rnd/propose", methods=["POST"])

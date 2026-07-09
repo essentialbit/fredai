@@ -24,30 +24,22 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.18
-- feat: landing page visual uplift and notification center (Issue #51)
-- Modernized dashboard design with upgraded Outfit/JetBrains Mono typography.
-- Integrated real-time central Notification Center for critical market alerts and agent messages.
-- Re-styled layout elements for responsive high-signal-density views.
+### FredAI v1.3.59
+- feat: backtest v2 -- per-source attribution + naive baseline (closes #108) (#118)
+- docs: sync README changelog to v1.3.58 (#117)
 
-### FredAI v1.3.17
-- feat: implement Gmail export option for Google Workspace Integration (Issue #49)
-- Allows exporting financial briefing digests directly to Gmail for easy updates on standard consumer hardware.
+### FredAI v1.3.58
+- feat: portfolio risk metrics -- VaR, Sharpe/Sortino, max drawdown, beta (closes #107) (#115)
+- docs: sync README changelog to v1.3.57 (#116)
 
-### FredAI v1.3.16
-- feat: complete Phase 2 Globe Uplift with monitored node overlays, hotspot rings, and interactive details (Issue #48) (#55)
-- Elevates the 3D WebGL globe with monitored node overlays representing active server nodes.
-- Adds glowing hotspot rings around high-signal-density areas.
-- Enhances interactive details with popup info cards for geocoded stories.
+### FredAI v1.3.57
+- fix: release README-sync PRs now open with a PAT so CI actually runs (#114)
 
-### FredAI v1.3.15
-- feat: real per-story sentiment-colored globe arcs (Phase 2 of #48) (#54)
-- Draw interactive paths on the 3D globe connecting the corporate HQ to the exchange where the asset is traded.
-- Colored globe arcs by real-time FinBERT/VADER sentiment score (green for bullish, red for bearish, gray for neutral).
+### FredAI v1.3.56
+- fix: README-sync merges must not cut a new version (release loop guard) (#111)
 
-### FredAI v1.3.14
-- docs: update README.md changelog for v1.3.11 (#53)
-- Sync README changelog block.
+### FredAI v1.3.55
+- docs: sync README changelog to v1.3.54 (#110)
 
 <!-- CHANGELOG_END -->
 

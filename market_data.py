@@ -251,6 +251,10 @@ def _chart(symbol: str, interval: str = "1d", period: str = "5d") -> dict | None
         return None
     interval = _INTERVAL_MAP.get(interval, interval)
     period = _RANGE_MAP.get(period, period)
+    # query1 and query2 rate-limit independently (verified: one can 429 while
+    # the other serves 200), so a 429 from the first host must not trip the
+    # global block before the second host has been tried.
+    saw_429 = 0
     for base in (_BASE, _BASE2):
         try:
             r = requests.get(
@@ -258,14 +262,20 @@ def _chart(symbol: str, interval: str = "1d", period: str = "5d") -> dict | None
                 headers=_HEADERS, timeout=12,
             )
             if r.status_code == 429:
-                _yf_set_blocked()
-                return None
+                saw_429 += 1
+                continue
             r.raise_for_status()
             result = r.json().get("chart", {}).get("result")
             if result:
                 return result[0]
         except Exception:
             continue
+    # Long ranges (1y+) have their own stricter budget that exhausts long
+    # before the short-range one (observed live: 1y dual-429 while 5d serves
+    # 200) — a long-range dual-429 must not trip the global block that the
+    # high-frequency short-range dashboard path depends on.
+    if saw_429 == 2 and period in ("1d", "5d", "1mo"):
+        _yf_set_blocked()
     return None
 
 

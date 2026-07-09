@@ -242,6 +242,20 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS central_bank_statements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bank TEXT NOT NULL,
+            meeting_date TEXT NOT NULL,
+            prior_meeting_date TEXT,
+            raw_text TEXT,
+            added_paragraphs TEXT,
+            removed_paragraphs TEXT,
+            changed_paragraphs TEXT,
+            sentiment_delta REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(bank, meeting_date)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -257,6 +271,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_central_bank_meeting ON central_bank_statements(bank, meeting_date);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1411,6 +1426,65 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── CENTRAL BANK STATEMENT DELTAS ────────────────────────────────────────────
+
+def save_central_bank_statement(bank: str, meeting_date: str, prior_meeting_date: str | None,
+                                 raw_text: str, delta: dict) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO central_bank_statements
+                (bank, meeting_date, prior_meeting_date, raw_text, added_paragraphs,
+                 removed_paragraphs, changed_paragraphs, sentiment_delta, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(bank, meeting_date) DO UPDATE SET
+                prior_meeting_date=excluded.prior_meeting_date,
+                raw_text=excluded.raw_text,
+                added_paragraphs=excluded.added_paragraphs,
+                removed_paragraphs=excluded.removed_paragraphs,
+                changed_paragraphs=excluded.changed_paragraphs,
+                sentiment_delta=excluded.sentiment_delta,
+                fetched_at=CURRENT_TIMESTAMP
+        """, (
+            bank, meeting_date, prior_meeting_date, raw_text,
+            json.dumps(delta.get("added", [])),
+            json.dumps(delta.get("removed", [])),
+            json.dumps(delta.get("changed", [])),
+            delta.get("sentiment_delta"),
+        ))
+
+
+def _hydrate_central_bank_row(row) -> dict:
+    d = dict(row)
+    d["added_paragraphs"] = json.loads(d["added_paragraphs"] or "[]")
+    d["removed_paragraphs"] = json.loads(d["removed_paragraphs"] or "[]")
+    d["changed_paragraphs"] = json.loads(d["changed_paragraphs"] or "[]")
+    return d
+
+
+def get_central_bank_statement(bank: str, meeting_date: str | None) -> dict | None:
+    if not meeting_date:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? AND meeting_date=?",
+            (bank, meeting_date),
+        ).fetchone()
+    return _hydrate_central_bank_row(row) if row else None
+
+
+def get_latest_central_bank_delta(bank: str = "Fed") -> dict:
+    """Cache-only -- the weekly-ish scheduled job keeps this warm, this
+    never triggers a live fetch."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? ORDER BY meeting_date DESC LIMIT 1",
+            (bank,),
+        ).fetchone()
+    if not row:
+        return {"bank": bank, "status": "no_data"}
+    return _hydrate_central_bank_row(row)
 
 
 def get_layout_prefs(user_id: int, page: str) -> dict:

@@ -819,6 +819,50 @@ def insert_alert(level, title, message, asset=None):
         )
 
 
+def _integrity_check_result(table: str, raw_count: int, read_count: int) -> dict:
+    if raw_count > 0 and read_count == 0:
+        return {
+            "check": table,
+            "status": "alert",
+            "detail": (
+                f"{raw_count} row(s) written to {table} in the last hour, but the "
+                f"app's own read path returned 0 for the same window -- a query "
+                f"filter is likely broken, not that the source stopped producing data."
+            ),
+        }
+    return {
+        "check": table,
+        "status": "ok",
+        "detail": f"{table}: {raw_count} written, {read_count} readable in the last hour.",
+    }
+
+
+def run_data_integrity_checks() -> list[dict]:
+    """Catch the write-succeeds-but-paired-read-returns-nothing failure mode
+    that hit signals/news_items twice already (see get_news's and get_signals'
+    own docstrings/history -- a CURRENT_TIMESTAMP-defaulted column compared
+    against a mismatched separator format silently matches zero rows, no
+    exception, no log line). Compares a raw COUNT(*) against each table's own
+    native timestamp column (ground truth) to its normal read function's row
+    count for the same 1h window. Deliberately narrow -- two tables already
+    bitten by this exact bug class, not a general observability framework."""
+    with get_conn() as conn:
+        raw_signals = conn.execute(
+            "SELECT COUNT(*) FROM signals WHERE timestamp > datetime('now', '-1 hour')"
+        ).fetchone()[0]
+        raw_news = conn.execute(
+            "SELECT COUNT(*) FROM news_items WHERE REPLACE(published_at, 'T', ' ') > datetime('now', '-1 hour')"
+        ).fetchone()[0]
+
+    read_signals = len(get_signals(hours=1, limit=100000))
+    read_news = len(get_news(hours=1, limit=100000))
+
+    return [
+        _integrity_check_result("signals", raw_signals, read_signals),
+        _integrity_check_result("news_items", raw_news, read_news),
+    ]
+
+
 # ── FEATURE BACKLOG ───────────────────────────────────────────────────────────
 
 _DEDUP_STOPWORDS = {

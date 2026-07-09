@@ -42,6 +42,7 @@ from memory_store import (
     get_latest_short_interest,
     get_recent_insider_transactions,
     get_layout_prefs, save_layout_prefs,
+    insert_alert, run_data_integrity_checks,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -2338,6 +2339,21 @@ if __name__ == "__main__":
         total = sum(result["deleted"].values())
         if total:
             print(f"[Prune] Removed {total} records older than {DATA_RETENTION_DAYS}d: {result['deleted']}")
+
+        try:
+            for check in run_data_integrity_checks():
+                if check["status"] != "alert":
+                    continue
+                print(f"[Integrity] {check['check']}: {check['detail']}")
+                insert_alert("warning", f"Data Integrity: {check['check']}", check["detail"])
+                socketio.emit("alert", {
+                    "level": "warning",
+                    "title": f"Data Integrity: {check['check']}",
+                    "message": check["detail"],
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+        except Exception as e:
+            print(f"[Integrity] Check error: {e}")
 
     def job_news_refresh():
         """Refresh news from all sources every 30 minutes (global + ASX)."""

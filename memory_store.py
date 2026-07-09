@@ -242,6 +242,25 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS hypotheses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            thesis TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            horizon_days INTEGER NOT NULL,
+            price_at_creation REAL,
+            benchmark_at_creation REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resolves_at DATETIME NOT NULL,
+            resolved_at DATETIME,
+            price_at_resolution REAL,
+            benchmark_at_resolution REAL,
+            actual_return REAL,
+            benchmark_return REAL,
+            outcome TEXT
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -257,6 +276,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_hypotheses_ticker ON hypotheses(ticker);
+        CREATE INDEX IF NOT EXISTS idx_hypotheses_resolves_at ON hypotheses(resolves_at);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1411,6 +1432,106 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── HYPOTHESIS TESTING LOOP (FSI L4) ────────────────────────────────────────
+def insert_hypothesis(ticker: str, thesis: str, direction: str, confidence: float,
+                       horizon_days: int, price_at_creation: float | None,
+                       benchmark_at_creation: float | None) -> int:
+    resolves_at = datetime.utcnow() + timedelta(days=horizon_days)
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO hypotheses
+               (ticker, thesis, direction, confidence, horizon_days,
+                price_at_creation, benchmark_at_creation, resolves_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (ticker, thesis, direction, confidence, horizon_days,
+             price_at_creation, benchmark_at_creation, resolves_at.isoformat()),
+        )
+        return cur.lastrowid
+
+
+def count_hypotheses_since(since: datetime) -> int:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM hypotheses WHERE created_at>=?", (since.isoformat(),)
+        ).fetchone()
+    return row[0]
+
+
+def get_open_hypothesis_tickers() -> set[str]:
+    """Tickers with an unresolved hypothesis -- used to avoid stacking a new
+    thesis on top of one that hasn't played out yet."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT DISTINCT ticker FROM hypotheses WHERE resolved_at IS NULL").fetchall()
+    return {r[0] for r in rows}
+
+
+def get_due_hypotheses() -> list[dict]:
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM hypotheses WHERE resolved_at IS NULL AND resolves_at<=?",
+            (now,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def resolve_hypothesis(hypothesis_id: int, price_at_resolution: float,
+                        benchmark_at_resolution: float | None, outcome: str,
+                        actual_return: float | None, benchmark_return: float | None):
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE hypotheses SET resolved_at=?, price_at_resolution=?,
+               benchmark_at_resolution=?, outcome=?, actual_return=?, benchmark_return=?
+               WHERE id=?""",
+            (datetime.utcnow().isoformat(), price_at_resolution, benchmark_at_resolution,
+             outcome, actual_return, benchmark_return, hypothesis_id),
+        )
+
+
+def get_hypotheses(status: str = "all", limit: int = 100) -> list[dict]:
+    query = "SELECT * FROM hypotheses"
+    if status == "open":
+        query += " WHERE resolved_at IS NULL"
+    elif status == "resolved":
+        query += " WHERE resolved_at IS NOT NULL"
+    query += " ORDER BY created_at DESC LIMIT ?"
+    with get_conn() as conn:
+        rows = conn.execute(query, (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_hypothesis_calibration() -> dict:
+    """Rolling accuracy by confidence bucket: is Fred's stated 0.8 confidence
+    actually right ~80% of the time? Distinct from backtest's raw per-signal
+    accuracy -- this grades Fred's own calibration, not a signal source."""
+    buckets = [(0.0, 0.5), (0.5, 0.65), (0.65, 0.8), (0.8, 0.95), (0.95, 1.01)]
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT confidence, outcome FROM hypotheses WHERE resolved_at IS NOT NULL"
+        ).fetchall()
+    rows = [dict(r) for r in rows]
+    result = []
+    for lo, hi in buckets:
+        in_bucket = [r for r in rows if lo <= r["confidence"] < hi]
+        if not in_bucket:
+            continue
+        correct = sum(1 for r in in_bucket if r["outcome"] == "correct")
+        result.append({
+            "confidence_range": f"{lo:.2f}-{hi:.2f}",
+            "total": len(in_bucket),
+            "correct": correct,
+            "actual_accuracy_pct": round(correct / len(in_bucket) * 100, 1),
+        })
+    return {
+        "total_resolved": len(rows),
+        "overall_accuracy_pct": (
+            round(sum(1 for r in rows if r["outcome"] == "correct") / len(rows) * 100, 1)
+            if rows else None
+        ),
+        "buckets": result,
+    }
 
 
 def get_layout_prefs(user_id: int, page: str) -> dict:

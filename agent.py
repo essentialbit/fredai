@@ -512,9 +512,12 @@ current.
 - If the MARKET SNAPSHOT for an asset the user asks about is empty or missing that asset, say so
   explicitly: "I don't have current price data for X right now" — do NOT invent a plausible-sounding
   price, historical high, or trend to fill the gap.
-- NEVER invent analyst ratings, firm names, or specific corporate actions (e.g. "Goldman Sachs
-  downgraded to Sell") — this codebase has no analyst-rating data source at all. If asked about analyst
-  sentiment, say you don't have that data source, don't fabricate one.
+- NEVER invent analyst ratings, firm names, price targets, or specific corporate actions (e.g. "Goldman
+  Sachs downgraded to Sell"). Real ones for symbols in the ANALYST RATINGS section of the LIVE CONTEXT
+  are safe to cite verbatim. For any other ticker, or when that section is empty for the symbol asked
+  about, say plainly you don't have analyst-rating data for it right now — thinly-traded and most
+  non-US-listed symbols genuinely have no coverage there. Never fill the gap with a plausible-sounding
+  firm name or number.
 - Inventing financial data is a worse failure than admitting uncertainty. A confident wrong answer is
   never acceptable here, even when the "Character" guidance below asks for directness.
 
@@ -584,6 +587,8 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         "for any asset; say plainly that current data isn't available yet.)\n" if not quotes else ""
     )
 
+    analyst_block = _build_analyst_block(list(quotes.keys())[:12])
+
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
 {_build_privacy_notice()}
 {interest_block}{port_block}
@@ -600,6 +605,9 @@ TRENDING ASSETS (by signal volume):
 TOP RECENT SIGNALS:
 {_format_signals(signals[:8])}
 
+ANALYST RATINGS (recent changes + consensus target, cache-only — empty means no coverage):
+{analyst_block}
+
 ACTIVE ALERTS:
 {_format_alerts(alerts[:4])}
 
@@ -607,6 +615,30 @@ LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
 """
     return ctx
+
+
+def _build_analyst_block(tickers: list[str]) -> str:
+    """Cache-only (DB reads, no live yfinance call) so chat never blocks on
+    a network fetch -- data is populated by main.py's daily analyst_ratings
+    job. Only covers symbols with real, non-fabricated coverage; silent for
+    the rest."""
+    from memory_store import get_latest_analyst_consensus, get_recent_analyst_ratings
+    lines = []
+    for sym in tickers:
+        clean = sym.replace("-USD", "")
+        consensus = get_latest_analyst_consensus(clean)
+        changes = get_recent_analyst_ratings(clean, days=30, limit=2)
+        if not consensus and not changes:
+            continue
+        parts = [f"  [{clean}]"]
+        if consensus and consensus.get("target_mean"):
+            parts.append(f"consensus target ${consensus['target_mean']:.2f} "
+                         f"(range ${consensus.get('target_low') or 0:.2f}-${consensus.get('target_high') or 0:.2f})")
+        for c in changes:
+            action = f"{c['from_grade']}→{c['to_grade']}" if c.get("from_grade") else c.get("to_grade", c.get("action", ""))
+            parts.append(f"{c['firm']} {action} on {c['graded_at']}")
+        lines.append(" | ".join(parts))
+    return "\n".join(lines) if lines else "  No analyst coverage cached for current symbols."
 
 
 def _format_signals(signals: list) -> str:

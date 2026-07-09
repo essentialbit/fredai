@@ -42,6 +42,8 @@ from memory_store import (
     get_latest_short_interest,
     get_recent_insider_transactions,
     get_layout_prefs, save_layout_prefs,
+    insert_analyst_ratings, get_recent_analyst_ratings,
+    insert_analyst_consensus, get_latest_analyst_consensus,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -53,6 +55,7 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from finviz_client import refresh_short_interest
 from sec_client import fetch_form4_filings
+from analyst_data import fetch_analyst_snapshot
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -798,6 +801,9 @@ def api_watchlist():
         spread = _crypto_spread_cache.get(w["symbol"])
         if spread:
             entry["cross_exchange_spread"] = spread
+        consensus = get_latest_analyst_consensus(w["symbol"])
+        if consensus and consensus.get("target_mean"):
+            entry["analyst_target_mean"] = consensus["target_mean"]
         result.append(entry)
     return jsonify(result)
 
@@ -1761,9 +1767,25 @@ def api_save_layout():
 @login_required
 def api_insider_transactions(ticker):
     """Recent SEC Form 4 open-market insider buy/sell transactions (FSI L2)."""
-    days = request.args.get("days", "90", type=int)
+    days = request.args.get("days", 90, type=int)
     txns = get_recent_insider_transactions(ticker.upper(), days=days, signal_only=True)
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
+
+
+@app.route("/api/ratings/<ticker>")
+@login_required
+def api_analyst_ratings(ticker):
+    """Recent Wall Street analyst upgrades/downgrades + consensus price target
+    (FSI L2). Cache-only -- matches /api/insider's pattern, refreshed by the
+    daily analyst_ratings job."""
+    sym = ticker.upper()
+    days = request.args.get("days", 90, type=int)
+    return jsonify({
+        "ticker": sym,
+        "days": days,
+        "consensus": get_latest_analyst_consensus(sym),
+        "recent_changes": get_recent_analyst_ratings(sym, days=days),
+    })
 
 
 @app.route("/api/assessment/<symbol>")
@@ -2410,6 +2432,31 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_analyst_ratings_refresh():
+        """Refresh Wall Street analyst upgrade/downgrade history + consensus
+        price target daily for portfolio + watchlist symbols (FSI L2). US-listed
+        only -- yfinance has essentially no analyst coverage for ASX/crypto."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            new_ratings, covered = 0, 0
+            for sym in symbols:
+                snap = fetch_analyst_snapshot(sym)
+                if not snap:
+                    continue
+                covered += 1
+                new_ratings += insert_analyst_ratings(sym, snap["ratings"])
+                if snap["consensus"]:
+                    insert_analyst_consensus(sym, snap["consensus"])
+            print(f"[AnalystData] Ratings refreshed — {covered}/{len(symbols)} symbols covered, {new_ratings} new rating(s)")
+        except Exception as e:
+            print(f"[AnalystData] Ratings refresh error: {e}")
+
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
         try:
@@ -2508,6 +2555,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=8, minute=0, id="analyst_ratings")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)

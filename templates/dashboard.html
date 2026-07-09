@@ -1800,6 +1800,23 @@ html[data-tier="micro"] #ov-globe-stage {
           </div>
         </div>
 
+        <!-- WIDGET: Sector Rotation -->
+        <div class="customizable-widget" data-widget-id="sr-widget" style="border-top:1px solid var(--border)">
+          <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+            <span class="customizable-widget-toggle">▾</span>
+            <span class="customizable-widget-title">⟳ Sector Rotation</span>
+            <span style="font-size:9px;color:var(--t3);margin-left:8px">SPDR sector ETFs ranked by relative strength vs SPY</span>
+            <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
+              <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
+              <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
+            </span>
+          </div>
+          <div class="customizable-widget-body" id="sr-body">
+            <div id="sr-list" style="padding:10px 16px;font-size:10px;color:var(--t3)">Loading...</div>
+          </div>
+        </div>
+
         <!-- WIDGET: Video Intelligence -->
         <div class="customizable-widget" data-widget-id="vi-widget" style="border-top:1px solid var(--border)">
           <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
@@ -2783,9 +2800,10 @@ function switchTab(tab, btn) {
     g('tab-globe-panel').style.display='';
     if (!_dashGlobeInst) initDashGlobe();
     if (!_cwLayout['globe']) {
-      initCustomizableWidgets('globe', ['rn-widget', 'vi-widget', 'tv-widget']).then(() => {
+      initCustomizableWidgets('globe', ['rn-widget', 'sr-widget', 'vi-widget', 'tv-widget']).then(() => {
         const hidden = _cwLayout['globe'].hidden;
         if (!hidden.includes('rn-widget') && !_srWidgetLoaded['rn-body']) { _srWidgetLoaded['rn-body'] = true; renderRelationshipNetwork(); }
+        if (!hidden.includes('sr-widget') && !_srWidgetLoaded['sr-body']) { _srWidgetLoaded['sr-body'] = true; loadSectorRotation(); }
         if (!hidden.includes('vi-widget') && !_srWidgetLoaded['vi-body']) { _srWidgetLoaded['vi-body'] = true; loadVideoIntelligence(); }
         if (!hidden.includes('tv-widget') && !_srWidgetLoaded['tv-body']) { _srWidgetLoaded['tv-body'] = true; initLiveTV(); }
       });
@@ -3048,6 +3066,7 @@ function toggleCwWidget(headerEl) {
   if (_srWidgetLoaded[bodyId]) return;
   _srWidgetLoaded[bodyId] = true;
   if (bodyId === 'rn-body') renderRelationshipNetwork();
+  if (bodyId === 'sr-body') loadSectorRotation();
   if (bodyId === 'vi-body') loadVideoIntelligence();
   if (bodyId === 'tv-body') initLiveTV();
 }
@@ -3136,6 +3155,32 @@ function cwRestoreWidget(page, id) {
   const widgetIds = Array.from(document.querySelectorAll(`[data-cw-page="${page}"] .customizable-widget`)).map(w => w.dataset.widgetId);
   _cwUpdateAddBar(page, widgetIds);
   _cwSaveLayout(page);
+}
+
+async function loadSectorRotation() {
+  const el = g('sr-list');
+  if (!el) return;
+  try {
+    const r = await fetch('/api/sector-rotation');
+    const d = await r.json();
+    const sectors = d.sectors || [];
+    if (!sectors.length) {
+      el.innerHTML = '<div style="color:var(--t3)">Sector rotation data unavailable</div>';
+      return;
+    }
+    el.innerHTML = sectors.map(s => {
+      const rsCls = s.relative_strength_20d >= 0 ? 'pos' : 'neg';
+      const sign = s.relative_strength_20d >= 0 ? '+' : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 16px;border-bottom:1px solid var(--border)">
+        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;width:44px;flex-shrink:0">${esc(s.symbol)}</span>
+        <span style="flex:1;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</span>
+        <span style="width:60px;text-align:right;color:var(--t3)">${s.return_20d >= 0 ? '+' : ''}${s.return_20d}%</span>
+        <span class="${rsCls}" style="width:70px;text-align:right;font-weight:700">${sign}${s.relative_strength_20d}% <span style="font-size:8px;color:var(--t3);font-weight:400">vs SPY</span></span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--t3)">Sector rotation data unavailable</div>';
+  }
 }
 
 let _rnData = null;

@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.61
+- feat: Landing Zone -- interactive globe, enriched ticker network, price alerts, live refresh (#180)
+- docs: sync README changelog to v1.3.60 (#177)
+
 ### FredAI v1.3.60
 - feat: Test Landing Zone -- adjustable best-of widget grid (#129)
 - docs: sync README changelog to v1.3.59 (#119)
@@ -38,9 +42,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.57
 - fix: release README-sync PRs now open with a PAT so CI actually runs (#114)
-
-### FredAI v1.3.56
-- fix: README-sync merges must not cut a new version (release loop guard) (#111)
 
 <!-- CHANGELOG_END -->
 

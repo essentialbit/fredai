@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.60
+- feat: Test Landing Zone -- adjustable best-of widget grid (#129)
+- docs: sync README changelog to v1.3.59 (#119)
+
 ### FredAI v1.3.59
 - feat: backtest v2 -- per-source attribution + naive baseline (closes #108) (#118)
 - docs: sync README changelog to v1.3.58 (#117)
@@ -37,9 +41,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.56
 - fix: README-sync merges must not cut a new version (release loop guard) (#111)
-
-### FredAI v1.3.55
-- docs: sync README changelog to v1.3.54 (#110)
 
 <!-- CHANGELOG_END -->
 

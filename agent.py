@@ -584,12 +584,16 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         "for any asset; say plainly that current data isn't available yet.)\n" if not quotes else ""
     )
 
+    onchain_block = ""
+    if "BTC-USD" in quotes:
+        onchain_block = f"\n\nBTC NETWORK HEALTH (on-chain, cache-only):\n{_format_onchain()}"
+
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
 {_build_privacy_notice()}
 {interest_block}{port_block}
 
 MARKET SNAPSHOT:{market_snapshot_warning}
-{json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}
+{json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}{onchain_block}
 
 SIGNAL SUMMARY (last 4h):
 - Total: {len(signals)} | Bullish: {len(bullish)} ({len(bullish)/max(len(signals),1)*100:.0f}%) | Bearish: {len(bearish)} ({len(bearish)/max(len(signals),1)*100:.0f}%)
@@ -607,6 +611,23 @@ LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
 """
     return ctx
+
+
+def _format_onchain() -> str:
+    """Cache-only (DB read, no live blockchain.info call) so chat never blocks
+    on a network fetch -- data is populated by main.py's daily onchain_metrics
+    job. Empty means the job hasn't run yet, not that BTC has no activity."""
+    from memory_store import get_latest_onchain_metrics
+    metrics = get_latest_onchain_metrics()
+    if not metrics:
+        return "  No on-chain data cached yet."
+    lines = []
+    for name, m in metrics.items():
+        if m.get("z_score") is not None:
+            lines.append(f"  {name}: {m['latest_value']:.0f} ({m['direction']}, z={m['z_score']:.2f})")
+        else:
+            lines.append(f"  {name}: {m['latest_value']:.0f}")
+    return "\n".join(lines)
 
 
 def _format_signals(signals: list) -> str:

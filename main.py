@@ -31,6 +31,7 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from supply_chain_client import get_supply_chain_stress
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1713,6 +1714,14 @@ def api_correlation():
     })
 
 
+@app.route("/api/supply-chain")
+@login_required
+def api_supply_chain():
+    """BDRY-vs-SPY relative-strength supply-chain-stress regime (FSI L5) --
+    cached 15min, see supply_chain_client.py."""
+    return jsonify(get_supply_chain_stress() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2160,6 +2169,16 @@ def job_market_refresh():
                     insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
+
+        # Supply-chain stress -- BDRY vs SPY relative strength (cached 15min in supply_chain_client.py)
+        try:
+            sc = get_supply_chain_stress()
+            if sc:
+                _macro_cache = {**_macro_cache, "SUPPLY_CHAIN": {
+                    "label": "Supply Chain", "value": sc["spread_20d"], "rating": sc["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] supply_chain error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

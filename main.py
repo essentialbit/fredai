@@ -2088,14 +2088,15 @@ def _get_market_status() -> dict:
     return {"status": "CLOSED", "label": "Market Closed", "color": "#4a6380"}
 
 
-@app.route("/api/fear-greed")
+@app.route("/api/alerts")
 @login_required
-def api_fear_greed():
-    """CNN Fear & Greed Index -- cached 1h at the client, no key required."""
-    fg = fetch_fear_greed()
-    if not fg:
-        return jsonify({"status": "unavailable"})
-    return jsonify({"status": "ok", **fg})
+def api_alerts():
+    """Fred's own alert stream -- sentiment shifts, volume spikes, insider
+    clusters, and fired technical (price/RSI/MA/volume) alerts, all funneled
+    through the same `alerts` table via insert_alert(). This is the real
+    price-action/volatility signal, not a separate detector."""
+    limit = min(max(request.args.get("limit", 10, type=int), 1), 50)
+    return jsonify({"alerts": get_recent_alerts(limit=limit)})
 
 
 @app.route("/api/asx/quotes")

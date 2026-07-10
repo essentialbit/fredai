@@ -1237,6 +1237,10 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .lz-newsline{font-size:9.5px;color:var(--t2);padding:3px 0;border-bottom:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lz-newsline:last-child{border-bottom:none}
 .lz-brief{font-size:10px;color:var(--t2);line-height:1.5}
+#lz-live-mini iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.lz-widget[data-widget-id="lz-globe"] .customizable-widget-body,
+.lz-widget[data-widget-id="lz-relationship"] .customizable-widget-body,
+.lz-widget[data-widget-id="lz-video"] .customizable-widget-body{flex:1;min-height:0}
 
 /* Signal density items */
 .sd-item{
@@ -1858,6 +1862,7 @@ html[data-tier="micro"] #ov-globe-stage {
             <span class="customizable-widget-title">◉ Live TV</span>
             <span style="font-size:9px;color:var(--t3);margin-left:8px">Financial news networks, live</span>
             <span class="cw-actions" onclick="event.stopPropagation()">
+              <button onclick="popOutLiveTv()" title="Pop out -- keeps playing while you navigate Fred AI">⇱</button>
               <button onclick="cwMoveWidget('globe',this)" title="Move up">↑</button>
               <button onclick="cwMoveWidget('globe',this,1)" title="Move down">↓</button>
               <button class="cw-hide" onclick="cwHideWidget('globe',this)" title="Hide widget">×</button>
@@ -2033,6 +2038,65 @@ html[data-tier="micro"] #ov-globe-stage {
               </span>
             </div>
             <div class="customizable-widget-body" id="lz-ops-body"><div class="lz-empty">Loading…</div></div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-globe" data-size="m">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">◎ Situation Room</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-globe-body" style="padding:0;display:flex;flex-direction:column">
+              <canvas id="lz-globe-canvas" style="width:100%;flex:1;display:block;min-height:0"></canvas>
+              <div style="padding:4px 10px;border-top:1px solid var(--border);flex-shrink:0">
+                <a href="javascript:void(0)" onclick="switchTab('globe',document.querySelector('.nav-tab[onclick*=\'globe\']'))" style="font-size:9px;color:var(--blue);text-decoration:none">Open Situation Room →</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-relationship" data-size="l">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">◈ Ticker Network</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-relationship-body" style="padding:0">
+              <div id="lz-rn-canvas" style="width:100%;height:100%;position:relative"></div>
+            </div>
+          </div>
+
+          <div class="customizable-widget lz-widget" data-widget-id="lz-video" data-size="l">
+            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
+              <span class="customizable-widget-toggle">▾</span>
+              <span class="customizable-widget-title">▶ Video Intelligence</span>
+              <span class="cw-actions" onclick="event.stopPropagation()">
+                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
+                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
+                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
+                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
+              </span>
+            </div>
+            <div class="customizable-widget-body" id="lz-video-body" style="display:flex;flex-direction:column;gap:6px">
+              <div id="lz-video-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;flex:1;overflow-y:auto"><div class="lz-empty">Loading…</div></div>
+              <div style="flex-shrink:0;border-top:1px solid var(--border);padding-top:6px">
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+                  <span style="font-size:8px;font-weight:700;color:var(--red);letter-spacing:1px">● LIVE</span>
+                  <span style="font-size:8px;color:var(--t3)">Bloomberg</span>
+                  <button onclick="popOutLzLiveMini()" title="Pop out -- keeps playing while you navigate Fred AI" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);font-size:8px;width:15px;height:15px;cursor:pointer">⇱</button>
+                </div>
+                <div id="lz-live-mini" style="width:100%;aspect-ratio:16/9;background:#000;position:relative;border-radius:4px;overflow:hidden"></div>
+              </div>
+            </div>
           </div>
 
         </div>
@@ -2222,6 +2286,7 @@ html[data-tier="micro"] #ov-globe-stage {
   <div class="video-modal-box">
     <div class="video-modal-hdr">
       <h3 class="video-modal-title" id="video-modal-title">VIDEO</h3>
+      <button class="install-close" onclick="popOutVideoModal()" style="margin:0 6px 0 0;padding:2px 8px;font-size:10px" title="Pop out -- keeps playing while you navigate Fred AI">⇱ Pop Out</button>
       <button class="install-close" onclick="closeVideoModal()" style="margin:0;padding:2px 8px;font-size:10px">Close</button>
     </div>
     <div class="video-modal-frame" id="video-modal-frame"></div>
@@ -2945,7 +3010,7 @@ const AI=['tab-ai'];
 const GB=['tab-globe-panel'];
 const LZ=['tab-landingzone'];
 const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI,...GB,...LZ];
-const LZ_WIDGET_IDS=['lz-portfolio','lz-risk','lz-feargreed','lz-accuracy','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops'];
+const LZ_WIDGET_IDS=['lz-portfolio','lz-risk','lz-feargreed','lz-accuracy','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops','lz-globe','lz-relationship','lz-video'];
 
 let _dashGlobeInst = null, _dashGlobeData = [], _dashGlobeFilter = 'all';
 
@@ -3301,6 +3366,7 @@ function cwCycleSize(page, btnEl) {
   prefs.sizes = prefs.sizes || {};
   prefs.sizes[widget.dataset.widgetId] = next;
   _cwSaveLayout(page);
+  requestAnimationFrame(() => widget.dispatchEvent(new Event('lz-resize', {bubbles: true})));
 }
 
 // ── LANDING ZONE (test) — lightweight best-of readouts, one fetch per widget ──
@@ -3308,7 +3374,82 @@ function loadLandingZone() {
   loadLzPortfolio(); loadLzRisk(); loadLzFearGreed(); loadLzAccuracy();
   loadLzTrending(); loadLzWatchlist(); loadLzAiUniverse(); loadLzNews();
   loadLzGlobalMap(); loadLzBriefing(); loadLzOps();
+  loadLzGlobePreview(); loadLzRelationshipNetwork(); loadLzVideoGrid(); initLzLiveMini();
 }
+
+// Situation Room preview: a flat 2D dot map, not a second live globe.gl/WebGL
+// instance -- this app targets Raspberry Pi deployments too, and two
+// concurrently-animating 3D globes (one per tab, both keep rendering even
+// when hidden via display:none) is real GPU cost for a small teaser tile.
+// Real 3D exploration stays one click away via the "Open Situation Room" link.
+async function loadLzGlobePreview() {
+  const canvas = g('lz-globe-canvas');
+  if (!canvas) return;
+  try {
+    const r = await fetch('/api/news/globe-data?hours=24');
+    const data = await r.json();
+    canvas._lzPoints = data.points || [];
+    _drawLzGlobePreview(canvas);
+  } catch(e) { /* leave canvas blank -- non-critical decorative widget */ }
+}
+
+function _drawLzGlobePreview(canvas) {
+  const points = canvas._lzPoints || [];
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 200, h = canvas.clientHeight || 100;
+  if (!w || !h) return;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = '#03080f';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(0,180,255,.08)';
+  ctx.lineWidth = 1;
+  for (let i = 1; i < 6; i++) { const y = (h/6)*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  for (let i = 1; i < 12; i++) { const x = (w/12)*i; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
+  points.forEach(p => {
+    const x = (p.lng + 180) / 360 * w;
+    const y = (90 - p.lat) / 180 * h;
+    const r = Math.min(2 + (p.count||1) * 0.4, 9);
+    const color = _gcol(p.category);
+    ctx.beginPath();
+    ctx.fillStyle = color + 'cc';
+    ctx.shadowColor = color; ctx.shadowBlur = 8;
+    ctx.arc(x, y, r, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.shadowBlur = 0;
+}
+
+function loadLzRelationshipNetwork() {
+  renderRelationshipNetwork('lz-rn-canvas', null, 260);
+}
+
+function initLzLiveMini() {
+  const el = g('lz-live-mini');
+  if (!el || el.dataset.init) return;
+  el.dataset.init = '1';
+  const c = LIVE_TV_CHANNELS[0];
+  const src = `https://www.youtube.com/embed/live_stream?channel=${c.id}&autoplay=1&mute=1`;
+  el.innerHTML = `<iframe src="${src}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+}
+
+function popOutLzLiveMini() {
+  const c = LIVE_TV_CHANNELS[0];
+  popOutVideo(`https://www.youtube.com/embed/live_stream?channel=${c.id}&mute=0`, c.name);
+  const el = g('lz-live-mini');
+  if (el) { el.innerHTML = ''; el.dataset.init = ''; } // stop inline copy, allow re-init if widget is revisited
+}
+
+// Resize-aware widgets (globe preview canvas, relationship-network SVG) don't
+// get a native browser resize event when only their CSS grid span changes --
+// cwCycleSize dispatches this on the widget element after a resize click.
+document.addEventListener('lz-resize', (e) => {
+  const widget = e.target;
+  if (!widget || !widget.dataset) return;
+  if (widget.dataset.widgetId === 'lz-globe') _drawLzGlobePreview(g('lz-globe-canvas'));
+  if (widget.dataset.widgetId === 'lz-relationship') loadLzRelationshipNetwork();
+});
 
 async function loadLzPortfolio() {
   const body = g('lz-portfolio-body');
@@ -3496,8 +3637,8 @@ function cwRestoreWidget(page, id) {
 }
 
 let _rnData = null;
-async function renderRelationshipNetwork() {
-  const canvas = g('rn-canvas');
+async function renderRelationshipNetwork(canvasId = 'rn-canvas', checkboxId = 'rn-show-correlated', height = 380) {
+  const canvas = g(canvasId);
   if (!canvas || !window.d3) return;
   if (!_rnData) {
     try {
@@ -3508,7 +3649,8 @@ async function renderRelationshipNetwork() {
       return;
     }
   }
-  const showCorrelated = g('rn-show-correlated').checked;
+  const checkbox = g(checkboxId);
+  const showCorrelated = checkbox ? checkbox.checked : true; // mini widgets have no filter control -- show everything relevant
   const edges = _rnData.edges.filter(e => showCorrelated || e.data_source === 'known_relationship');
   const usedNodeIds = new Set(edges.flatMap(e => [e.source, e.target]));
   const nodes = _rnData.nodes.filter(n => n.tracked || usedNodeIds.has(n.id));
@@ -3519,7 +3661,7 @@ async function renderRelationshipNetwork() {
     return;
   }
 
-  const W = canvas.clientWidth || 600, H = 380;
+  const W = canvas.clientWidth || 600, H = height;
   const svg = d3.select(canvas).append('svg').attr('width', W).attr('height', H).attr('viewBox', `0 0 ${W} ${H}`);
   const nodeData = nodes.map(n => ({...n}));
   const linkData = edges.map(e => ({...e}));
@@ -3566,58 +3708,114 @@ async function renderRelationshipNetwork() {
   });
 }
 
+// ── VIDEO POP-OUT ── a real window.open() companion player: a genuinely
+// separate browsing context, so it keeps playing regardless of what page/tab
+// the opener navigates to next (unlike an in-page overlay, which dies with
+// the tab switch). Every video widget (Live TV, on-demand clips, the Landing
+// Zone mini live stream) shares this one floating window.
+const POPOUT_WIN_NAME = 'fredai_video_popout';
+function popOutVideo(embedUrl, title) {
+  const w = 480, h = 300;
+  const left = Math.round((screen.width - w) / 2), top = Math.round((screen.height - h) / 2);
+  const win = window.open(
+    `/popout/video?src=${encodeURIComponent(embedUrl)}&title=${encodeURIComponent(title || 'Fred AI Video')}`,
+    POPOUT_WIN_NAME,
+    `width=${w},height=${h},left=${left},top=${top},popup=yes,resizable=yes`
+  );
+  if (win) win.focus();
+}
+
+function popOutLiveTv() {
+  const c = LIVE_TV_CHANNELS[_liveTvIdx] || LIVE_TV_CHANNELS[0];
+  const src = c.type === 'channel'
+    ? `https://www.youtube.com/embed/live_stream?channel=${c.id}&mute=0`
+    : `https://www.youtube.com/embed/${c.id}?mute=0`;
+  popOutVideo(src, c.name);
+  g('tv-player').innerHTML = ''; // stop the inline copy -- avoid double audio
+}
+
 const VIDEO_BREAKING_HOURS = 48;
 let _videoIntelData = [];
+let _currentVideoModal = null;
 
 function openVideoModalByIndex(i) {
   const v = _videoIntelData[i];
   if (!v) return;
+  _currentVideoModal = v;
   g('video-modal-title').textContent = v.title;
   g('video-modal-frame').innerHTML = `<iframe src="${v.embed_url}&autoplay=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
   g('video-modal').classList.add('open');
+}
+function popOutVideoModal() {
+  if (!_currentVideoModal) return;
+  popOutVideo(_currentVideoModal.embed_url, _currentVideoModal.title);
+  closeVideoModal();
 }
 function closeVideoModal() {
   g('video-modal').classList.remove('open');
   g('video-modal-frame').innerHTML = ''; // stop playback, don't just hide it
 }
 
+async function _fetchVideoIntelData() {
+  const r = await fetch('/api/news/youtube-channels');
+  const data = await r.json();
+  const tracked = new Set([...(window._portfolio || []), ...(window._watchlist || [])]);
+  const breakingCutoff = Date.now() - VIDEO_BREAKING_HOURS * 3600 * 1000;
+  let videos = [];
+  for (const [ch, chData] of Object.entries(data)) {
+    for (const v of (chData.videos || [])) {
+      const mentionsTracked = [...tracked].some(sym => v.title.toUpperCase().includes(sym.replace('-USD','').replace('.AX','')));
+      const isBreaking = new Date(v.published).getTime() >= breakingCutoff;
+      videos.push({...v, channel: ch, mentionsTracked, isBreaking});
+    }
+  }
+  // Scope to what's actually relevant: tracked-ticker mentions or genuinely
+  // recent breaking news -- not just "everything these channels ever posted."
+  let relevant = videos.filter(v => v.mentionsTracked || v.isBreaking);
+  if (!relevant.length) relevant = videos; // fresh account, nothing recent -- show what exists rather than an empty widget
+  relevant.sort((a,b) => (b.mentionsTracked - a.mentionsTracked) || (new Date(b.published) - new Date(a.published)));
+  _videoIntelData = relevant.slice(0, 12);
+}
+
+// Every grid renders a prefix of the same shared _videoIntelData (same sort
+// order, just different counts) so onclick indices stay valid across grids.
+function _renderVideoGrid(gridId, limit) {
+  const grid = g(gridId);
+  if (!grid) return;
+  if (!_videoIntelData.length) {
+    grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center;padding:20px">No videos available right now</div>';
+    return;
+  }
+  grid.innerHTML = _videoIntelData.slice(0, limit).map((v,i) => `
+    <div style="cursor:pointer" onclick="openVideoModalByIndex(${i})">
+      <div style="position:relative">
+        <img src="${esc(v.thumbnail)}" style="width:100%;border-radius:6px;aspect-ratio:16/9;object-fit:cover" loading="lazy" onerror="this.style.background='var(--bg3)'">
+        ${v.mentionsTracked ? '<span style="position:absolute;top:4px;left:4px;background:rgba(0,255,136,.9);color:#03080f;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px">TRACKED</span>' : (v.isBreaking ? '<span style="position:absolute;top:4px;left:4px;background:rgba(255,59,92,.9);color:#03080f;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px">BREAKING</span>' : '')}
+      </div>
+      <div style="font-size:9px;color:var(--blue);margin-top:4px">${esc(v.channel)}</div>
+      <div style="font-size:10px;color:var(--t2);line-height:1.3;margin-top:2px">${esc(v.title)}</div>
+    </div>`).join('');
+}
+
 async function loadVideoIntelligence() {
   const grid = g('vi-grid');
   if (!grid) return;
   try {
-    const r = await fetch('/api/news/youtube-channels');
-    const data = await r.json();
-    const tracked = new Set([...(window._portfolio || []), ...(window._watchlist || [])]);
-    const breakingCutoff = Date.now() - VIDEO_BREAKING_HOURS * 3600 * 1000;
-    let videos = [];
-    for (const [ch, chData] of Object.entries(data)) {
-      for (const v of (chData.videos || [])) {
-        const mentionsTracked = [...tracked].some(sym => v.title.toUpperCase().includes(sym.replace('-USD','').replace('.AX','')));
-        const isBreaking = new Date(v.published).getTime() >= breakingCutoff;
-        videos.push({...v, channel: ch, mentionsTracked, isBreaking});
-      }
-    }
-    // Scope to what's actually relevant: tracked-ticker mentions or genuinely
-    // recent breaking news -- not just "everything these channels ever posted."
-    let relevant = videos.filter(v => v.mentionsTracked || v.isBreaking);
-    if (!relevant.length) relevant = videos; // fresh account, nothing recent -- show what exists rather than an empty widget
-    relevant.sort((a,b) => (b.mentionsTracked - a.mentionsTracked) || (new Date(b.published) - new Date(a.published)));
-    if (!relevant.length) {
-      grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center;padding:20px">No videos available right now</div>';
-      return;
-    }
-    _videoIntelData = relevant.slice(0, 12);
-    grid.innerHTML = _videoIntelData.map((v,i) => `
-      <div style="cursor:pointer" onclick="openVideoModalByIndex(${i})">
-        <div style="position:relative">
-          <img src="${esc(v.thumbnail)}" style="width:100%;border-radius:6px;aspect-ratio:16/9;object-fit:cover" loading="lazy" onerror="this.style.background='var(--bg3)'">
-          ${v.mentionsTracked ? '<span style="position:absolute;top:4px;left:4px;background:rgba(0,255,136,.9);color:#03080f;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px">TRACKED</span>' : (v.isBreaking ? '<span style="position:absolute;top:4px;left:4px;background:rgba(255,59,92,.9);color:#03080f;font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px">BREAKING</span>' : '')}
-        </div>
-        <div style="font-size:9px;color:var(--blue);margin-top:4px">${esc(v.channel)}</div>
-        <div style="font-size:10px;color:var(--t2);line-height:1.3;margin-top:2px">${esc(v.title)}</div>
-      </div>`).join('');
+    await _fetchVideoIntelData();
+    _renderVideoGrid('vi-grid', 12);
   } catch(e) {
     grid.innerHTML = '<div style="color:var(--t3);font-size:9px;grid-column:1/-1;text-align:center">Video intelligence unavailable</div>';
+  }
+}
+
+async function loadLzVideoGrid() {
+  const grid = g('lz-video-grid');
+  if (!grid) return;
+  try {
+    if (!_videoIntelData.length) await _fetchVideoIntelData();
+    _renderVideoGrid('lz-video-grid', 4);
+  } catch(e) {
+    grid.innerHTML = '<div class="lz-empty">Video intelligence unavailable</div>';
   }
 }
 
@@ -3643,9 +3841,11 @@ function initLiveTV() {
   switchLiveChannel(0, tabs.querySelector('button[data-tv-idx="0"]'));
 }
 
+let _liveTvIdx = 0;
 function switchLiveChannel(i, btn) {
   const c = LIVE_TV_CHANNELS[i];
   if (!c) return;
+  _liveTvIdx = i;
   document.querySelectorAll('#tv-tabs button').forEach(b => {
     b.classList.remove('active');
     b.style.background = 'none';

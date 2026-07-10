@@ -1584,6 +1584,23 @@ def api_youtube_channels():
     return jsonify(results)
 
 
+_VIDEO_EMBED_PREFIXES = ("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/")
+
+
+@app.route("/popout/video")
+@login_required
+def popout_video():
+    """Standalone floating player window -- opened via window.open() from any
+    video widget, so it's a genuinely separate browsing context that survives
+    the opener navigating to a different page/tab (real window.open, not an
+    in-page overlay)."""
+    src = request.args.get("src", "")
+    title = request.args.get("title", "Fred AI Video")[:120]
+    if not src.startswith(_VIDEO_EMBED_PREFIXES):
+        return "Invalid video source", 400
+    return render_template("video_popout.html", src=src, title=title)
+
+
 @app.route("/news")
 @login_required
 def news_page():

@@ -242,6 +242,20 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS filing_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT,
+            company TEXT,
+            cik TEXT,
+            accession_number TEXT NOT NULL,
+            filed_date TEXT,
+            item_codes TEXT,
+            item_summary TEXT,
+            signal_type TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(accession_number)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -1408,6 +1422,37 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     if signal_only:
         query += " AND is_signal_code=1"
     query += " ORDER BY transaction_date DESC"
+    with get_conn() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── FILING EVENTS (SEC 8-K real-time monitor) ─────────────────────────────────
+
+def insert_filing_events(filings: list[dict]) -> int:
+    """Idempotent on accession_number — safe to call repeatedly against the
+    same rolling feed window. Returns rows actually inserted."""
+    if not filings:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO filing_events
+                (ticker, company, cik, accession_number, filed_date,
+                 item_codes, item_summary, signal_type)
+            VALUES (:ticker, :company, :cik, :accession_number, :filed_date,
+                    :item_codes, :item_summary, :signal_type)
+        """, filings)
+        return conn.total_changes - before
+
+
+def get_recent_filing_events(ticker: str, days: int = 30, material_only: bool = False) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    query = "SELECT * FROM filing_events WHERE ticker=? AND filed_date >= ?"
+    params = [ticker, since]
+    if material_only:
+        query += " AND signal_type='material'"
+    query += " ORDER BY filed_date DESC"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]

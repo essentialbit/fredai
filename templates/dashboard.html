@@ -1242,6 +1242,22 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .lz-widget[data-widget-id="lz-relationship"] .customizable-widget-body,
 .lz-widget[data-widget-id="lz-video"] .customizable-widget-body{flex:1;min-height:0}
 
+/* Ticker Network — ephemeral micro-popup on hover/click of a node or link */
+#rn-tooltip{position:fixed;z-index:2000;pointer-events:none;background:rgba(6,15,28,.97);
+  border:1px solid rgba(0,180,255,.35);border-radius:8px;padding:10px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;color:#e8f4ff;max-width:260px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;line-height:1.5;
+  transition:opacity .2s ease;}
+#rn-tooltip.pinned{pointer-events:auto}
+.rn-tt-title{font-size:11px;font-weight:700;color:var(--blue);margin-bottom:4px;display:flex;justify-content:space-between;gap:10px}
+.rn-tt-sub{color:var(--t2);font-size:9.5px;margin-bottom:4px}
+.rn-tt-row{display:flex;justify-content:space-between;gap:10px;color:var(--t2)}
+.rn-tt-label{color:var(--t3)}
+.rn-tt-desc{margin-top:6px;color:var(--t2);font-family:'Inter',sans-serif;font-size:9.5px;line-height:1.4}
+.rn-tt-badge{font-size:8px;letter-spacing:.5px;padding:1px 5px;border-radius:3px}
+.rn-tt-close{cursor:pointer;color:var(--t3);font-size:10px;display:block;margin-top:6px;text-align:right}
+.rn-tt-close:hover{color:var(--t1)}
+
 /* Signal density items */
 .sd-item{
   display:flex;align-items:center;gap:8px;padding:5px 0;
@@ -1900,10 +1916,10 @@ html[data-tier="micro"] #ov-globe-stage {
             <div class="customizable-widget-body" id="lz-portfolio-body"><div class="lz-empty">Loading…</div></div>
           </div>
 
-          <div class="customizable-widget lz-widget" data-widget-id="lz-risk" data-size="s">
+          <div class="customizable-widget lz-widget" data-widget-id="lz-alerts" data-size="s">
             <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
               <span class="customizable-widget-toggle">▾</span>
-              <span class="customizable-widget-title">◎ Risk Metrics</span>
+              <span class="customizable-widget-title">⚡ Price Action Alerts</span>
               <span class="cw-actions" onclick="event.stopPropagation()">
                 <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
                 <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
@@ -1911,35 +1927,7 @@ html[data-tier="micro"] #ov-globe-stage {
                 <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
               </span>
             </div>
-            <div class="customizable-widget-body" id="lz-risk-body"><div class="lz-empty">Loading…</div></div>
-          </div>
-
-          <div class="customizable-widget lz-widget" data-widget-id="lz-feargreed" data-size="s">
-            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
-              <span class="customizable-widget-toggle">▾</span>
-              <span class="customizable-widget-title">☍ Fear &amp; Greed</span>
-              <span class="cw-actions" onclick="event.stopPropagation()">
-                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
-                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
-                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
-                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
-              </span>
-            </div>
-            <div class="customizable-widget-body" id="lz-feargreed-body"><div class="lz-empty">Loading…</div></div>
-          </div>
-
-          <div class="customizable-widget lz-widget" data-widget-id="lz-accuracy" data-size="s">
-            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
-              <span class="customizable-widget-toggle">▾</span>
-              <span class="customizable-widget-title">✓ Signal Accuracy</span>
-              <span class="cw-actions" onclick="event.stopPropagation()">
-                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
-                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
-                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
-                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
-              </span>
-            </div>
-            <div class="customizable-widget-body" id="lz-accuracy-body"><div class="lz-empty">Loading…</div></div>
+            <div class="customizable-widget-body" id="lz-alerts-body"><div class="lz-empty">Loading…</div></div>
           </div>
 
           <div class="customizable-widget lz-widget" data-widget-id="lz-trending" data-size="s">
@@ -2052,7 +2040,7 @@ html[data-tier="micro"] #ov-globe-stage {
               </span>
             </div>
             <div class="customizable-widget-body" id="lz-globe-body" style="padding:0;display:flex;flex-direction:column">
-              <canvas id="lz-globe-canvas" style="width:100%;flex:1;display:block;min-height:0"></canvas>
+              <div id="lz-globe-canvas" style="width:100%;flex:1;min-height:0;position:relative"></div>
               <div style="padding:4px 10px;border-top:1px solid var(--border);flex-shrink:0">
                 <a href="javascript:void(0)" onclick="switchTab('globe',document.querySelector('.nav-tab[onclick*=\'globe\']'))" style="font-size:9px;color:var(--blue);text-decoration:none">Open Situation Room →</a>
               </div>
@@ -2086,15 +2074,15 @@ html[data-tier="micro"] #ov-globe-stage {
                 <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
               </span>
             </div>
-            <div class="customizable-widget-body" id="lz-video-body" style="display:flex;flex-direction:column;gap:6px">
-              <div id="lz-video-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;flex:1;overflow-y:auto"><div class="lz-empty">Loading…</div></div>
+            <div class="customizable-widget-body" id="lz-video-body" style="display:flex;flex-direction:column;gap:6px;min-height:0">
+              <div id="lz-video-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;flex:1;min-height:60px;overflow-y:auto"><div class="lz-empty">Loading…</div></div>
               <div style="flex-shrink:0;border-top:1px solid var(--border);padding-top:6px">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
                   <span style="font-size:8px;font-weight:700;color:var(--red);letter-spacing:1px">● LIVE</span>
                   <span style="font-size:8px;color:var(--t3)">Bloomberg</span>
                   <button onclick="popOutLzLiveMini()" title="Pop out -- keeps playing while you navigate Fred AI" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);font-size:8px;width:15px;height:15px;cursor:pointer">⇱</button>
                 </div>
-                <div id="lz-live-mini" style="width:100%;aspect-ratio:16/9;background:#000;position:relative;border-radius:4px;overflow:hidden"></div>
+                <div id="lz-live-mini" style="width:100%;height:80px;background:#000;position:relative;border-radius:4px;overflow:hidden"></div>
               </div>
             </div>
           </div>
@@ -3010,12 +2998,13 @@ const AI=['tab-ai'];
 const GB=['tab-globe-panel'];
 const LZ=['tab-landingzone'];
 const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI,...GB,...LZ];
-const LZ_WIDGET_IDS=['lz-portfolio','lz-risk','lz-feargreed','lz-accuracy','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops','lz-globe','lz-relationship','lz-video'];
+const LZ_WIDGET_IDS=['lz-portfolio','lz-alerts','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops','lz-globe','lz-relationship','lz-video'];
 
 let _dashGlobeInst = null, _dashGlobeData = [], _dashGlobeFilter = 'all';
 
 function switchTab(tab, btn) {
   activeTab = tab;
+  stopLzAutoRefresh(); // restarted below if we're actually entering landingzone
   document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
   if (btn) { btn.classList.add('active'); }
@@ -3065,8 +3054,17 @@ function switchTab(tab, btn) {
     } else {
       loadLandingZone();
     }
+    startLzAutoRefresh();
   }
 }
+
+// Also pause/resume on browser-tab visibility changes (not just Fred-tab
+// switches) -- no point refreshing a backgrounded browser tab either.
+document.addEventListener('visibilitychange', () => {
+  if (activeTab !== 'landingzone') return;
+  if (document.visibilityState === 'visible') startLzAutoRefresh();
+  else stopLzAutoRefresh();
+});
 
 const _GCOLS = {market:'#00b4ff',ai:'#00ff88',geopolitical:'#ff3b5c',central_bank:'#f5a623',macro:'#9b59ff',ticker:'#8ba3b8'};
 function _gcol(cat){return _GCOLS[cat]||'#8ba3b8'}
@@ -3371,54 +3369,88 @@ function cwCycleSize(page, btnEl) {
 
 // ── LANDING ZONE (test) — lightweight best-of readouts, one fetch per widget ──
 function loadLandingZone() {
-  loadLzPortfolio(); loadLzRisk(); loadLzFearGreed(); loadLzAccuracy();
+  loadLzPortfolio(); loadLzAlerts();
   loadLzTrending(); loadLzWatchlist(); loadLzAiUniverse(); loadLzNews();
   loadLzGlobalMap(); loadLzBriefing(); loadLzOps();
   loadLzGlobePreview(); loadLzRelationshipNetwork(); loadLzVideoGrid(); initLzLiveMini();
 }
 
+// Auto-refresh: nothing on this tab should ever go stale while it's actually
+// on screen. Runs only while the Landing Zone tab is active AND the browser
+// tab itself is visible (no point burning fetches/D3 re-renders on a
+// backgrounded tab). _rnData is force-cleared each tick since it's normally
+// fetch-once-and-cache -- the ticker network is supposed to be live.
+const LZ_REFRESH_MS = 60000;
+let _lzRefreshTimer = null;
+function startLzAutoRefresh() {
+  stopLzAutoRefresh();
+  _lzRefreshTimer = setInterval(() => {
+    if (activeTab === 'landingzone' && document.visibilityState === 'visible') {
+      _rnData = null;
+      loadLandingZone();
+    }
+  }, LZ_REFRESH_MS);
+}
+function stopLzAutoRefresh() {
+  if (_lzRefreshTimer) { clearInterval(_lzRefreshTimer); _lzRefreshTimer = null; }
+}
+
 // Situation Room preview: a flat 2D dot map, not a second live globe.gl/WebGL
 // instance -- this app targets Raspberry Pi deployments too, and two
 // concurrently-animating 3D globes (one per tab, both keep rendering even
-// when hidden via display:none) is real GPU cost for a small teaser tile.
-// Real 3D exploration stays one click away via the "Open Situation Room" link.
+// when hidden via display:none) is real GPU cost for a small teaser tile --
+// but per user direction it's a real interactive mini globe.gl instance
+// (same library the full Situation Room tab uses, not a second heavier
+// rebuild): drag to rotate, scroll to zoom, auto-rotates when idle. Refreshed
+// in place (pointsData/arcsData, not torn down and rebuilt) by the Landing
+// Zone auto-refresh loop so it never goes stale.
+let _lzGlobeInst = null;
 async function loadLzGlobePreview() {
-  const canvas = g('lz-globe-canvas');
-  if (!canvas) return;
+  const container = g('lz-globe-canvas');
+  if (!container || !window.Globe) return;
   try {
     const r = await fetch('/api/news/globe-data?hours=24');
     const data = await r.json();
-    canvas._lzPoints = data.points || [];
-    _drawLzGlobePreview(canvas);
-  } catch(e) { /* leave canvas blank -- non-critical decorative widget */ }
+    const points = (data.points || []).map(p => ({...p, color: _gcol(p.category)}));
+    const arcs = (data.story_arcs || []).slice(0, 25).map(s => {
+      const score = s.sentiment_score || 0;
+      const color = score > 0.05 ? 'rgba(0,255,136,.7)' : score < -0.05 ? 'rgba(255,59,92,.7)' : 'rgba(245,166,35,.5)';
+      return {startLat: s.hq_lat, startLng: s.hq_lng, endLat: s.exchange_lat, endLng: s.exchange_lng, color: [color, 'rgba(0,0,0,0.1)']};
+    });
+
+    if (!_lzGlobeInst) {
+      _lzGlobeInst = Globe({animateIn: false})(container)
+        .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+        .backgroundColor('rgba(0,0,0,0)')
+        .atmosphereColor('rgba(0,180,255,.15)')
+        .atmosphereAltitude(0.2)
+        .pointLat('lat').pointLng('lng')
+        .pointColor('color')
+        .pointAltitude(d => Math.min(0.04 + (d.count||1)*0.012, 0.2))
+        .pointRadius(d => Math.min(0.35 + (d.count||1)*0.06, 1))
+        .pointLabel(d => `${esc(d.label)} · ${d.count} signals`)
+        .arcColor('color')
+        .arcAltitude(0.15)
+        .arcStroke(0.4)
+        .arcDashLength(0.4)
+        .arcDashGap(0.2)
+        .arcDashAnimateTime(2500);
+      const controls = _lzGlobeInst.controls();
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.7;
+      controls.enableZoom = true;
+      controls.enablePan = false;
+      _resizeLzGlobe();
+    }
+    _lzGlobeInst.pointsData(points).arcsData(arcs);
+  } catch(e) { /* leave the globe as-is -- non-critical, this cycle's refresh failed but the last good render remains visible */ }
 }
 
-function _drawLzGlobePreview(canvas) {
-  const points = canvas._lzPoints || [];
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth || 200, h = canvas.clientHeight || 100;
-  if (!w || !h) return;
-  canvas.width = w * dpr; canvas.height = h * dpr;
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#03080f';
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(0,180,255,.08)';
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 6; i++) { const y = (h/6)*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-  for (let i = 1; i < 12; i++) { const x = (w/12)*i; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  points.forEach(p => {
-    const x = (p.lng + 180) / 360 * w;
-    const y = (90 - p.lat) / 180 * h;
-    const r = Math.min(2 + (p.count||1) * 0.4, 9);
-    const color = _gcol(p.category);
-    ctx.beginPath();
-    ctx.fillStyle = color + 'cc';
-    ctx.shadowColor = color; ctx.shadowBlur = 8;
-    ctx.arc(x, y, r, 0, Math.PI*2);
-    ctx.fill();
-  });
-  ctx.shadowBlur = 0;
+function _resizeLzGlobe() {
+  const container = g('lz-globe-canvas');
+  if (!container || !_lzGlobeInst) return;
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w && h) _lzGlobeInst.width(w).height(h);
 }
 
 function loadLzRelationshipNetwork() {
@@ -3447,7 +3479,7 @@ function popOutLzLiveMini() {
 document.addEventListener('lz-resize', (e) => {
   const widget = e.target;
   if (!widget || !widget.dataset) return;
-  if (widget.dataset.widgetId === 'lz-globe') _drawLzGlobePreview(g('lz-globe-canvas'));
+  if (widget.dataset.widgetId === 'lz-globe') _resizeLzGlobe();
   if (widget.dataset.widgetId === 'lz-relationship') loadLzRelationshipNetwork();
 });
 
@@ -3463,45 +3495,30 @@ async function loadLzPortfolio() {
   } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
 }
 
-async function loadLzRisk() {
-  const body = g('lz-risk-body');
+// Price Action Alerts -- Fred's own alert stream (sentiment shifts, volume
+// spikes, insider clusters, fired price/RSI/MA/volume technical alerts),
+// all funneled through the same `alerts` table -- real volatility signal,
+// not a separate detector built just for this widget.
+const _ALERT_LEVEL_COLOR = {warning: 'var(--gold)', critical: 'var(--red)', info: 'var(--blue)'};
+async function loadLzAlerts() {
+  const body = g('lz-alerts-body');
   try {
-    const r = await fetch('/api/portfolio/risk'); const d = await r.json();
-    if (d.status !== 'ok') {
-      body.innerHTML = `<div class="lz-empty">${d.status==='no_positions'?'No holdings yet':'Needs more price history'}</div>`;
-      return;
-    }
-    body.innerHTML = `<div class="lz-grid2">
-      <div><span class="lz-label">Sharpe</span><span class="lz-val">${d.sharpe ?? '--'}</span></div>
-      <div><span class="lz-label">Sortino</span><span class="lz-val">${d.sortino ?? '--'}</span></div>
-      <div><span class="lz-label">Max DD</span><span class="lz-val neg">${d.max_drawdown_pct}%</span></div>
-      <div><span class="lz-label">VaR 95%</span><span class="lz-val">${d.var_95_1d_pct}%</span></div>
-    </div>`;
-  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
-}
-
-async function loadLzFearGreed() {
-  const body = g('lz-feargreed-body');
-  try {
-    const r = await fetch('/api/fear-greed'); const d = await r.json();
-    if (d.status !== 'ok') { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; return; }
-    const score = Math.round(d.score);
-    const color = score>=75?'var(--green)':score>=55?'#8ecf7a':score>=45?'var(--t2)':score>=25?'var(--gold)':'var(--red)';
-    body.innerHTML = `<div class="lz-stat-big" style="color:${color}">${score}</div>
-      <div class="lz-sub" style="color:${color};text-transform:uppercase;letter-spacing:1px">${esc(d.rating||'')}</div>`;
-  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
-}
-
-async function loadLzAccuracy() {
-  const body = g('lz-accuracy-body');
-  try {
-    const r = await fetch('/api/backtest/accuracy'); const d = await r.json();
-    const day = d['24h'];
-    if (!day || day.accuracy_pct == null) { body.innerHTML = '<div class="lz-empty">Not enough data yet</div>'; return; }
-    const delta = day.baseline_delta_pct;
-    body.innerHTML = `<div class="lz-stat-big">${day.accuracy_pct}%</div>
-      <div class="lz-sub">24h direction accuracy · ${day.total} signals</div>
-      ${delta!=null?`<div class="${delta>=0?'pos':'neg'}" style="font-size:10px">${delta>=0?'+':''}${delta}pp vs naive baseline</div>`:''}`;
+    const r = await fetch('/api/alerts?limit=8'); const d = await r.json();
+    const alerts = d.alerts || [];
+    if (!alerts.length) { body.innerHTML = '<div class="lz-empty">No alerts fired recently</div>'; return; }
+    body.innerHTML = alerts.map(a => {
+      const color = _ALERT_LEVEL_COLOR[a.level] || 'var(--t3)';
+      return `<div class="lz-row" style="align-items:flex-start;font-family:'Inter',sans-serif">
+        <span style="display:flex;gap:6px;align-items:flex-start;min-width:0">
+          <span style="width:6px;height:6px;border-radius:50%;background:${color};margin-top:4px;flex-shrink:0"></span>
+          <span style="min-width:0">
+            <span style="color:var(--t1);font-weight:600">${a.asset ? esc(a.asset)+' — ' : ''}${esc(a.title)}</span><br>
+            <span style="color:var(--t3);font-size:9px">${esc(a.message||'')}</span>
+          </span>
+        </span>
+        <span style="color:var(--t3);font-size:8px;white-space:nowrap;flex-shrink:0">${relTime(a.timestamp)}</span>
+      </div>`;
+    }).join('');
   } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
 }
 
@@ -3637,6 +3654,103 @@ function cwRestoreWidget(page, id) {
 }
 
 let _rnData = null;
+
+// ── Ticker Network micro-popup ── one shared floating tooltip (position:fixed
+// so it escapes the mini Landing Zone widget's own overflow:hidden/scroll),
+// reused by both the full Situation Room graph and the mini widget. Hover
+// shows it; moving away lingers 3s before fading (long enough to read, short
+// enough not to clutter); click pins it open until the user clicks elsewhere.
+let _rnTooltipPinned = false;
+let _rnHideTimer = null;
+
+function _rnTooltipEl() {
+  let el = g('rn-tooltip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'rn-tooltip';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function _positionRnTooltip(x, y) {
+  const el = _rnTooltipEl();
+  const pad = 14;
+  let left = x + pad, top = y + pad;
+  const rect = el.getBoundingClientRect();
+  if (left + rect.width > window.innerWidth - 8) left = x - rect.width - pad;
+  if (top + rect.height > window.innerHeight - 8) top = y - rect.height - pad;
+  el.style.left = Math.max(8, left) + 'px';
+  el.style.top = Math.max(8, top) + 'px';
+}
+
+function _showRnTooltip(x, y, html, pin) {
+  clearTimeout(_rnHideTimer);
+  const el = _rnTooltipEl();
+  el.innerHTML = html;
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  _positionRnTooltip(x, y);
+  requestAnimationFrame(() => _positionRnTooltip(x, y)); // re-measure now that content is in
+  if (pin) { el.classList.add('pinned'); _rnTooltipPinned = true; }
+}
+
+function _reallyHideRnTooltip() {
+  const el = g('rn-tooltip');
+  if (el) { el.style.display = 'none'; el.style.opacity = '1'; el.classList.remove('pinned'); }
+  _rnTooltipPinned = false;
+}
+
+function _hideRnTooltip(force) {
+  if (_rnTooltipPinned && !force) return;
+  clearTimeout(_rnHideTimer);
+  if (force) { _reallyHideRnTooltip(); return; }
+  _rnHideTimer = setTimeout(_reallyHideRnTooltip, 3000);
+}
+
+function _fmtMktCap(v) {
+  if (!v) return '--';
+  if (v >= 1e12) return '$' + (v/1e12).toFixed(2) + 'T';
+  if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return '$' + (v/1e6).toFixed(0) + 'M';
+  return '$' + v.toLocaleString();
+}
+
+function _rnNodeTooltipHtml(d, linkData) {
+  const chgCls = (d.change_pct||0) >= 0 ? 'pos' : 'neg';
+  const rels = linkData.filter(l => (l.source.id||l.source) === d.id || (l.target.id||l.target) === d.id);
+  const sent = d.sentiment;
+  return `
+    <div class="rn-tt-title"><span>${esc(d.id)}</span><span class="${chgCls}">${d.price?fmtPrice(d.price):'--'} ${(d.change_pct||0)>=0?'+':''}${(d.change_pct||0).toFixed(2)}%</span></div>
+    <div class="rn-tt-sub">${esc(d.name||d.id)}</div>
+    <div class="rn-tt-row"><span class="rn-tt-label">Sector</span><span>${esc(d.sector||'--')}${d.industry?' · '+esc(d.industry):''}</span></div>
+    ${d.market_cap ? `<div class="rn-tt-row"><span class="rn-tt-label">Market Cap</span><span>${_fmtMktCap(d.market_cap)}</span></div>` : ''}
+    ${sent ? `<div class="rn-tt-row"><span class="rn-tt-label">Sentiment (24h)</span><span class="${sent.signal_type==='bullish'?'pos':sent.signal_type==='bearish'?'neg':''}">${esc(sent.signal_type)} · ${sent.signal_count} signals</span></div>` : ''}
+    ${rels.length ? `<div class="rn-tt-desc"><b>${rels.length} relationship${rels.length===1?'':'s'}:</b><br>${rels.slice(0,4).map(r=>'• '+esc(r.desc)).join('<br>')}</div>` : ''}
+    <span class="rn-tt-close" onclick="_hideRnTooltip(true)">Close ×</span>`;
+}
+
+function _rnEdgeTooltipHtml(d) {
+  const known = d.data_source === 'known_relationship';
+  const badge = known
+    ? '<span class="rn-tt-badge pos" style="background:rgba(0,255,170,.12)">KNOWN RELATIONSHIP</span>'
+    : '<span class="rn-tt-badge" style="background:rgba(245,166,35,.15);color:var(--gold)">STATISTICAL CORRELATION</span>';
+  const src = d.source.id || d.source, tgt = d.target.id || d.target;
+  return `
+    <div class="rn-tt-title"><span>${esc(src)} ↔ ${esc(tgt)}</span></div>
+    <div style="margin-bottom:4px">${badge}</div>
+    <div class="rn-tt-row"><span class="rn-tt-label">Type</span><span>${esc(d.type)}</span></div>
+    ${d.corr_value != null ? `<div class="rn-tt-row"><span class="rn-tt-label">Correlation</span><span>${d.corr_value>=0?'+':''}${d.corr_value.toFixed(2)}</span></div>` : ''}
+    <div class="rn-tt-desc">${esc(d.desc)}</div>
+    <span class="rn-tt-close" onclick="_hideRnTooltip(true)">Close ×</span>`;
+}
+
+document.addEventListener('click', (e) => {
+  if (!_rnTooltipPinned) return;
+  const el = g('rn-tooltip');
+  if (el && !el.contains(e.target)) _reallyHideRnTooltip();
+});
+
 async function renderRelationshipNetwork(canvasId = 'rn-canvas', checkboxId = 'rn-show-correlated', height = 380) {
   const canvas = g(canvasId);
   if (!canvas || !window.d3) return;
@@ -3670,18 +3784,41 @@ async function renderRelationshipNetwork(canvasId = 'rn-canvas', checkboxId = 'r
     .force('link', d3.forceLink(linkData).id(d => d.id).distance(70).strength(0.4))
     .force('charge', d3.forceManyBody().strength(-160))
     .force('center', d3.forceCenter(W/2, H/2))
-    .force('collision', d3.forceCollide().radius(d => d.tracked ? 22 : 14));
+    // Extra pull toward center for the user's own portfolio/watchlist tickers
+    // specifically, so the graph opens focused on what's actually relevant
+    // to them rather than wherever the force layout happens to settle.
+    .force('trackedX', d3.forceX(W/2).strength(d => d.tracked ? 0.12 : 0.01))
+    .force('trackedY', d3.forceY(H/2).strength(d => d.tracked ? 0.12 : 0.01))
+    .force('collision', d3.forceCollide().radius(d => d.tracked ? 22 : 14))
+    // Default alphaDecay (~0.0228, tuned for ~300 ticks at 60fps) took ~30s
+    // to fully settle when measured live -- far too long for a small widget
+    // that's supposed to read as "live," not "still finding its layout."
+    // Faster decay + more velocity damping settles in a couple of seconds
+    // without looking rushed/jumpy.
+    .alphaDecay(0.1)
+    .velocityDecay(0.45);
 
   const link = svg.append('g').selectAll('line').data(linkData).enter().append('line')
     .attr('stroke', d => d.color).attr('stroke-width', d => Math.max(1, d.strength / 3))
     .attr('stroke-opacity', d => d.data_source === 'known_relationship' ? 0.7 : 0.35)
-    .attr('stroke-dasharray', d => d.data_source === 'statistical_correlation' ? '3,3' : null);
+    .attr('stroke-dasharray', d => d.data_source === 'statistical_correlation' ? '3,3' : null)
+    .style('cursor', 'pointer')
+    .style('pointer-events', 'stroke') // hover/click the thin line itself, not just its bounding box
+    .on('mouseenter', function(e,d) { d3.select(this).attr('stroke-opacity', 1); if (!_rnTooltipPinned) _showRnTooltip(e.clientX, e.clientY, _rnEdgeTooltipHtml(d)); })
+    .on('mousemove', (e) => { if (!_rnTooltipPinned) _positionRnTooltip(e.clientX, e.clientY); })
+    .on('mouseleave', function(e,d) { d3.select(this).attr('stroke-opacity', d.data_source === 'known_relationship' ? 0.7 : 0.35); if (!_rnTooltipPinned) _hideRnTooltip(); })
+    .on('click', (e,d) => { e.stopPropagation(); _showRnTooltip(e.clientX, e.clientY, _rnEdgeTooltipHtml(d), true); });
 
   const node = svg.append('g').selectAll('g').data(nodeData).enter().append('g')
+    .style('cursor', 'pointer')
     .call(d3.drag()
       .on('start', (e,d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
       .on('drag', (e,d) => { d.fx=e.x; d.fy=e.y; })
-      .on('end', (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+      .on('end', (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
+    .on('mouseenter', (e,d) => { if (!_rnTooltipPinned) _showRnTooltip(e.clientX, e.clientY, _rnNodeTooltipHtml(d, linkData)); })
+    .on('mousemove', (e) => { if (!_rnTooltipPinned) _positionRnTooltip(e.clientX, e.clientY); })
+    .on('mouseleave', () => { if (!_rnTooltipPinned) _hideRnTooltip(); })
+    .on('click', (e,d) => { e.stopPropagation(); _showRnTooltip(e.clientX, e.clientY, _rnNodeTooltipHtml(d, linkData), true); });
 
   node.append('circle')
     .attr('r', d => d.tracked ? 14 : 8)
@@ -3694,12 +3831,8 @@ async function renderRelationshipNetwork(canvasId = 'rn-canvas', checkboxId = 'r
     .attr('text-anchor', 'middle').attr('dy', d => d.tracked ? 26 : 18)
     .attr('font-size', d => d.tracked ? '10px' : '8px')
     .attr('font-family', "'JetBrains Mono',monospace")
-    .attr('fill', d => d.tracked ? '#e8f4ff' : 'var(--t3)');
-
-  node.append('title').text(d => {
-    const rels = linkData.filter(l => l.source.id === d.id || l.target.id === d.id);
-    return rels.map(r => r.desc).join('\n') || d.id;
-  });
+    .attr('fill', d => d.tracked ? '#e8f4ff' : 'var(--t3)')
+    .style('pointer-events', 'none');
 
   sim.on('tick', () => {
     link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)

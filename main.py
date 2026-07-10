@@ -31,6 +31,7 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from vix_term_structure import get_vix_term_structure
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1713,6 +1714,14 @@ def api_correlation():
     })
 
 
+@app.route("/api/vix-term-structure")
+@login_required
+def api_vix_term_structure():
+    """VIX term-structure contango/backwardation regime (FSI L2) -- cached
+    hourly, see vix_term_structure.py."""
+    return jsonify(get_vix_term_structure() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2160,6 +2169,16 @@ def job_market_refresh():
                     insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
+
+        # VIX term-structure regime (cached 1h in vix_term_structure.py)
+        try:
+            vts = get_vix_term_structure()
+            if vts:
+                _macro_cache = {**_macro_cache, "VIX_TERM": {
+                    "label": "VIX Term", "value": vts["front_back_spread_pct"], "rating": vts["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] vix_term_structure error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

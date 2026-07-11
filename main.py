@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from market_breadth import get_market_breadth
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/market-breadth")
+@login_required
+def api_market_breadth():
+    """RSP-vs-SPY equal-weight/cap-weight market breadth signal (FSI L2)
+    -- cached 15min, see market_breadth.py."""
+    return jsonify(get_market_breadth() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2213,6 +2222,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Market breadth: RSP/SPY equal-weight vs cap-weight (cached 15min in market_breadth.py)
+        try:
+            mb = get_market_breadth()
+            if mb:
+                _macro_cache = {**_macro_cache, "MARKET_BREADTH": {
+                    "label": "Breadth", "value": mb["ratio"], "rating": mb["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] market_breadth error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from crypto_fear_greed import get_crypto_fear_greed
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/crypto-fear-greed")
+@login_required
+def api_crypto_fear_greed():
+    """Crypto-specific Fear & Greed composite (alternative.me), distinct from
+    the equity CNN Fear & Greed badge and the BTC on-chain health metrics --
+    cached 1h, see crypto_fear_greed.py."""
+    return jsonify(get_crypto_fear_greed() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2213,6 +2223,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Crypto Fear & Greed Index (cached 1h in crypto_fear_greed.py)
+        try:
+            cfg = get_crypto_fear_greed()
+            if cfg:
+                _macro_cache = {**_macro_cache, "CRYPTO_FNG": {
+                    "label": "Crypto F&G", "value": cfg["value"], "rating": cfg["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] crypto_fear_greed error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

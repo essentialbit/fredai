@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from oss_velocity_client import get_velocity_snapshot, TRACKED_REPOS
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1737,6 +1738,19 @@ def api_copper_gold_ratio():
     """CPER-vs-GLD "Dr. Copper" growth-vs-safe-haven regime signal (FSI L2)
     -- cached 15min, see copper_gold_ratio.py."""
     return jsonify(get_copper_gold_ratio() or {})
+
+
+@app.route("/api/oss-velocity/<ticker>")
+@login_required
+def api_oss_velocity(ticker):
+    """Weekly commit-count/contributor trend for open-source-native tickers
+    where the ticker->flagship-repo mapping is unambiguous (FSI L5) --
+    cached 24h, see oss_velocity_client.py."""
+    ticker = ticker.upper()
+    if ticker not in TRACKED_REPOS:
+        return jsonify({"error": "ticker not tracked", "tracked": sorted(TRACKED_REPOS)}), 404
+    snapshot = get_velocity_snapshot(ticker)
+    return jsonify(snapshot or {"ticker": ticker, "status": "unavailable"})
 
 
 @app.route("/api/ticker-relationships")

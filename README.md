@@ -24,6 +24,17 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.64
+- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
+
+### FredAI v1.3.63
+- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
+- feat: Copper/Gold ratio "Dr. Copper" cross-asset regime signal (closes #176)
+
+### FredAI v1.3.62
+- fix: debate.py silently skipped proposals with non-canonical proposed_by labels
+- docs: sync README changelog to v1.3.61 (#181)
+
 ### FredAI v1.3.61
 - feat: Landing Zone -- interactive globe, enriched ticker network, price alerts, live refresh (#180)
 - docs: sync README changelog to v1.3.60 (#177)
@@ -31,17 +42,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 ### FredAI v1.3.60
 - feat: Test Landing Zone -- adjustable best-of widget grid (#129)
 - docs: sync README changelog to v1.3.59 (#119)
-
-### FredAI v1.3.59
-- feat: backtest v2 -- per-source attribution + naive baseline (closes #108) (#118)
-- docs: sync README changelog to v1.3.58 (#117)
-
-### FredAI v1.3.58
-- feat: portfolio risk metrics -- VaR, Sharpe/Sortino, max drawdown, beta (closes #107) (#115)
-- docs: sync README changelog to v1.3.57 (#116)
-
-### FredAI v1.3.57
-- fix: release README-sync PRs now open with a PAT so CI actually runs (#114)
 
 <!-- CHANGELOG_END -->
 

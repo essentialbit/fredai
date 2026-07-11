@@ -480,6 +480,7 @@ html[data-tier="nano"] .hdr-sub { display:none }
 }
 #macro-strip::-webkit-scrollbar{display:none}
 .macro-item{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border-right:1px solid var(--border);font-size:var(--font-xs);font-family:var(--mono)}
+.macro-item.macro-dim{opacity:.45}
 .macro-label{color:var(--t3)}.macro-val{color:var(--t1);font-weight:600}
 .macro-chg.up{color:var(--green)}.macro-chg.dn{color:var(--red)}.macro-chg.flat{color:var(--t3)}
 html[data-tier="nano"] #macro-strip { display:none }
@@ -4308,14 +4309,18 @@ function updateIdxBar(q) {
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
 const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)'};
+const MACRO_DIM_FLOOR=0.15;
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};
-  const html=Object.entries(macro).map(([k,v])=>{
+  const html=Object.entries(macro)
+    .sort(([,a],[,b])=>(b?.severity??0)-(a?.severity??0))
+    .map(([k,v])=>{
     if(!v||v.value==null) return '';
     const lbl=v.label||LBL[k]||k,chg=v.change,cls=!chg?'flat':chg>0?'up':'dn';
+    const dim=(v.severity??0)<MACRO_DIM_FLOOR?' macro-dim':'';
     const rating=v.rating?`<span class="macro-chg" style="color:${_FG_COLOR[v.rating]||'var(--t3)'}">${esc(v.rating)}</span>`:'';
-    return `<span class="macro-item"><span class="macro-label">${esc(lbl)}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${rating||(chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:'')}</span>`;
+    return `<span class="macro-item${dim}"><span class="macro-label">${esc(lbl)}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${rating||(chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:'')}</span>`;
   }).filter(Boolean).join('');
   g('macro-items').innerHTML=html||'<span style="color:var(--t3)">No macro data — add NASDAQ_API_KEY</span>';
 }

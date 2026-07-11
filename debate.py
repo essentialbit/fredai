@@ -42,7 +42,14 @@ Respond with ONLY a JSON object, no markdown fences:
 
 
 def _other_agent(proposed_by: str | None) -> str | None:
-    return {"claude": "gemini", "gemini": "claude"}.get(proposed_by)
+    """Only two agents ever review each other's proposals. Treat any label
+    variant other than an exact "gemini" match as Claude-authored (e.g. a
+    proposal posted with proposed_by="claude_rnd" or the insert_feature_proposal
+    default "rnd_cycle") rather than silently skipping the issue forever --
+    #176/#182 both went unreviewed for cycles because of an exact-match miss."""
+    if not proposed_by:
+        return None
+    return "claude" if proposed_by == "gemini" else "gemini"
 
 
 def _already_reviewed_by(comments: list, agent: str) -> bool:

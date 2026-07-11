@@ -32,7 +32,7 @@ def _init_model():
     from transformers import AutoTokenizer, AutoModelForSequenceClassification
     # Load tokenizer and model
     _tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
-    _model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
+    _model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert").to('cpu')
 
 def analyze_sentiment(text: str) -> tuple[float, str] | None:
     """Analyze sentiment of text using FinBERT model.

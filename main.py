@@ -25,7 +25,7 @@ from memory_store import (
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
-from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters
+from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters, detect_short_volume_pressure
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
@@ -54,6 +54,7 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
+from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
@@ -245,6 +246,7 @@ _updater.init(socketio)
 _quotes_cache: dict = {}
 _crypto_spread_cache: dict = {}
 _insider_cluster_cache: dict = {}
+_short_volume_cache: dict = {}
 _last_scan: datetime = datetime.min
 _scan_lock = threading.Lock()
 _chat_histories: dict = {}  # user_id -> list
@@ -804,6 +806,9 @@ def api_watchlist():
         cluster = _insider_cluster_cache.get(w["symbol"])
         if cluster:
             entry["insider_cluster"] = cluster
+        sv = _short_volume_cache.get(w["symbol"])
+        if sv:
+            entry["short_volume"] = sv
         result.append(entry)
     return jsonify(result)
 
@@ -833,6 +838,9 @@ def api_portfolio():
         if si:
             pos["short_float_pct"] = si["short_float_pct"]
             pos["short_ratio"] = si["short_ratio"]
+        sv = _short_volume_cache.get(pos["symbol"])
+        if sv:
+            pos["short_volume"] = sv
         s = sentiment.get(pos["symbol"])
         if s:
             pos["sentiment"] = s
@@ -1812,6 +1820,16 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/short-volume/<ticker>")
+@login_required
+def api_short_volume(ticker):
+    """Daily FINRA Reg SHO short-volume ratio + rolling trend (FSI L2) --
+    distinct from the slower Finviz short-interest snapshot in /api/portfolio
+    and /api/watchlist."""
+    signal = compute_short_volume_signal(ticker.upper())
+    return jsonify(signal or {"symbol": ticker.upper(), "short_volume_pct": None, "trend": None})
+
+
 @app.route("/api/assessment/<symbol>")
 @login_required
 def api_assessment(symbol):
@@ -2457,6 +2475,31 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
 
+    def job_short_volume_refresh():
+        """Refresh FINRA Reg SHO daily short-volume ratios for portfolio +
+        watchlist symbols, populate the watchlist-badge cache, and check for
+        pressure spikes (FSI L2)."""
+        global _short_volume_cache
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            stored = refresh_short_volume(symbols)
+            cache = {}
+            for sym in symbols:
+                signal = compute_short_volume_signal(sym)
+                if signal:
+                    cache[sym] = signal
+            _short_volume_cache = cache
+            alerts_fired = detect_short_volume_pressure(symbols)
+            print(f"[FINRA] Short volume refreshed — {stored}/{len(symbols)} symbols, {len(alerts_fired)} pressure alert(s)")
+        except Exception as e:
+            print(f"[FINRA] Short volume refresh error: {e}")
+
     def job_insider_signals_refresh():
         """Refresh SEC Form 4 insider-trading data daily for portfolio + watchlist symbols,
         then check for buying/selling clusters (FSI L2)."""
@@ -2577,6 +2620,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
+    scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")

@@ -587,6 +587,19 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         if confluence_line:
             port_block += f"\n{_strip_portfolio(confluence_line)}"
 
+    macro_block = ""
+    try:
+        from jobless_claims_client import get_jobless_claims
+        jc = get_jobless_claims()
+        if jc:
+            macro_block = (
+                f"\nMACRO: Initial jobless claims {jc['latest']:,.0f} ({jc['date']}), "
+                f"{jc['trend_8w']['direction']} vs 8wk avg, WoW {jc['change_wow']:+,.0f}, "
+                f"level {jc['level_flag']}"
+            )
+    except Exception:
+        pass
+
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "
         "rate-limited, or the app just started. Do not invent prices, historical highs, or figures "
@@ -597,7 +610,7 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
 {_build_privacy_notice()}
 {interest_block}{port_block}{entities_block}
 
-MARKET SNAPSHOT:{market_snapshot_warning}
+MARKET SNAPSHOT:{market_snapshot_warning}{macro_block}
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}
 
 SIGNAL SUMMARY (last 4h):

@@ -1472,15 +1472,20 @@ def get_layout_prefs(user_id: int, page: str) -> dict:
     except Exception:
         prefs = {}
     layout = prefs.get("layout", {}).get(page, {})
-    return {"hidden": layout.get("hidden", []), "order": layout.get("order", {})}
+    return {
+        "hidden": layout.get("hidden", []),
+        "order": layout.get("order", {}),
+        "sizes": layout.get("sizes", {}),
+    }
 
 
-def save_layout_prefs(user_id: int, page: str, hidden: list, order: dict) -> None:
+def save_layout_prefs(user_id: int, page: str, hidden: list, order: dict, sizes: dict | None = None) -> None:
     with get_conn() as conn:
         row = conn.execute("SELECT preferences FROM users WHERE id=?", (user_id,)).fetchone()
         try:
             prefs = json.loads(row["preferences"] or "{}") if row else {}
         except Exception:
             prefs = {}
-        prefs.setdefault("layout", {})[page] = {"hidden": hidden, "order": order}
+        entry = {"hidden": hidden, "order": order, "sizes": sizes or {}}
+        prefs.setdefault("layout", {})[page] = entry
         conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), user_id))

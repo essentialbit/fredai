@@ -1586,6 +1586,23 @@ def api_youtube_channels():
     return jsonify(results)
 
 
+_VIDEO_EMBED_PREFIXES = ("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/")
+
+
+@app.route("/popout/video")
+@login_required
+def popout_video():
+    """Standalone floating player window -- opened via window.open() from any
+    video widget, so it's a genuinely separate browsing context that survives
+    the opener navigating to a different page/tab (real window.open, not an
+    in-page overlay)."""
+    src = request.args.get("src", "")
+    title = request.args.get("title", "Fred AI Video")[:120]
+    if not src.startswith(_VIDEO_EMBED_PREFIXES):
+        return "Invalid video source", 400
+    return render_template("video_popout.html", src=src, title=title)
+
+
 @app.route("/news")
 @login_required
 def news_page():
@@ -1749,13 +1766,16 @@ def api_save_layout():
     page = str(data.get("page", "")).strip()
     hidden = data.get("hidden", [])
     order = data.get("order", {})
+    sizes = data.get("sizes", {})
     if not page:
         return jsonify({"error": "page is required"}), 400
     if not isinstance(hidden, list) or not all(isinstance(h, str) for h in hidden):
         return jsonify({"error": "hidden must be a list of widget ids"}), 400
     if not isinstance(order, dict) or not all(isinstance(v, int) for v in order.values()):
         return jsonify({"error": "order must be a widget id -> position map"}), 400
-    save_layout_prefs(session["user_id"], page, hidden, order)
+    if not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values()):
+        return jsonify({"error": "sizes must be a widget id -> size string map"}), 400
+    save_layout_prefs(session["user_id"], page, hidden, order, sizes)
     return jsonify({"status": "ok"})
 
 
@@ -2080,6 +2100,17 @@ def _get_market_status() -> dict:
     if 21 <= hour < 22:
         return {"status": "AH", "label": "After Hours", "color": "#9b59ff"}
     return {"status": "CLOSED", "label": "Market Closed", "color": "#4a6380"}
+
+
+@app.route("/api/alerts")
+@login_required
+def api_alerts():
+    """Fred's own alert stream -- sentiment shifts, volume spikes, insider
+    clusters, and fired technical (price/RSI/MA/volume) alerts, all funneled
+    through the same `alerts` table via insert_alert(). This is the real
+    price-action/volatility signal, not a separate detector."""
+    limit = min(max(request.args.get("limit", 10, type=int), 1), 50)
+    return jsonify({"alerts": get_recent_alerts(limit=limit)})
 
 
 @app.route("/api/asx/quotes")

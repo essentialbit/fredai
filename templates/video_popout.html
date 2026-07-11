@@ -1,0 +1,18 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{ title }} — Fred AI</title>
+<style>
+  html,body{margin:0;padding:0;background:#03080f;height:100%;overflow:hidden;font-family:'JetBrains Mono',monospace}
+  #bar{position:fixed;top:0;left:0;right:0;height:26px;background:#080f1e;color:#94a3b8;font-size:10px;font-weight:700;
+       letter-spacing:1px;display:flex;align-items:center;padding:0 10px;border-bottom:1px solid rgba(0,180,255,.15);z-index:2}
+  #bar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;color:#00d2ff}
+  iframe{position:fixed;top:26px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 26px);border:0}
+</style>
+</head>
+<body>
+  <div id="bar"><span>{{ title }}</span></div>
+  <iframe src="{{ src }}&autoplay=1" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+</body>
+</html>

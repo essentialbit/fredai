@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from dollar_index_client import get_dollar_index
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/dollar-index")
+@login_required
+def api_dollar_index():
+    """Broad Dollar Index (FRED DTWEXBGS), currency-market macro regime
+    signal (FSI L2) -- cached 1h, see dollar_index_client.py."""
+    return jsonify(get_dollar_index() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2213,6 +2222,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Broad Dollar Index / DTWEXBGS currency regime signal (cached 1h in dollar_index_client.py)
+        try:
+            di = get_dollar_index()
+            if di:
+                _macro_cache = {**_macro_cache, "DOLLAR_INDEX": {
+                    "label": "Broad $", "value": di["latest"], "rating": di["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] dollar_index error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

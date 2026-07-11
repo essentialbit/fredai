@@ -53,6 +53,7 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from finviz_client import refresh_short_interest
 from sec_client import fetch_form4_filings
+from volume_anomaly import get_volume_anomaly_cached
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -799,6 +800,31 @@ def api_watchlist():
         if spread:
             entry["cross_exchange_spread"] = spread
         result.append(entry)
+    return jsonify(result)
+
+
+@app.route("/api/volume-anomaly/<ticker>")
+@login_required
+def api_volume_anomaly(ticker):
+    ticker = ticker.upper().strip()
+    if not _valid_symbol(ticker):
+        return jsonify({"error": "invalid symbol"}), 400
+    return jsonify(get_volume_anomaly_cached(ticker))
+
+
+@app.route("/api/volume-anomalies")
+@login_required
+def api_volume_anomalies():
+    """Batch per-ticker signal/news volume anomaly check across the caller's
+    own watchlist -- {"AAPL": {"status": "ok", "level": "elevated", ...}, ...},
+    tickers still building up history are simply omitted (nothing to flag yet)."""
+    uid = session["user_id"]
+    tickers = [w["symbol"] for w in get_watchlist(uid)]
+    result = {}
+    for sym in tickers:
+        data = get_volume_anomaly_cached(sym)
+        if data.get("status") == "ok" and data.get("level") != "normal":
+            result[sym] = data
     return jsonify(result)
 
 

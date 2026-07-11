@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from fed_liquidity import get_liquidity_snapshot
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/fed-liquidity")
+@login_required
+def api_fed_liquidity():
+    """Fed balance sheet (WALCL) / M2 money supply (M2SL) liquidity regime
+    (FSI L2) -- cached 12h, see fed_liquidity.py."""
+    return jsonify(get_liquidity_snapshot() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2213,6 +2222,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Fed balance sheet / M2 liquidity regime (cached 12h in fed_liquidity.py)
+        try:
+            liq = get_liquidity_snapshot()
+            if liq:
+                _macro_cache = {**_macro_cache, "FED_LIQUIDITY": {
+                    "label": "Fed Liquidity", "value": liq["walcl"]["change_wow_pct"], "rating": liq["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] fed_liquidity error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

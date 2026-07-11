@@ -672,6 +672,33 @@ html[data-touch="1"] .pos-row { min-height:var(--touch) }
 .ctab{padding:6px clamp(8px,1.5vw,12px);background:none;border:none;cursor:pointer;font-size:var(--font-xs);font-weight:600;letter-spacing:.5px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;min-height:var(--touch);display:flex;align-items:center;white-space:nowrap}
 .ctab.active{color:var(--blue);border-bottom-color:var(--blue)}
 #sym-sel{margin-left:auto;background:var(--bg1);border:1px solid var(--border);border-radius:3px;color:var(--t2);padding:3px 6px;font-size:var(--font-xs);align-self:center}
+#cmp-legend{display:none;gap:10px;align-items:center;padding:4px var(--pad);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:var(--font-xs);flex-shrink:0;flex-wrap:wrap}
+#cmp-legend.on{display:flex}
+.cmp-item{display:flex;gap:5px;align-items:center;color:var(--t2)}
+.cmp-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.cmp-pct{font-weight:600}
+.cmp-x{cursor:pointer;color:var(--t3);padding:0 2px}
+.cmp-x:hover{color:var(--red)}
+#cmp-exit{margin-left:auto;background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);cursor:pointer;font-size:var(--font-xs);padding:2px 8px}
+#cmp-exit:hover{color:var(--t1);border-color:var(--border2)}
+#cmdk-overlay,#keymap-overlay{display:none;position:fixed;inset:0;background:rgba(2,4,8,.7);backdrop-filter:blur(3px);z-index:9000}
+#cmdk-overlay.on,#keymap-overlay.on{display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
+#cmdk-box{width:min(560px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
+#cmdk-inp{width:100%;background:var(--bg1);border:none;outline:none;color:var(--t1);font-family:var(--mono);font-size:15px;padding:14px 16px;border-bottom:1px solid var(--border)}
+#cmdk-inp::placeholder{color:var(--t3)}
+#cmdk-results{max-height:46vh;overflow-y:auto}
+.cmdk-row{display:flex;gap:10px;align-items:baseline;padding:9px 16px;cursor:pointer;font-size:var(--font-xs)}
+.cmdk-row.sel,.cmdk-row:hover{background:var(--bg3)}
+.cmdk-sym{font-family:var(--mono);font-weight:600;color:var(--t1);min-width:80px}
+.cmdk-name{color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.cmdk-act{color:var(--blue);font-family:var(--mono)}
+.cmdk-hint{padding:8px 16px;color:var(--t3);font-size:var(--font-xs);border-top:1px solid var(--border);display:flex;gap:14px}
+.cmdk-hint kbd,#keymap-box kbd{background:var(--bg1);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:var(--mono);font-size:10px;color:var(--t2)}
+#keymap-box{width:min(440px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);padding:18px 20px}
+#keymap-box h3{margin:0 0 12px;font-size:13px;color:var(--t1);letter-spacing:.5px}
+.km-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:var(--font-xs);color:var(--t2)}
+.km-row:last-child{border-bottom:none}
+.km-keys{display:flex;gap:4px}
 #price-chart-wrap{flex:1;position:relative;min-height:0}
 #price-chart{width:100%;height:100%}
 .ind-tab.active{color:var(--purple);border-bottom-color:var(--purple)}
@@ -1242,6 +1269,22 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .lz-widget[data-widget-id="lz-relationship"] .customizable-widget-body,
 .lz-widget[data-widget-id="lz-video"] .customizable-widget-body{flex:1;min-height:0}
 
+/* Ticker Network — ephemeral micro-popup on hover/click of a node or link */
+#rn-tooltip{position:fixed;z-index:2000;pointer-events:none;background:rgba(6,15,28,.97);
+  border:1px solid rgba(0,180,255,.35);border-radius:8px;padding:10px 12px;
+  font-family:'JetBrains Mono',monospace;font-size:10px;color:#e8f4ff;max-width:260px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;line-height:1.5;
+  transition:opacity .2s ease;}
+#rn-tooltip.pinned{pointer-events:auto}
+.rn-tt-title{font-size:11px;font-weight:700;color:var(--blue);margin-bottom:4px;display:flex;justify-content:space-between;gap:10px}
+.rn-tt-sub{color:var(--t2);font-size:9.5px;margin-bottom:4px}
+.rn-tt-row{display:flex;justify-content:space-between;gap:10px;color:var(--t2)}
+.rn-tt-label{color:var(--t3)}
+.rn-tt-desc{margin-top:6px;color:var(--t2);font-family:'Inter',sans-serif;font-size:9.5px;line-height:1.4}
+.rn-tt-badge{font-size:8px;letter-spacing:.5px;padding:1px 5px;border-radius:3px}
+.rn-tt-close{cursor:pointer;color:var(--t3);font-size:10px;display:block;margin-top:6px;text-align:right}
+.rn-tt-close:hover{color:var(--t1)}
+
 /* Signal density items */
 .sd-item{
   display:flex;align-items:center;gap:8px;padding:5px 0;
@@ -1637,13 +1680,14 @@ html[data-tier="micro"] #ov-globe-stage {
         <button class="ctab active" onclick="switchChart('price',this)">Price</button>
         <button class="ctab" onclick="switchChart('sentiment',this)">Sentiment</button>
         <button class="ctab ind-tab" id="ind-toggle" onclick="toggleIndicators(this)">RSI/MACD</button>
-        <select id="sym-sel" onchange="loadPriceChart()">
+        <select id="sym-sel" onchange="loadPriceChart();saveChartWorkspace()">
           <option value="SPY">SPY</option><option value="QQQ">QQQ</option>
           <option value="AAPL">AAPL</option><option value="NVDA">NVDA</option>
           <option value="TSLA">TSLA</option><option value="MSFT">MSFT</option>
           <option value="BTC-USD">BTC</option><option value="ETH-USD">ETH</option>
         </select>
       </div>
+      <div id="cmp-legend"></div>
       <div id="price-chart-wrap"><div id="price-chart"></div></div>
       <div id="ind-chart-wrap">
         <div id="rsi-chart"><div class="ind-label">RSI(14) <span id="rsi-val"></span></div></div>
@@ -1900,10 +1944,10 @@ html[data-tier="micro"] #ov-globe-stage {
             <div class="customizable-widget-body" id="lz-portfolio-body"><div class="lz-empty">Loading…</div></div>
           </div>
 
-          <div class="customizable-widget lz-widget" data-widget-id="lz-risk" data-size="s">
+          <div class="customizable-widget lz-widget" data-widget-id="lz-alerts" data-size="s">
             <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
               <span class="customizable-widget-toggle">▾</span>
-              <span class="customizable-widget-title">◎ Risk Metrics</span>
+              <span class="customizable-widget-title">⚡ Price Action Alerts</span>
               <span class="cw-actions" onclick="event.stopPropagation()">
                 <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
                 <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
@@ -1911,35 +1955,7 @@ html[data-tier="micro"] #ov-globe-stage {
                 <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
               </span>
             </div>
-            <div class="customizable-widget-body" id="lz-risk-body"><div class="lz-empty">Loading…</div></div>
-          </div>
-
-          <div class="customizable-widget lz-widget" data-widget-id="lz-feargreed" data-size="s">
-            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
-              <span class="customizable-widget-toggle">▾</span>
-              <span class="customizable-widget-title">☍ Fear &amp; Greed</span>
-              <span class="cw-actions" onclick="event.stopPropagation()">
-                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
-                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
-                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
-                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
-              </span>
-            </div>
-            <div class="customizable-widget-body" id="lz-feargreed-body"><div class="lz-empty">Loading…</div></div>
-          </div>
-
-          <div class="customizable-widget lz-widget" data-widget-id="lz-accuracy" data-size="s">
-            <div class="customizable-widget-header" onclick="toggleCwWidget(this)">
-              <span class="customizable-widget-toggle">▾</span>
-              <span class="customizable-widget-title">✓ Signal Accuracy</span>
-              <span class="cw-actions" onclick="event.stopPropagation()">
-                <button onclick="cwCycleSize('landingzone',this)" title="Resize">⤢</button>
-                <button onclick="cwMoveWidget('landingzone',this)" title="Move left">←</button>
-                <button onclick="cwMoveWidget('landingzone',this,1)" title="Move right">→</button>
-                <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
-              </span>
-            </div>
-            <div class="customizable-widget-body" id="lz-accuracy-body"><div class="lz-empty">Loading…</div></div>
+            <div class="customizable-widget-body" id="lz-alerts-body"><div class="lz-empty">Loading…</div></div>
           </div>
 
           <div class="customizable-widget lz-widget" data-widget-id="lz-trending" data-size="s">
@@ -2052,7 +2068,7 @@ html[data-tier="micro"] #ov-globe-stage {
               </span>
             </div>
             <div class="customizable-widget-body" id="lz-globe-body" style="padding:0;display:flex;flex-direction:column">
-              <canvas id="lz-globe-canvas" style="width:100%;flex:1;display:block;min-height:0"></canvas>
+              <div id="lz-globe-canvas" style="width:100%;flex:1;min-height:0;position:relative"></div>
               <div style="padding:4px 10px;border-top:1px solid var(--border);flex-shrink:0">
                 <a href="javascript:void(0)" onclick="switchTab('globe',document.querySelector('.nav-tab[onclick*=\'globe\']'))" style="font-size:9px;color:var(--blue);text-decoration:none">Open Situation Room →</a>
               </div>
@@ -2086,15 +2102,15 @@ html[data-tier="micro"] #ov-globe-stage {
                 <button class="cw-hide" onclick="cwHideWidget('landingzone',this)" title="Hide widget">×</button>
               </span>
             </div>
-            <div class="customizable-widget-body" id="lz-video-body" style="display:flex;flex-direction:column;gap:6px">
-              <div id="lz-video-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;flex:1;overflow-y:auto"><div class="lz-empty">Loading…</div></div>
+            <div class="customizable-widget-body" id="lz-video-body" style="display:flex;flex-direction:column;gap:6px;min-height:0">
+              <div id="lz-video-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:6px;flex:1;min-height:60px;overflow-y:auto"><div class="lz-empty">Loading…</div></div>
               <div style="flex-shrink:0;border-top:1px solid var(--border);padding-top:6px">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
                   <span style="font-size:8px;font-weight:700;color:var(--red);letter-spacing:1px">● LIVE</span>
                   <span style="font-size:8px;color:var(--t3)">Bloomberg</span>
                   <button onclick="popOutLzLiveMini()" title="Pop out -- keeps playing while you navigate Fred AI" style="margin-left:auto;background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);font-size:8px;width:15px;height:15px;cursor:pointer">⇱</button>
                 </div>
-                <div id="lz-live-mini" style="width:100%;aspect-ratio:16/9;background:#000;position:relative;border-radius:4px;overflow:hidden"></div>
+                <div id="lz-live-mini" style="width:100%;height:80px;background:#000;position:relative;border-radius:4px;overflow:hidden"></div>
               </div>
             </div>
           </div>
@@ -2139,6 +2155,29 @@ html[data-tier="micro"] #ov-globe-stage {
   </div>
 
 </div><!-- /app-shell -->
+
+<!-- COMMAND PALETTE (Cmd+K / "/") -->
+<div id="cmdk-overlay" onclick="if(event.target===this)closePalette()">
+  <div id="cmdk-box">
+    <input id="cmdk-inp" placeholder="Jump to symbol, or: compare AAPL MSFT · watch TSLA · clear" autocomplete="off" spellcheck="false">
+    <div id="cmdk-results"></div>
+    <div class="cmdk-hint"><span><kbd>↑↓</kbd> navigate</span><span><kbd>↵</kbd> select</span><span><kbd>esc</kbd> close</span></div>
+  </div>
+</div>
+
+<!-- KEYBOARD MAP (?) -->
+<div id="keymap-overlay" onclick="if(event.target===this)closeKeyHelp()">
+  <div id="keymap-box">
+    <h3>KEYBOARD</h3>
+    <div class="km-row"><span>Command palette</span><span class="km-keys"><kbd>⌘K</kbd><kbd>/</kbd></span></div>
+    <div class="km-row"><span>Switch tab</span><span class="km-keys"><kbd>1</kbd>–<kbd>6</kbd></span></div>
+    <div class="km-row"><span>Compare symbols</span><span class="km-keys"><kbd>compare A B</kbd></span></div>
+    <div class="km-row"><span>Add to watchlist</span><span class="km-keys"><kbd>watch SYM</kbd></span></div>
+    <div class="km-row"><span>Exit comparison</span><span class="km-keys"><kbd>clear</kbd></span></div>
+    <div class="km-row"><span>This help</span><span class="km-keys"><kbd>?</kbd></span></div>
+    <div class="km-row"><span>Close overlay</span><span class="km-keys"><kbd>esc</kbd></span></div>
+  </div>
+</div>
 
 <!-- INSTALL MODAL -->
 <div id="install-modal">
@@ -2962,7 +3001,7 @@ async function loadInitData() {
     if (d.portfolio) renderPortfolioTab(d.portfolio);
     if (d.macro) renderMacroStrip(d.macro);
     if (trendData.length) { renderTrending(trendData); renderUltraTrend(trendData); }
-    if (!IS_NANO && CHART_CANDLES > 0) { initPriceChart(); loadPriceChart(); }
+    if (!IS_NANO && CHART_CANDLES > 0) { initPriceChart(); restoreChartWorkspace().then(loadPriceChart); }
     if (d.timeline && !IS_NANO && !IS_MOBILE) initSentChart(d.timeline);
     // Nano-specific
     if (IS_NANO) { updateNanoQuotes(quotesCache); updateNanoSignal(allSignals); updateNanoRisk(d.risk_level); }
@@ -3010,12 +3049,13 @@ const AI=['tab-ai'];
 const GB=['tab-globe-panel'];
 const LZ=['tab-landingzone'];
 const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI,...GB,...LZ];
-const LZ_WIDGET_IDS=['lz-portfolio','lz-risk','lz-feargreed','lz-accuracy','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops','lz-globe','lz-relationship','lz-video'];
+const LZ_WIDGET_IDS=['lz-portfolio','lz-alerts','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops','lz-globe','lz-relationship','lz-video'];
 
 let _dashGlobeInst = null, _dashGlobeData = [], _dashGlobeFilter = 'all';
 
 function switchTab(tab, btn) {
   activeTab = tab;
+  stopLzAutoRefresh(); // restarted below if we're actually entering landingzone
   document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.mnav-btn').forEach(b=>b.classList.remove('active'));
   if (btn) { btn.classList.add('active'); }
@@ -3065,8 +3105,17 @@ function switchTab(tab, btn) {
     } else {
       loadLandingZone();
     }
+    startLzAutoRefresh();
   }
 }
+
+// Also pause/resume on browser-tab visibility changes (not just Fred-tab
+// switches) -- no point refreshing a backgrounded browser tab either.
+document.addEventListener('visibilitychange', () => {
+  if (activeTab !== 'landingzone') return;
+  if (document.visibilityState === 'visible') startLzAutoRefresh();
+  else stopLzAutoRefresh();
+});
 
 const _GCOLS = {market:'#00b4ff',ai:'#00ff88',geopolitical:'#ff3b5c',central_bank:'#f5a623',macro:'#9b59ff',ticker:'#8ba3b8'};
 function _gcol(cat){return _GCOLS[cat]||'#8ba3b8'}
@@ -3371,54 +3420,88 @@ function cwCycleSize(page, btnEl) {
 
 // ── LANDING ZONE (test) — lightweight best-of readouts, one fetch per widget ──
 function loadLandingZone() {
-  loadLzPortfolio(); loadLzRisk(); loadLzFearGreed(); loadLzAccuracy();
+  loadLzPortfolio(); loadLzAlerts();
   loadLzTrending(); loadLzWatchlist(); loadLzAiUniverse(); loadLzNews();
   loadLzGlobalMap(); loadLzBriefing(); loadLzOps();
   loadLzGlobePreview(); loadLzRelationshipNetwork(); loadLzVideoGrid(); initLzLiveMini();
 }
 
+// Auto-refresh: nothing on this tab should ever go stale while it's actually
+// on screen. Runs only while the Landing Zone tab is active AND the browser
+// tab itself is visible (no point burning fetches/D3 re-renders on a
+// backgrounded tab). _rnData is force-cleared each tick since it's normally
+// fetch-once-and-cache -- the ticker network is supposed to be live.
+const LZ_REFRESH_MS = 60000;
+let _lzRefreshTimer = null;
+function startLzAutoRefresh() {
+  stopLzAutoRefresh();
+  _lzRefreshTimer = setInterval(() => {
+    if (activeTab === 'landingzone' && document.visibilityState === 'visible') {
+      _rnData = null;
+      loadLandingZone();
+    }
+  }, LZ_REFRESH_MS);
+}
+function stopLzAutoRefresh() {
+  if (_lzRefreshTimer) { clearInterval(_lzRefreshTimer); _lzRefreshTimer = null; }
+}
+
 // Situation Room preview: a flat 2D dot map, not a second live globe.gl/WebGL
 // instance -- this app targets Raspberry Pi deployments too, and two
 // concurrently-animating 3D globes (one per tab, both keep rendering even
-// when hidden via display:none) is real GPU cost for a small teaser tile.
-// Real 3D exploration stays one click away via the "Open Situation Room" link.
+// when hidden via display:none) is real GPU cost for a small teaser tile --
+// but per user direction it's a real interactive mini globe.gl instance
+// (same library the full Situation Room tab uses, not a second heavier
+// rebuild): drag to rotate, scroll to zoom, auto-rotates when idle. Refreshed
+// in place (pointsData/arcsData, not torn down and rebuilt) by the Landing
+// Zone auto-refresh loop so it never goes stale.
+let _lzGlobeInst = null;
 async function loadLzGlobePreview() {
-  const canvas = g('lz-globe-canvas');
-  if (!canvas) return;
+  const container = g('lz-globe-canvas');
+  if (!container || !window.Globe) return;
   try {
     const r = await fetch('/api/news/globe-data?hours=24');
     const data = await r.json();
-    canvas._lzPoints = data.points || [];
-    _drawLzGlobePreview(canvas);
-  } catch(e) { /* leave canvas blank -- non-critical decorative widget */ }
+    const points = (data.points || []).map(p => ({...p, color: _gcol(p.category)}));
+    const arcs = (data.story_arcs || []).slice(0, 25).map(s => {
+      const score = s.sentiment_score || 0;
+      const color = score > 0.05 ? 'rgba(0,255,136,.7)' : score < -0.05 ? 'rgba(255,59,92,.7)' : 'rgba(245,166,35,.5)';
+      return {startLat: s.hq_lat, startLng: s.hq_lng, endLat: s.exchange_lat, endLng: s.exchange_lng, color: [color, 'rgba(0,0,0,0.1)']};
+    });
+
+    if (!_lzGlobeInst) {
+      _lzGlobeInst = Globe({animateIn: false})(container)
+        .globeImageUrl('//unpkg.com/three-globe/example/img/earth-night.jpg')
+        .backgroundColor('rgba(0,0,0,0)')
+        .atmosphereColor('rgba(0,180,255,.15)')
+        .atmosphereAltitude(0.2)
+        .pointLat('lat').pointLng('lng')
+        .pointColor('color')
+        .pointAltitude(d => Math.min(0.04 + (d.count||1)*0.012, 0.2))
+        .pointRadius(d => Math.min(0.35 + (d.count||1)*0.06, 1))
+        .pointLabel(d => `${esc(d.label)} · ${d.count} signals`)
+        .arcColor('color')
+        .arcAltitude(0.15)
+        .arcStroke(0.4)
+        .arcDashLength(0.4)
+        .arcDashGap(0.2)
+        .arcDashAnimateTime(2500);
+      const controls = _lzGlobeInst.controls();
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.7;
+      controls.enableZoom = true;
+      controls.enablePan = false;
+      _resizeLzGlobe();
+    }
+    _lzGlobeInst.pointsData(points).arcsData(arcs);
+  } catch(e) { /* leave the globe as-is -- non-critical, this cycle's refresh failed but the last good render remains visible */ }
 }
 
-function _drawLzGlobePreview(canvas) {
-  const points = canvas._lzPoints || [];
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth || 200, h = canvas.clientHeight || 100;
-  if (!w || !h) return;
-  canvas.width = w * dpr; canvas.height = h * dpr;
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.fillStyle = '#03080f';
-  ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(0,180,255,.08)';
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 6; i++) { const y = (h/6)*i; ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
-  for (let i = 1; i < 12; i++) { const x = (w/12)*i; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,h); ctx.stroke(); }
-  points.forEach(p => {
-    const x = (p.lng + 180) / 360 * w;
-    const y = (90 - p.lat) / 180 * h;
-    const r = Math.min(2 + (p.count||1) * 0.4, 9);
-    const color = _gcol(p.category);
-    ctx.beginPath();
-    ctx.fillStyle = color + 'cc';
-    ctx.shadowColor = color; ctx.shadowBlur = 8;
-    ctx.arc(x, y, r, 0, Math.PI*2);
-    ctx.fill();
-  });
-  ctx.shadowBlur = 0;
+function _resizeLzGlobe() {
+  const container = g('lz-globe-canvas');
+  if (!container || !_lzGlobeInst) return;
+  const w = container.clientWidth, h = container.clientHeight;
+  if (w && h) _lzGlobeInst.width(w).height(h);
 }
 
 function loadLzRelationshipNetwork() {
@@ -3447,7 +3530,7 @@ function popOutLzLiveMini() {
 document.addEventListener('lz-resize', (e) => {
   const widget = e.target;
   if (!widget || !widget.dataset) return;
-  if (widget.dataset.widgetId === 'lz-globe') _drawLzGlobePreview(g('lz-globe-canvas'));
+  if (widget.dataset.widgetId === 'lz-globe') _resizeLzGlobe();
   if (widget.dataset.widgetId === 'lz-relationship') loadLzRelationshipNetwork();
 });
 
@@ -3463,45 +3546,30 @@ async function loadLzPortfolio() {
   } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
 }
 
-async function loadLzRisk() {
-  const body = g('lz-risk-body');
+// Price Action Alerts -- Fred's own alert stream (sentiment shifts, volume
+// spikes, insider clusters, fired price/RSI/MA/volume technical alerts),
+// all funneled through the same `alerts` table -- real volatility signal,
+// not a separate detector built just for this widget.
+const _ALERT_LEVEL_COLOR = {warning: 'var(--gold)', critical: 'var(--red)', info: 'var(--blue)'};
+async function loadLzAlerts() {
+  const body = g('lz-alerts-body');
   try {
-    const r = await fetch('/api/portfolio/risk'); const d = await r.json();
-    if (d.status !== 'ok') {
-      body.innerHTML = `<div class="lz-empty">${d.status==='no_positions'?'No holdings yet':'Needs more price history'}</div>`;
-      return;
-    }
-    body.innerHTML = `<div class="lz-grid2">
-      <div><span class="lz-label">Sharpe</span><span class="lz-val">${d.sharpe ?? '--'}</span></div>
-      <div><span class="lz-label">Sortino</span><span class="lz-val">${d.sortino ?? '--'}</span></div>
-      <div><span class="lz-label">Max DD</span><span class="lz-val neg">${d.max_drawdown_pct}%</span></div>
-      <div><span class="lz-label">VaR 95%</span><span class="lz-val">${d.var_95_1d_pct}%</span></div>
-    </div>`;
-  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
-}
-
-async function loadLzFearGreed() {
-  const body = g('lz-feargreed-body');
-  try {
-    const r = await fetch('/api/fear-greed'); const d = await r.json();
-    if (d.status !== 'ok') { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; return; }
-    const score = Math.round(d.score);
-    const color = score>=75?'var(--green)':score>=55?'#8ecf7a':score>=45?'var(--t2)':score>=25?'var(--gold)':'var(--red)';
-    body.innerHTML = `<div class="lz-stat-big" style="color:${color}">${score}</div>
-      <div class="lz-sub" style="color:${color};text-transform:uppercase;letter-spacing:1px">${esc(d.rating||'')}</div>`;
-  } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
-}
-
-async function loadLzAccuracy() {
-  const body = g('lz-accuracy-body');
-  try {
-    const r = await fetch('/api/backtest/accuracy'); const d = await r.json();
-    const day = d['24h'];
-    if (!day || day.accuracy_pct == null) { body.innerHTML = '<div class="lz-empty">Not enough data yet</div>'; return; }
-    const delta = day.baseline_delta_pct;
-    body.innerHTML = `<div class="lz-stat-big">${day.accuracy_pct}%</div>
-      <div class="lz-sub">24h direction accuracy · ${day.total} signals</div>
-      ${delta!=null?`<div class="${delta>=0?'pos':'neg'}" style="font-size:10px">${delta>=0?'+':''}${delta}pp vs naive baseline</div>`:''}`;
+    const r = await fetch('/api/alerts?limit=8'); const d = await r.json();
+    const alerts = d.alerts || [];
+    if (!alerts.length) { body.innerHTML = '<div class="lz-empty">No alerts fired recently</div>'; return; }
+    body.innerHTML = alerts.map(a => {
+      const color = _ALERT_LEVEL_COLOR[a.level] || 'var(--t3)';
+      return `<div class="lz-row" style="align-items:flex-start;font-family:'Inter',sans-serif">
+        <span style="display:flex;gap:6px;align-items:flex-start;min-width:0">
+          <span style="width:6px;height:6px;border-radius:50%;background:${color};margin-top:4px;flex-shrink:0"></span>
+          <span style="min-width:0">
+            <span style="color:var(--t1);font-weight:600">${a.asset ? esc(a.asset)+' — ' : ''}${esc(a.title)}</span><br>
+            <span style="color:var(--t3);font-size:9px">${esc(a.message||'')}</span>
+          </span>
+        </span>
+        <span style="color:var(--t3);font-size:8px;white-space:nowrap;flex-shrink:0">${relTime(a.timestamp)}</span>
+      </div>`;
+    }).join('');
   } catch(e) { body.innerHTML = '<div class="lz-empty">Unavailable</div>'; }
 }
 
@@ -3637,6 +3705,103 @@ function cwRestoreWidget(page, id) {
 }
 
 let _rnData = null;
+
+// ── Ticker Network micro-popup ── one shared floating tooltip (position:fixed
+// so it escapes the mini Landing Zone widget's own overflow:hidden/scroll),
+// reused by both the full Situation Room graph and the mini widget. Hover
+// shows it; moving away lingers 3s before fading (long enough to read, short
+// enough not to clutter); click pins it open until the user clicks elsewhere.
+let _rnTooltipPinned = false;
+let _rnHideTimer = null;
+
+function _rnTooltipEl() {
+  let el = g('rn-tooltip');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'rn-tooltip';
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+function _positionRnTooltip(x, y) {
+  const el = _rnTooltipEl();
+  const pad = 14;
+  let left = x + pad, top = y + pad;
+  const rect = el.getBoundingClientRect();
+  if (left + rect.width > window.innerWidth - 8) left = x - rect.width - pad;
+  if (top + rect.height > window.innerHeight - 8) top = y - rect.height - pad;
+  el.style.left = Math.max(8, left) + 'px';
+  el.style.top = Math.max(8, top) + 'px';
+}
+
+function _showRnTooltip(x, y, html, pin) {
+  clearTimeout(_rnHideTimer);
+  const el = _rnTooltipEl();
+  el.innerHTML = html;
+  el.style.display = 'block';
+  el.style.opacity = '1';
+  _positionRnTooltip(x, y);
+  requestAnimationFrame(() => _positionRnTooltip(x, y)); // re-measure now that content is in
+  if (pin) { el.classList.add('pinned'); _rnTooltipPinned = true; }
+}
+
+function _reallyHideRnTooltip() {
+  const el = g('rn-tooltip');
+  if (el) { el.style.display = 'none'; el.style.opacity = '1'; el.classList.remove('pinned'); }
+  _rnTooltipPinned = false;
+}
+
+function _hideRnTooltip(force) {
+  if (_rnTooltipPinned && !force) return;
+  clearTimeout(_rnHideTimer);
+  if (force) { _reallyHideRnTooltip(); return; }
+  _rnHideTimer = setTimeout(_reallyHideRnTooltip, 3000);
+}
+
+function _fmtMktCap(v) {
+  if (!v) return '--';
+  if (v >= 1e12) return '$' + (v/1e12).toFixed(2) + 'T';
+  if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return '$' + (v/1e6).toFixed(0) + 'M';
+  return '$' + v.toLocaleString();
+}
+
+function _rnNodeTooltipHtml(d, linkData) {
+  const chgCls = (d.change_pct||0) >= 0 ? 'pos' : 'neg';
+  const rels = linkData.filter(l => (l.source.id||l.source) === d.id || (l.target.id||l.target) === d.id);
+  const sent = d.sentiment;
+  return `
+    <div class="rn-tt-title"><span>${esc(d.id)}</span><span class="${chgCls}">${d.price?fmtPrice(d.price):'--'} ${(d.change_pct||0)>=0?'+':''}${(d.change_pct||0).toFixed(2)}%</span></div>
+    <div class="rn-tt-sub">${esc(d.name||d.id)}</div>
+    <div class="rn-tt-row"><span class="rn-tt-label">Sector</span><span>${esc(d.sector||'--')}${d.industry?' · '+esc(d.industry):''}</span></div>
+    ${d.market_cap ? `<div class="rn-tt-row"><span class="rn-tt-label">Market Cap</span><span>${_fmtMktCap(d.market_cap)}</span></div>` : ''}
+    ${sent ? `<div class="rn-tt-row"><span class="rn-tt-label">Sentiment (24h)</span><span class="${sent.signal_type==='bullish'?'pos':sent.signal_type==='bearish'?'neg':''}">${esc(sent.signal_type)} · ${sent.signal_count} signals</span></div>` : ''}
+    ${rels.length ? `<div class="rn-tt-desc"><b>${rels.length} relationship${rels.length===1?'':'s'}:</b><br>${rels.slice(0,4).map(r=>'• '+esc(r.desc)).join('<br>')}</div>` : ''}
+    <span class="rn-tt-close" onclick="_hideRnTooltip(true)">Close ×</span>`;
+}
+
+function _rnEdgeTooltipHtml(d) {
+  const known = d.data_source === 'known_relationship';
+  const badge = known
+    ? '<span class="rn-tt-badge pos" style="background:rgba(0,255,170,.12)">KNOWN RELATIONSHIP</span>'
+    : '<span class="rn-tt-badge" style="background:rgba(245,166,35,.15);color:var(--gold)">STATISTICAL CORRELATION</span>';
+  const src = d.source.id || d.source, tgt = d.target.id || d.target;
+  return `
+    <div class="rn-tt-title"><span>${esc(src)} ↔ ${esc(tgt)}</span></div>
+    <div style="margin-bottom:4px">${badge}</div>
+    <div class="rn-tt-row"><span class="rn-tt-label">Type</span><span>${esc(d.type)}</span></div>
+    ${d.corr_value != null ? `<div class="rn-tt-row"><span class="rn-tt-label">Correlation</span><span>${d.corr_value>=0?'+':''}${d.corr_value.toFixed(2)}</span></div>` : ''}
+    <div class="rn-tt-desc">${esc(d.desc)}</div>
+    <span class="rn-tt-close" onclick="_hideRnTooltip(true)">Close ×</span>`;
+}
+
+document.addEventListener('click', (e) => {
+  if (!_rnTooltipPinned) return;
+  const el = g('rn-tooltip');
+  if (el && !el.contains(e.target)) _reallyHideRnTooltip();
+});
+
 async function renderRelationshipNetwork(canvasId = 'rn-canvas', checkboxId = 'rn-show-correlated', height = 380) {
   const canvas = g(canvasId);
   if (!canvas || !window.d3) return;
@@ -3670,18 +3835,41 @@ async function renderRelationshipNetwork(canvasId = 'rn-canvas', checkboxId = 'r
     .force('link', d3.forceLink(linkData).id(d => d.id).distance(70).strength(0.4))
     .force('charge', d3.forceManyBody().strength(-160))
     .force('center', d3.forceCenter(W/2, H/2))
-    .force('collision', d3.forceCollide().radius(d => d.tracked ? 22 : 14));
+    // Extra pull toward center for the user's own portfolio/watchlist tickers
+    // specifically, so the graph opens focused on what's actually relevant
+    // to them rather than wherever the force layout happens to settle.
+    .force('trackedX', d3.forceX(W/2).strength(d => d.tracked ? 0.12 : 0.01))
+    .force('trackedY', d3.forceY(H/2).strength(d => d.tracked ? 0.12 : 0.01))
+    .force('collision', d3.forceCollide().radius(d => d.tracked ? 22 : 14))
+    // Default alphaDecay (~0.0228, tuned for ~300 ticks at 60fps) took ~30s
+    // to fully settle when measured live -- far too long for a small widget
+    // that's supposed to read as "live," not "still finding its layout."
+    // Faster decay + more velocity damping settles in a couple of seconds
+    // without looking rushed/jumpy.
+    .alphaDecay(0.1)
+    .velocityDecay(0.45);
 
   const link = svg.append('g').selectAll('line').data(linkData).enter().append('line')
     .attr('stroke', d => d.color).attr('stroke-width', d => Math.max(1, d.strength / 3))
     .attr('stroke-opacity', d => d.data_source === 'known_relationship' ? 0.7 : 0.35)
-    .attr('stroke-dasharray', d => d.data_source === 'statistical_correlation' ? '3,3' : null);
+    .attr('stroke-dasharray', d => d.data_source === 'statistical_correlation' ? '3,3' : null)
+    .style('cursor', 'pointer')
+    .style('pointer-events', 'stroke') // hover/click the thin line itself, not just its bounding box
+    .on('mouseenter', function(e,d) { d3.select(this).attr('stroke-opacity', 1); if (!_rnTooltipPinned) _showRnTooltip(e.clientX, e.clientY, _rnEdgeTooltipHtml(d)); })
+    .on('mousemove', (e) => { if (!_rnTooltipPinned) _positionRnTooltip(e.clientX, e.clientY); })
+    .on('mouseleave', function(e,d) { d3.select(this).attr('stroke-opacity', d.data_source === 'known_relationship' ? 0.7 : 0.35); if (!_rnTooltipPinned) _hideRnTooltip(); })
+    .on('click', (e,d) => { e.stopPropagation(); _showRnTooltip(e.clientX, e.clientY, _rnEdgeTooltipHtml(d), true); });
 
   const node = svg.append('g').selectAll('g').data(nodeData).enter().append('g')
+    .style('cursor', 'pointer')
     .call(d3.drag()
       .on('start', (e,d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
       .on('drag', (e,d) => { d.fx=e.x; d.fy=e.y; })
-      .on('end', (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+      .on('end', (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
+    .on('mouseenter', (e,d) => { if (!_rnTooltipPinned) _showRnTooltip(e.clientX, e.clientY, _rnNodeTooltipHtml(d, linkData)); })
+    .on('mousemove', (e) => { if (!_rnTooltipPinned) _positionRnTooltip(e.clientX, e.clientY); })
+    .on('mouseleave', () => { if (!_rnTooltipPinned) _hideRnTooltip(); })
+    .on('click', (e,d) => { e.stopPropagation(); _showRnTooltip(e.clientX, e.clientY, _rnNodeTooltipHtml(d, linkData), true); });
 
   node.append('circle')
     .attr('r', d => d.tracked ? 14 : 8)
@@ -3694,12 +3882,8 @@ async function renderRelationshipNetwork(canvasId = 'rn-canvas', checkboxId = 'r
     .attr('text-anchor', 'middle').attr('dy', d => d.tracked ? 26 : 18)
     .attr('font-size', d => d.tracked ? '10px' : '8px')
     .attr('font-family', "'JetBrains Mono',monospace")
-    .attr('fill', d => d.tracked ? '#e8f4ff' : 'var(--t3)');
-
-  node.append('title').text(d => {
-    const rels = linkData.filter(l => l.source.id === d.id || l.target.id === d.id);
-    return rels.map(r => r.desc).join('\n') || d.id;
-  });
+    .attr('fill', d => d.tracked ? '#e8f4ff' : 'var(--t3)')
+    .style('pointer-events', 'none');
 
   sim.on('tick', () => {
     link.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
@@ -4212,6 +4396,8 @@ function initPriceChart() {
 
 async function loadPriceChart() {
   if (!priceChart) return;
+  if (_compareSyms.length) return loadCompareChart();
+  clearCompareSeries();
   const sym=g('sym-sel').value;
   socket.emit('view_symbol',{symbol:sym});
   const period=IS_MOBILE?'5d':IS_ULTRA?'30d':'5d';
@@ -4360,7 +4546,215 @@ function toggleIndicators(btn) {
       if (priceChart) priceChart.applyOptions({width:g('price-chart').clientWidth,height:g('price-chart').clientHeight});
     });
   }
+  saveChartWorkspace();
 }
+
+// ── CHART WORKSPACE: palette + comparison + saved layout (#109) ───────────
+let _compareSyms = [], _compareSeries = [], _cmdkSel = 0, _cmdkItems = [], _wsRestoring = false, _wsSaveT = null, _aiUniSyms = null;
+const CMP_COLORS = ['#00d2ff', '#00ffaa', '#fb5607', '#8338ec'];
+
+function clearCompareSeries() {
+  _compareSeries.forEach(s => { try { priceChart.removeSeries(s.series) } catch(e){} });
+  _compareSeries = [];
+  const leg = g('cmp-legend'); if (leg) { leg.classList.remove('on'); leg.innerHTML = ''; }
+}
+
+async function loadCompareChart() {
+  if (!priceChart) return;
+  const base = g('sym-sel').value;
+  const syms = [base, ..._compareSyms.filter(s => s !== base)].slice(0, 4);
+  socket.emit('view_symbol', {symbol: base});
+  const period = IS_MOBILE ? '5d' : IS_ULTRA ? '30d' : '5d';
+  try {
+    const results = await Promise.all(syms.map(s =>
+      fetch(`/api/history/${s}?period=${period}&interval=${CHART_INTERVAL}`).then(r => r.json()).catch(() => [])));
+    if (_priceChartSeries) { try { priceChart.removeSeries(_priceChartSeries) } catch(e){} _priceChartSeries = null; }
+    clearCompareSeries();
+    const legendRows = [];
+    results.forEach((data, i) => {
+      if (!Array.isArray(data) || !data.length) return;
+      const pts = data.slice(-CHART_CANDLES)
+        .map(d => ({time: Math.floor(new Date(d.time).getTime() / 1000), close: d.close}))
+        .filter(d => d.time > 0 && !isNaN(d.close));
+      if (!pts.length) return;
+      const first = pts[0].close;
+      const norm = pts.map(p => ({time: p.time, value: +((p.close / first - 1) * 100).toFixed(2)}));
+      const color = CMP_COLORS[i % CMP_COLORS.length];
+      const series = priceChart.addLineSeries({
+        color, lineWidth: 2, priceLineVisible: false,
+        priceFormat: {type: 'custom', minMove: 0.01, formatter: v => v.toFixed(2) + '%'},
+      });
+      series.setData(norm);
+      _compareSeries.push({series, sym: syms[i]});
+      const last = norm[norm.length - 1].value;
+      legendRows.push({sym: syms[i], color, pct: last, isBase: i === 0});
+    });
+    priceChart.timeScale().fitContent();
+    const leg = g('cmp-legend');
+    if (leg && legendRows.length) {
+      leg.innerHTML = legendRows.map(r =>
+        `<span class="cmp-item"><span class="cmp-dot" style="background:${r.color}"></span>${esc(r.sym.replace('-USD',''))} <span class="cmp-pct" style="color:${r.pct>=0?'var(--green)':'var(--red)'}">${r.pct>=0?'+':''}${r.pct.toFixed(2)}%</span>${r.isBase?'':`<span class="cmp-x" onclick="removeCompare('${esc(r.sym)}')" title="Remove">×</span>`}</span>`
+      ).join('') + `<button id="cmp-exit" onclick="exitCompare()">EXIT COMPARE</button>`;
+      leg.classList.add('on');
+    }
+    if (indicatorsOn) toggleIndicators(g('ind-toggle'));
+  } catch(e) { console.error('Compare:', e); }
+}
+
+function setCompare(syms) {
+  _compareSyms = [...new Set(syms.map(s => s.toUpperCase()).filter(s => /^[A-Z0-9.^=-]{1,12}$/.test(s)))].slice(0, 3);
+  loadPriceChart();
+  saveChartWorkspace();
+}
+function removeCompare(sym) {
+  _compareSyms = _compareSyms.filter(s => s !== sym);
+  loadPriceChart();
+  saveChartWorkspace();
+}
+function exitCompare() { setCompare([]); }
+
+// ── workspace persistence via /api/user/layout (page: chart_workspace) ────
+function saveChartWorkspace() {
+  if (_wsRestoring) return;
+  clearTimeout(_wsSaveT);
+  _wsSaveT = setTimeout(() => {
+    fetch('/api/user/layout', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({page: 'chart_workspace', hidden: [], order: {},
+        state: {symbol: g('sym-sel').value, compare: _compareSyms, indicators: indicatorsOn}}),
+    }).catch(() => {});
+  }, 600);
+}
+
+async function restoreChartWorkspace() {
+  try {
+    const r = await fetch('/api/user/layout?page=chart_workspace');
+    if (!r.ok) return;
+    const st = ((await r.json()) || {}).state || {};
+    _wsRestoring = true;
+    if (st.symbol && /^[A-Z0-9.^=-]{1,12}$/.test(st.symbol)) {
+      const sel = g('sym-sel');
+      if (![...sel.options].some(o => o.value === st.symbol)) sel.add(new Option(st.symbol, st.symbol));
+      sel.value = st.symbol;
+    }
+    if (Array.isArray(st.compare)) _compareSyms = st.compare.filter(s => typeof s === 'string' && /^[A-Z0-9.^=-]{1,12}$/.test(s)).slice(0, 3);
+    if (st.indicators && !indicatorsOn && !_compareSyms.length) toggleIndicators(g('ind-toggle'));
+  } catch(e) {} finally { _wsRestoring = false; }
+}
+
+// ── command palette ────────────────────────────────────────────────────────
+function _paletteCandidates() {
+  const seen = new Set(), out = [];
+  const push = (sym, name) => { const s = (sym || '').toUpperCase(); if (s && !seen.has(s)) { seen.add(s); out.push({sym: s, name: name || ''}); } };
+  Object.keys(quotesCache).forEach(s => push(s, (quotesCache[s] || {}).name));
+  (window._watchlist || []).forEach(s => push(s, ''));
+  (window._portfolio || []).forEach(s => push(s, ''));
+  [...(g('sym-sel') || {options: []}).options].forEach(o => push(o.value, ''));
+  (_aiUniSyms || []).forEach(t => push(t.sym, t.name));
+  return out;
+}
+
+function _fuzzyScore(q, sym, name) {
+  const s = sym.toUpperCase(), n = (name || '').toUpperCase();
+  if (s === q) return 100;
+  if (s.startsWith(q)) return 80 - s.length * 0.1;
+  if (s.replace('-USD', '') === q) return 90;
+  if (s.includes(q)) return 50;
+  if (n.includes(q)) return 30;
+  let qi = 0;
+  for (let i = 0; i < s.length && qi < q.length; i++) if (s[i] === q[qi]) qi++;
+  return qi === q.length ? 15 : -1;
+}
+
+function openPalette() {
+  const ov = g('cmdk-overlay'); if (!ov) return;
+  ov.classList.add('on');
+  const inp = g('cmdk-inp');
+  inp.value = ''; _cmdkSel = 0;
+  renderPaletteResults('');
+  setTimeout(() => inp.focus(), 30);
+  if (_aiUniSyms === null) {
+    _aiUniSyms = [];
+    fetch('/api/ai-universe').then(r => r.json())
+      .then(d => { _aiUniSyms = (d.sectors || []).flatMap(sec => (sec.tickers || []).map(t => ({sym: t.symbol, name: t.name || ''}))).filter(t => typeof t.sym === 'string'); })
+      .catch(() => {});
+  }
+}
+function closePalette() { const ov = g('cmdk-overlay'); if (ov) ov.classList.remove('on'); }
+function toggleKeyHelp() { g('keymap-overlay').classList.toggle('on'); }
+function closeKeyHelp() { g('keymap-overlay').classList.remove('on'); }
+
+function renderPaletteResults(raw) {
+  const box = g('cmdk-results');
+  const q = raw.trim().toUpperCase();
+  _cmdkItems = [];
+  const cmd = q.match(/^(COMPARE|CMP)\s+(.+)/);
+  const watch = q.match(/^WATCH\s+([A-Z0-9.^=-]{1,12})$/);
+  if (cmd) {
+    const syms = cmd[2].split(/[\s,]+/).filter(Boolean).slice(0, 3);
+    _cmdkItems = [{type: 'compare', syms, label: `Compare ${syms.join(' vs ')}`}];
+  } else if (watch) {
+    _cmdkItems = [{type: 'watch', sym: watch[1], label: `Add ${watch[1]} to watchlist`}];
+  } else if (q === 'CLEAR') {
+    _cmdkItems = [{type: 'clear', label: 'Exit comparison mode'}];
+  } else if (q) {
+    _cmdkItems = _paletteCandidates()
+      .map(c => ({...c, score: _fuzzyScore(q, c.sym, c.name)}))
+      .filter(c => c.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map(c => ({type: 'jump', sym: c.sym, name: c.name, label: c.sym}));
+    if (!_cmdkItems.length && /^[A-Z0-9.^=-]{1,12}$/.test(q)) {
+      _cmdkItems = [{type: 'jump', sym: q, name: 'Load anyway', label: q}];
+    }
+  } else {
+    _cmdkItems = _paletteCandidates().slice(0, 8).map(c => ({type: 'jump', sym: c.sym, name: c.name, label: c.sym}));
+  }
+  _cmdkSel = Math.min(_cmdkSel, Math.max(0, _cmdkItems.length - 1));
+  box.innerHTML = _cmdkItems.map((it, i) => {
+    const act = it.type === 'jump' ? 'chart' : it.type;
+    const name = it.type === 'jump' ? (it.name || '') : '';
+    return `<div class="cmdk-row${i === _cmdkSel ? ' sel' : ''}" onmouseenter="_cmdkSel=${i};renderPaletteResults(g('cmdk-inp').value)" onclick="execPaletteItem(${i})"><span class="cmdk-sym">${esc(it.type === 'jump' ? it.sym.replace('-USD','') : '›')}</span><span class="cmdk-name">${esc(name || it.label)}</span><span class="cmdk-act">${esc(act)}</span></div>`;
+  }).join('') || '<div class="cmdk-row"><span class="cmdk-name">No matches</span></div>';
+}
+
+function execPaletteItem(i) {
+  const it = _cmdkItems[i]; if (!it) return;
+  closePalette();
+  if (it.type === 'jump') { exitCompareQuiet(); loadSymbolChart(it.sym); saveChartWorkspace(); }
+  else if (it.type === 'compare') { switchTab('overview', document.querySelector('.nav-tab')); setCompare(it.syms); }
+  else if (it.type === 'clear') exitCompare();
+  else if (it.type === 'watch') {
+    fetch('/api/watchlist', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({symbol: it.sym})}).then(() => loadWatchlist()).catch(() => {});
+  }
+}
+function exitCompareQuiet() { if (_compareSyms.length) { _compareSyms = []; clearCompareSeries(); } }
+
+document.addEventListener('keydown', e => {
+  const shell = g('app-shell');
+  if (!shell || !shell.classList.contains('visible')) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); g('cmdk-overlay').classList.contains('on') ? closePalette() : openPalette(); return; }
+  const t = e.target;
+  const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if (typing) {
+    if (t.id === 'cmdk-inp') {
+      if (e.key === 'ArrowDown') { e.preventDefault(); _cmdkSel = Math.min(_cmdkSel + 1, _cmdkItems.length - 1); renderPaletteResults(t.value); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); _cmdkSel = Math.max(_cmdkSel - 1, 0); renderPaletteResults(t.value); }
+      else if (e.key === 'Enter') { e.preventDefault(); execPaletteItem(_cmdkSel); }
+      else if (e.key === 'Escape') closePalette();
+    }
+    return;
+  }
+  if (e.key === '/') { e.preventDefault(); openPalette(); }
+  else if (e.key === '?') toggleKeyHelp();
+  else if (e.key === 'Escape') { closePalette(); closeKeyHelp(); }
+  else if (/^[1-6]$/.test(e.key)) {
+    const tabs = document.querySelectorAll('.nav-tab');
+    const btn = tabs[+e.key - 1];
+    if (btn) btn.click();
+  }
+});
+(() => { const inp = g('cmdk-inp'); if (inp) inp.addEventListener('input', () => { _cmdkSel = 0; renderPaletteResults(inp.value); }); })();
 
 // ── SENTIMENT CHART ───────────────────────────────────────────────────────
 function initSentChart(tl) {

@@ -1773,16 +1773,19 @@ def api_save_layout():
     page = str(data.get("page", "")).strip()
     hidden = data.get("hidden", [])
     order = data.get("order", {})
-    sizes = data.get("sizes", {})
+    sizes = data.get("sizes")
+    state = data.get("state")
     if not page:
         return jsonify({"error": "page is required"}), 400
     if not isinstance(hidden, list) or not all(isinstance(h, str) for h in hidden):
         return jsonify({"error": "hidden must be a list of widget ids"}), 400
     if not isinstance(order, dict) or not all(isinstance(v, int) for v in order.values()):
         return jsonify({"error": "order must be a widget id -> position map"}), 400
-    if not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values()):
+    if sizes is not None and (not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values())):
         return jsonify({"error": "sizes must be a widget id -> size string map"}), 400
-    save_layout_prefs(session["user_id"], page, hidden, order, sizes)
+    if state is not None and not isinstance(state, dict):
+        return jsonify({"error": "state must be an object"}), 400
+    save_layout_prefs(session["user_id"], page, hidden, order, sizes=sizes, state=state)
     return jsonify({"status": "ok"})
 
 
@@ -2097,14 +2100,15 @@ def _get_market_status() -> dict:
     return {"status": "CLOSED", "label": "Market Closed", "color": "#4a6380"}
 
 
-@app.route("/api/fear-greed")
+@app.route("/api/alerts")
 @login_required
-def api_fear_greed():
-    """CNN Fear & Greed Index -- cached 1h at the client, no key required."""
-    fg = fetch_fear_greed()
-    if not fg:
-        return jsonify({"status": "unavailable"})
-    return jsonify({"status": "ok", **fg})
+def api_alerts():
+    """Fred's own alert stream -- sentiment shifts, volume spikes, insider
+    clusters, and fired technical (price/RSI/MA/volume) alerts, all funneled
+    through the same `alerts` table via insert_alert(). This is the real
+    price-action/volatility signal, not a separate detector."""
+    limit = min(max(request.args.get("limit", 10, type=int), 1), 50)
+    return jsonify({"alerts": get_recent_alerts(limit=limit)})
 
 
 @app.route("/api/asx/quotes")

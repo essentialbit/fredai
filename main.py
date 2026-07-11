@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from skew_index import get_skew_index
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/skew-index")
+@login_required
+def api_skew_index():
+    """CBOE SKEW Index tail-risk gauge (FSI L2) -- cached 15min, see skew_index.py."""
+    return jsonify(get_skew_index() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2213,6 +2221,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # CBOE SKEW Index tail-risk gauge (cached 15min in skew_index.py)
+        try:
+            sk = get_skew_index()
+            if sk:
+                _macro_cache = {**_macro_cache, "SKEW": {
+                    "label": "SKEW", "value": sk["value"], "rating": sk["band"],
+                }}
+        except Exception as e:
+            print(f"[Job] skew_index error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

@@ -21,7 +21,7 @@ identically would overstate what the correlation data actually tells you.
 import time
 from datetime import datetime
 from graph_engine import EDGES, SECTORS, SECTOR_COLORS, EDGE_COLORS
-from memory_store import get_latest_correlation_matrix
+from memory_store import get_latest_correlation_matrix, get_ticker_info, get_sentiment_snapshot
 
 PRICE_MOVE_THRESHOLD = 3.0    # % move that triggers cascade
 NEWS_SENTIMENT_THRESHOLD = 0.7
@@ -247,6 +247,11 @@ def get_ticker_network(tracked_symbols: list[str], quotes: dict = None, max_neig
     feeds a compact widget, not a standalone page, and a sprawling network
     of everything is lower-signal than a focused one of what the user
     actually holds/watches.
+
+    Nodes and edges carry enough context (company name/sector/industry/
+    market cap, live sentiment, exact correlation coefficients) to be useful
+    to an actual financial-expert user reading a tooltip, not just enough to
+    draw circles -- see 2026-07-10 enrichment.
     """
     quotes = quotes or {}
     tracked = set(s.upper() for s in tracked_symbols)
@@ -262,6 +267,7 @@ def get_ticker_network(tracked_symbols: list[str], quotes: dict = None, max_neig
             return
         q = quotes.get(sym, {})
         sector = SECTORS.get(sym, "Other")
+        info = get_ticker_info(sym) or {}
         nodes[sym] = {
             "id": sym,
             "tracked": tracked_flag,
@@ -269,6 +275,10 @@ def get_ticker_network(tracked_symbols: list[str], quotes: dict = None, max_neig
             "sector_color": SECTOR_COLORS.get(sector, "#4a6380"),
             "price": q.get("price", 0),
             "change_pct": q.get("change_pct", 0),
+            "name": info.get("name") or q.get("name") or sym,
+            "industry": info.get("industry"),
+            "market_cap": info.get("market_cap"),
+            "country": info.get("country"),
         }
 
     for sym in tracked:
@@ -297,6 +307,11 @@ def get_ticker_network(tracked_symbols: list[str], quotes: dict = None, max_neig
                 "source": sym, "target": n["symbol"], "type": "correlated",
                 "strength": n["strength"], "color": EDGE_COLORS.get("correlated", "#8ba3b8"),
                 "desc": n["desc"], "data_source": "statistical_correlation",
+                "corr_value": n.get("corr_value"),
             })
+
+    sentiment = get_sentiment_snapshot(list(nodes.keys()), hours=24)
+    for sym, snap in sentiment.items():
+        nodes[sym]["sentiment"] = snap
 
     return {"nodes": list(nodes.values()), "edges": edges}

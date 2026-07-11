@@ -31,6 +31,7 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from cot_client import fetch_all_cot_positioning
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1730,6 +1731,14 @@ def api_correlation():
     })
 
 
+@app.route("/api/cot-positioning")
+@login_required
+def api_cot_positioning():
+    """CFTC Commitment of Traders noncommercial ("speculator") net-positioning
+    crowding, per tracked contract (FSI L2) -- cached 12h, see cot_client.py."""
+    return jsonify({"contracts": fetch_all_cot_positioning()})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2191,6 +2200,17 @@ def job_market_refresh():
                     insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
+
+        # CFTC Commitment of Traders positioning crowding (cached 12h in cot_client.py)
+        try:
+            cot = fetch_all_cot_positioning()
+            if cot:
+                most_extreme = max(cot.values(), key=lambda r: abs(r["z_score"]))
+                _macro_cache = {**_macro_cache, "COT": {
+                    "label": "COT", "value": most_extreme["z_score"], "rating": most_extreme["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] cot_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

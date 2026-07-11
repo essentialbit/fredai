@@ -243,6 +243,7 @@ _updater.init(socketio)
 
 _quotes_cache: dict = {}
 _crypto_spread_cache: dict = {}
+_insider_cluster_cache: dict = {}
 _last_scan: datetime = datetime.min
 _scan_lock = threading.Lock()
 _chat_histories: dict = {}  # user_id -> list
@@ -799,6 +800,9 @@ def api_watchlist():
         spread = _crypto_spread_cache.get(w["symbol"])
         if spread:
             entry["cross_exchange_spread"] = spread
+        cluster = _insider_cluster_cache.get(w["symbol"])
+        if cluster:
+            entry["insider_cluster"] = cluster
         result.append(entry)
     return jsonify(result)
 
@@ -2459,6 +2463,9 @@ if __name__ == "__main__":
                 txns = fetch_form4_filings(sym, limit=5)
                 total_new += insert_insider_transactions(txns)
             alerts_fired = detect_insider_clusters(symbols)
+            _insider_cluster_cache.clear()
+            for a in alerts_fired:
+                _insider_cluster_cache[a["asset"]] = {"direction": a["direction"], "distinct_owners": a["distinct_owners"]}
             print(f"[SEC] Insider signals refreshed — {total_new} new transactions, {len(alerts_fired)} cluster alert(s)")
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")

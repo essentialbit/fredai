@@ -111,6 +111,26 @@ def detect_insider_clusters(tickers: list[str], lookback_days: int = 30, min_clu
     return alerts
 
 
+def detect_short_volume_pressure(tickers: list[str], z_threshold: float = 2.0) -> list[dict]:
+    """Flag tickers whose daily FINRA Reg SHO short-volume ratio has spiked
+    well above its own trailing baseline -- a fast-moving flow signal,
+    distinct from the slower Finviz short-interest snapshot which has no
+    per-day resolution to alert on."""
+    from finra_short_volume import compute_short_volume_signal
+
+    alerts = []
+    for ticker in tickers:
+        signal = compute_short_volume_signal(ticker)
+        if not signal or not signal.get("trend"):
+            continue
+        z = signal["trend"]["z_score"]
+        if z >= z_threshold:
+            msg = f"Short volume ratio for {ticker} at {signal['short_volume_pct']:.1f}% ({signal['trade_date']}), z-score {z:+.2f} vs its own 30d baseline"
+            alerts.append({"level": "warning", "title": f"${ticker} Short Volume Pressure", "message": msg, "asset": ticker})
+            insert_alert("warning", f"${ticker} Short Volume Pressure", msg, ticker)
+    return alerts
+
+
 def get_risk_level(stats: dict, alerts: list[dict]) -> str:
     bearish = stats.get("bearish_pct", 0)
     warning_count = sum(1 for a in alerts if a.get("level") == "warning")

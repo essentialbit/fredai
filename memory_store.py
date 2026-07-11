@@ -242,6 +242,17 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS short_volume_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            trade_date TEXT NOT NULL,
+            short_volume REAL,
+            total_volume REAL,
+            short_volume_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(symbol, trade_date)
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -257,6 +268,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_short_volume_symbol ON short_volume_history(symbol, trade_date);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1380,6 +1392,43 @@ def get_short_interest_direction(symbol: str) -> str | None:
     if latest < prior:
         return "bullish"
     return None
+
+
+# ── FINRA REG SHO SHORT VOLUME ────────────────────────────────────────────────
+
+def insert_short_volume(symbol: str, trade_date: str, short_volume: float, total_volume: float, short_volume_pct: float):
+    """One row per (symbol, trade_date) -- INSERT OR IGNORE keeps a same-day
+    re-run of the refresh job idempotent instead of duplicating rows."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO short_volume_history
+               (symbol, trade_date, short_volume, total_volume, short_volume_pct)
+               VALUES (?, ?, ?, ?, ?)""",
+            (symbol, trade_date, short_volume, total_volume, short_volume_pct)
+        )
+
+
+def get_short_volume_series(symbol: str, limit: int = 30) -> list[dict]:
+    """Ascending by trade_date (oldest first) -- ready to feed straight into
+    a rolling z-score/trend helper."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM (
+                   SELECT * FROM short_volume_history WHERE symbol=?
+                   ORDER BY trade_date DESC LIMIT ?
+               ) ORDER BY trade_date ASC""",
+            (symbol, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_latest_short_volume(symbol: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM short_volume_history WHERE symbol=? ORDER BY trade_date DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        return dict(row) if row else None
 
 
 # ── INSIDER TRANSACTIONS (SEC Form 4) ─────────────────────────────────────────

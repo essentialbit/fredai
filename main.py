@@ -1775,16 +1775,19 @@ def api_save_layout():
     page = str(data.get("page", "")).strip()
     hidden = data.get("hidden", [])
     order = data.get("order", {})
-    sizes = data.get("sizes", {})
+    sizes = data.get("sizes")
+    state = data.get("state")
     if not page:
         return jsonify({"error": "page is required"}), 400
     if not isinstance(hidden, list) or not all(isinstance(h, str) for h in hidden):
         return jsonify({"error": "hidden must be a list of widget ids"}), 400
     if not isinstance(order, dict) or not all(isinstance(v, int) for v in order.values()):
         return jsonify({"error": "order must be a widget id -> position map"}), 400
-    if not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values()):
+    if sizes is not None and (not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values())):
         return jsonify({"error": "sizes must be a widget id -> size string map"}), 400
-    save_layout_prefs(session["user_id"], page, hidden, order, sizes)
+    if state is not None and not isinstance(state, dict):
+        return jsonify({"error": "state must be an object"}), 400
+    save_layout_prefs(session["user_id"], page, hidden, order, sizes=sizes, state=state)
     return jsonify({"status": "ok"})
 
 

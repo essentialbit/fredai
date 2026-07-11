@@ -578,6 +578,20 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         if risk_line:
             port_block += f"\n{_strip_portfolio(risk_line)}"
 
+    # Cache-only on purpose: chat must never block on live pytrends calls.
+    # Populated by the daily job_trends_refresh scan; surfaces only tickers
+    # with a real velocity reading (skipped silently otherwise).
+    trends_block = ""
+    if quotes:
+        from memory_store import get_search_interest_velocity
+        movers = []
+        for sym in list(quotes.keys())[:12]:
+            v = get_search_interest_velocity(sym)
+            if v and abs(v["velocity_pct"]) >= 15:
+                movers.append(f"{sym} {v['velocity_pct']:+.0f}%")
+        if movers:
+            trends_block = f"\nSEARCH-INTEREST VELOCITY (Google Trends, vs 7d avg): {', '.join(movers)}"
+
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "
         "rate-limited, or the app just started. Do not invent prices, historical highs, or figures "
@@ -596,6 +610,7 @@ SIGNAL SUMMARY (last 4h):
 
 TRENDING ASSETS (by signal volume):
 {json.dumps([{"asset": t["asset"], "signals": t["signal_count"], "bullish_pct": round(t.get("bullish_pct",0),1)} for t in trending[:6]], indent=2)}
+{trends_block}
 
 TOP RECENT SIGNALS:
 {_format_signals(signals[:8])}

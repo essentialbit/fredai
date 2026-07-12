@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from commodity_futures_curve import get_commodity_futures_curve, most_extreme_basket
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1749,6 +1750,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/commodity-curve")
+@login_required
+def api_commodity_curve():
+    """WTI crude + gold contract-month curves, contango/backwardation
+    classification per basket (FSI L3) -- cached 15min, see
+    commodity_futures_curve.py."""
+    return jsonify(get_commodity_futures_curve() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2223,6 +2233,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Commodity futures curve contango/backwardation (cached 15min in commodity_futures_curve.py)
+        try:
+            curve = get_commodity_futures_curve()
+            extreme = most_extreme_basket(curve) if curve else None
+            if extreme:
+                _macro_cache = {**_macro_cache, "COMMODITY_CURVE": {
+                    "label": "Cmdty Curve", "value": extreme["spread_pct"], "rating": extreme["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] commodity_futures_curve error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

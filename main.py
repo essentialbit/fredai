@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from geopolitical_risk import get_geopolitical_risk
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/geopolitical-risk")
+@login_required
+def api_geopolitical_risk():
+    """Keyword-weighted conflict/sanctions severity score over FredAI's own
+    'geopolitical' news category (FSI L5) -- cached 15min, see
+    geopolitical_risk.py."""
+    return jsonify(get_geopolitical_risk() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2213,6 +2223,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Geopolitical risk score (cached 15min in geopolitical_risk.py)
+        try:
+            gr = get_geopolitical_risk()
+            if gr:
+                _macro_cache = {**_macro_cache, "GEOPOLITICAL_RISK": {
+                    "label": "Geopolitical", "value": gr["score"], "rating": gr["band"],
+                }}
+        except Exception as e:
+            print(f"[Job] geopolitical_risk error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

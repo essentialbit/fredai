@@ -4783,7 +4783,18 @@ function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(t
 
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
 async function loadWatchlist(){const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[])}
+let darkPoolCache={},_wlLastItems=null,_wlLastInterests=null;
+async function loadDarkPool(sym){
+  if(darkPoolCache[sym]!==undefined)return;
+  darkPoolCache[sym]=null;
+  try{
+    const r=await fetch('/api/dark-pool/'+sym);
+    const d=await r.json();
+    if(d&&d.trend){darkPoolCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+  }catch(e){}
+}
 function renderWatchlist(items,interests){
+  _wlLastItems=items;_wlLastInterests=interests;
   const im={};(interests||[]).forEach(i=>im[i.symbol]=i.interest_score);
   const tbody=g('wl-body');
   if(!items.length){g('wl-empty').style.display='';tbody.innerHTML='';g('wl-cnt').textContent='0 symbols';return}
@@ -4807,7 +4818,18 @@ function renderWatchlist(items,interests){
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    let dpBadge='';
+    if(!isAsx(sym)){
+      const dp=darkPoolCache[sym];
+      if(dp===undefined)loadDarkPool(sym);
+      else if(dp&&dp.trend){
+        const arrow=dp.trend.direction==='rising'?'▲':dp.trend.direction==='falling'?'▼':'▬';
+        const dirColor=dp.trend.direction==='rising'?'var(--green)':dp.trend.direction==='falling'?'var(--red)':'var(--t3)';
+        const tip=`Dark pool (ATS) volume week of ${dp.week_start_date}: ${dp.trend.direction} (z=${dp.trend.z_score}). Publishes ~2-3wk delayed.`;
+        dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
+      }
+    }
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${dpBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}

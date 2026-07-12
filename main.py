@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from sahm_rule import get_sahm_rule
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/sahm-rule")
+@login_required
+def api_sahm_rule():
+    """Sahm Rule recession-trigger indicator (FSI L3) -- cached daily,
+    see sahm_rule.py."""
+    return jsonify(get_sahm_rule() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2213,6 +2222,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Sahm Rule recession-trigger indicator (cached daily in sahm_rule.py)
+        try:
+            sahm = get_sahm_rule()
+            if sahm:
+                _macro_cache = {**_macro_cache, "SAHM_RULE": {
+                    "label": "Sahm Rule", "value": sahm["value"], "rating": sahm["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] sahm_rule error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

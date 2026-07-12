@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1737,6 +1738,19 @@ def api_copper_gold_ratio():
     """CPER-vs-GLD "Dr. Copper" growth-vs-safe-haven regime signal (FSI L2)
     -- cached 15min, see copper_gold_ratio.py."""
     return jsonify(get_copper_gold_ratio() or {})
+
+
+@app.route("/api/job-listings/<ticker>")
+@login_required
+def api_job_listings(ticker):
+    """Open-role-count hiring-velocity trend for a curated set of
+    Greenhouse-listed tickers (FSI L5) -- cached 24h, see
+    job_listings_client.py."""
+    ticker = ticker.upper()
+    if ticker not in JOB_LISTINGS_TRACKED:
+        return jsonify({"error": "ticker not tracked", "tracked": sorted(JOB_LISTINGS_TRACKED)}), 404
+    snapshot = get_job_listings_snapshot(ticker)
+    return jsonify(snapshot or {"ticker": ticker, "status": "unavailable"})
 
 
 @app.route("/api/ticker-relationships")

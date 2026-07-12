@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from cot_client import fetch_all_cot_positioning
+from copper_gold_ratio import get_copper_gold_ratio
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1739,6 +1740,14 @@ def api_cot_positioning():
     return jsonify({"contracts": fetch_all_cot_positioning()})
 
 
+@app.route("/api/copper-gold-ratio")
+@login_required
+def api_copper_gold_ratio():
+    """CPER-vs-GLD "Dr. Copper" growth-vs-safe-haven regime signal (FSI L2)
+    -- cached 15min, see copper_gold_ratio.py."""
+    return jsonify(get_copper_gold_ratio() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2214,6 +2223,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] cot_client error: {e}")
+
+        # Copper/Gold "Dr. Copper" regime signal (cached 15min in copper_gold_ratio.py)
+        try:
+            cg = get_copper_gold_ratio()
+            if cg:
+                _macro_cache = {**_macro_cache, "COPPER_GOLD": {
+                    "label": "Cu/Au", "value": cg["ratio"], "rating": cg["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] copper_gold_ratio error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

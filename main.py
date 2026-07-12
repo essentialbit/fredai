@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from treasury_auction_client import get_treasury_auction_demand
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1749,6 +1750,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/treasury-auction-demand")
+@login_required
+def api_treasury_auction_demand():
+    """10Y/30Y Treasury auction indirect-bidder share + bid-to-cover trend
+    (FSI L2) -- cached 1h, see treasury_auction_client.py."""
+    return jsonify(get_treasury_auction_demand() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2223,6 +2232,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Treasury auction indirect-bidder demand (cached 1h in treasury_auction_client.py)
+        try:
+            ta = get_treasury_auction_demand()
+            if ta:
+                _macro_cache = {**_macro_cache, "TREASURY_AUCTION": {
+                    "label": "Auction Demand", "value": ta["demand"], "rating": ta["demand"],
+                }}
+        except Exception as e:
+            print(f"[Job] treasury_auction_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

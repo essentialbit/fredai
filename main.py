@@ -847,6 +847,19 @@ def api_portfolio_risk():
     return jsonify(risk)
 
 
+@app.route("/api/portfolio/stress-test")
+@login_required
+def api_portfolio_stress_test():
+    from stress_test import get_cached_stress_test
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    result = get_cached_stress_test(
+        uid, portfolio.get("positions", []), portfolio.get("total_value")
+    )
+    return jsonify(result)
+
+
 @app.route("/api/scan", methods=["POST"])
 @login_required
 def api_manual_scan():

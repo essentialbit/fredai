@@ -1325,6 +1325,26 @@ def api_analyst_debate(ticker):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/sector-specialist/<ticker>")
+@login_required
+def api_sector_specialist(ticker):
+    """Sector Specialist Agents (FSI L5, closes #235) -- one persona's sector-framed
+    reasoning take on a ticker (Tech/Energy/Financials/Macro), reusing agent.py's
+    existing provider path + live context block. Falls back to the Macro persona
+    for any ticker not in the hand-curated sector map."""
+    ticker = ticker.upper().strip()
+    if not ticker:
+        return jsonify({"error": "Invalid ticker symbol."}), 400
+
+    from agent import build_context_block
+    from sector_specialist import get_sector_take
+    context = build_context_block(quotes=_quotes_cache or {})
+    try:
+        return jsonify(get_sector_take(ticker, context))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/analyst/report/<ticker>")
 @login_required
 def api_analyst_report(ticker):

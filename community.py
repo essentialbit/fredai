@@ -128,6 +128,23 @@ def _gh_post(path: str, body: dict) -> dict | None:
     return None
 
 
+def _gh_delete(path: str) -> bool:
+    try:
+        r = requests.delete(
+            f"{_GH_API}/{path.lstrip('/')}",
+            headers=_gh_headers(), timeout=_TIMEOUT
+        )
+        if r.status_code in (200, 204):
+            return True
+        # 404 means the label was already gone — treat as success, not an error.
+        if r.status_code == 404:
+            return True
+        print(f"  [GH] DELETE {path} → {r.status_code}: {r.text[:120]}")
+    except Exception as e:
+        print(f"  [GH] DELETE error {path}: {e}")
+    return False
+
+
 def _post_issue_comment(number: int, body: str) -> bool:
     result = _gh_post(f"repos/{GITHUB_REPO}/issues/{number}/comments", {"body": body})
     return result is not None

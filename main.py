@@ -52,6 +52,7 @@ from cascade_engine import cascade_for_event, run_cascade_check, detect_major_mo
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from correlation_engine import refresh_correlation_matrix
+from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
 from sec_client import fetch_form4_filings
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
@@ -1729,6 +1730,15 @@ def api_correlation():
         "computed_at": pairs[0]["computed_at"] if pairs else None,
         "pairs": [{"symbol_a": p["symbol_a"], "symbol_b": p["symbol_b"], "correlation": p["correlation"]} for p in pairs],
     })
+
+
+@app.route("/api/sector-rotation")
+@login_required
+def api_sector_rotation():
+    """Sector rotation leader/laggard ranking -- 11 SPDR sector ETFs' 5d/20d
+    relative strength vs SPY (FSI L2). Cached 15min, see sector_rotation.py."""
+    rankings = get_sector_rotation()
+    return jsonify({"sectors": rankings, "benchmark": "SPY"})
 
 
 @app.route("/api/copper-gold-ratio")

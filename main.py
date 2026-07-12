@@ -31,6 +31,7 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from copper_gold_ratio import get_copper_gold_ratio
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1740,6 +1741,14 @@ def api_sector_rotation():
     return jsonify({"sectors": rankings, "benchmark": "SPY"})
 
 
+@app.route("/api/copper-gold-ratio")
+@login_required
+def api_copper_gold_ratio():
+    """CPER-vs-GLD "Dr. Copper" growth-vs-safe-haven regime signal (FSI L2)
+    -- cached 15min, see copper_gold_ratio.py."""
+    return jsonify(get_copper_gold_ratio() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -1774,16 +1783,19 @@ def api_save_layout():
     page = str(data.get("page", "")).strip()
     hidden = data.get("hidden", [])
     order = data.get("order", {})
-    sizes = data.get("sizes", {})
+    sizes = data.get("sizes")
+    state = data.get("state")
     if not page:
         return jsonify({"error": "page is required"}), 400
     if not isinstance(hidden, list) or not all(isinstance(h, str) for h in hidden):
         return jsonify({"error": "hidden must be a list of widget ids"}), 400
     if not isinstance(order, dict) or not all(isinstance(v, int) for v in order.values()):
         return jsonify({"error": "order must be a widget id -> position map"}), 400
-    if not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values()):
+    if sizes is not None and (not isinstance(sizes, dict) or not all(isinstance(v, str) for v in sizes.values())):
         return jsonify({"error": "sizes must be a widget id -> size string map"}), 400
-    save_layout_prefs(session["user_id"], page, hidden, order, sizes)
+    if state is not None and not isinstance(state, dict):
+        return jsonify({"error": "state must be an object"}), 400
+    save_layout_prefs(session["user_id"], page, hidden, order, sizes=sizes, state=state)
     return jsonify({"status": "ok"})
 
 
@@ -2201,6 +2213,16 @@ def job_market_refresh():
                     insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
+
+        # Copper/Gold "Dr. Copper" regime signal (cached 15min in copper_gold_ratio.py)
+        try:
+            cg = get_copper_gold_ratio()
+            if cg:
+                _macro_cache = {**_macro_cache, "COPPER_GOLD": {
+                    "label": "Cu/Au", "value": cg["ratio"], "rating": cg["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] copper_gold_ratio error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

@@ -672,6 +672,33 @@ html[data-touch="1"] .pos-row { min-height:var(--touch) }
 .ctab{padding:6px clamp(8px,1.5vw,12px);background:none;border:none;cursor:pointer;font-size:var(--font-xs);font-weight:600;letter-spacing:.5px;color:var(--t3);border-bottom:2px solid transparent;margin-bottom:-1px;transition:.15s;min-height:var(--touch);display:flex;align-items:center;white-space:nowrap}
 .ctab.active{color:var(--blue);border-bottom-color:var(--blue)}
 #sym-sel{margin-left:auto;background:var(--bg1);border:1px solid var(--border);border-radius:3px;color:var(--t2);padding:3px 6px;font-size:var(--font-xs);align-self:center}
+#cmp-legend{display:none;gap:10px;align-items:center;padding:4px var(--pad);border-bottom:1px solid var(--border);font-family:var(--mono);font-size:var(--font-xs);flex-shrink:0;flex-wrap:wrap}
+#cmp-legend.on{display:flex}
+.cmp-item{display:flex;gap:5px;align-items:center;color:var(--t2)}
+.cmp-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.cmp-pct{font-weight:600}
+.cmp-x{cursor:pointer;color:var(--t3);padding:0 2px}
+.cmp-x:hover{color:var(--red)}
+#cmp-exit{margin-left:auto;background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);cursor:pointer;font-size:var(--font-xs);padding:2px 8px}
+#cmp-exit:hover{color:var(--t1);border-color:var(--border2)}
+#cmdk-overlay,#keymap-overlay{display:none;position:fixed;inset:0;background:rgba(2,4,8,.7);backdrop-filter:blur(3px);z-index:9000}
+#cmdk-overlay.on,#keymap-overlay.on{display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
+#cmdk-box{width:min(560px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
+#cmdk-inp{width:100%;background:var(--bg1);border:none;outline:none;color:var(--t1);font-family:var(--mono);font-size:15px;padding:14px 16px;border-bottom:1px solid var(--border)}
+#cmdk-inp::placeholder{color:var(--t3)}
+#cmdk-results{max-height:46vh;overflow-y:auto}
+.cmdk-row{display:flex;gap:10px;align-items:baseline;padding:9px 16px;cursor:pointer;font-size:var(--font-xs)}
+.cmdk-row.sel,.cmdk-row:hover{background:var(--bg3)}
+.cmdk-sym{font-family:var(--mono);font-weight:600;color:var(--t1);min-width:80px}
+.cmdk-name{color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.cmdk-act{color:var(--blue);font-family:var(--mono)}
+.cmdk-hint{padding:8px 16px;color:var(--t3);font-size:var(--font-xs);border-top:1px solid var(--border);display:flex;gap:14px}
+.cmdk-hint kbd,#keymap-box kbd{background:var(--bg1);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:var(--mono);font-size:10px;color:var(--t2)}
+#keymap-box{width:min(440px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);padding:18px 20px}
+#keymap-box h3{margin:0 0 12px;font-size:13px;color:var(--t1);letter-spacing:.5px}
+.km-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:var(--font-xs);color:var(--t2)}
+.km-row:last-child{border-bottom:none}
+.km-keys{display:flex;gap:4px}
 #price-chart-wrap{flex:1;position:relative;min-height:0}
 #price-chart{width:100%;height:100%}
 .ind-tab.active{color:var(--purple);border-bottom-color:var(--purple)}
@@ -1653,13 +1680,14 @@ html[data-tier="micro"] #ov-globe-stage {
         <button class="ctab active" onclick="switchChart('price',this)">Price</button>
         <button class="ctab" onclick="switchChart('sentiment',this)">Sentiment</button>
         <button class="ctab ind-tab" id="ind-toggle" onclick="toggleIndicators(this)">RSI/MACD</button>
-        <select id="sym-sel" onchange="loadPriceChart()">
+        <select id="sym-sel" onchange="loadPriceChart();saveChartWorkspace()">
           <option value="SPY">SPY</option><option value="QQQ">QQQ</option>
           <option value="AAPL">AAPL</option><option value="NVDA">NVDA</option>
           <option value="TSLA">TSLA</option><option value="MSFT">MSFT</option>
           <option value="BTC-USD">BTC</option><option value="ETH-USD">ETH</option>
         </select>
       </div>
+      <div id="cmp-legend"></div>
       <div id="price-chart-wrap"><div id="price-chart"></div></div>
       <div id="ind-chart-wrap">
         <div id="rsi-chart"><div class="ind-label">RSI(14) <span id="rsi-val"></span></div></div>
@@ -2144,6 +2172,29 @@ html[data-tier="micro"] #ov-globe-stage {
   </div>
 
 </div><!-- /app-shell -->
+
+<!-- COMMAND PALETTE (Cmd+K / "/") -->
+<div id="cmdk-overlay" onclick="if(event.target===this)closePalette()">
+  <div id="cmdk-box">
+    <input id="cmdk-inp" placeholder="Jump to symbol, or: compare AAPL MSFT · watch TSLA · clear" autocomplete="off" spellcheck="false">
+    <div id="cmdk-results"></div>
+    <div class="cmdk-hint"><span><kbd>↑↓</kbd> navigate</span><span><kbd>↵</kbd> select</span><span><kbd>esc</kbd> close</span></div>
+  </div>
+</div>
+
+<!-- KEYBOARD MAP (?) -->
+<div id="keymap-overlay" onclick="if(event.target===this)closeKeyHelp()">
+  <div id="keymap-box">
+    <h3>KEYBOARD</h3>
+    <div class="km-row"><span>Command palette</span><span class="km-keys"><kbd>⌘K</kbd><kbd>/</kbd></span></div>
+    <div class="km-row"><span>Switch tab</span><span class="km-keys"><kbd>1</kbd>–<kbd>6</kbd></span></div>
+    <div class="km-row"><span>Compare symbols</span><span class="km-keys"><kbd>compare A B</kbd></span></div>
+    <div class="km-row"><span>Add to watchlist</span><span class="km-keys"><kbd>watch SYM</kbd></span></div>
+    <div class="km-row"><span>Exit comparison</span><span class="km-keys"><kbd>clear</kbd></span></div>
+    <div class="km-row"><span>This help</span><span class="km-keys"><kbd>?</kbd></span></div>
+    <div class="km-row"><span>Close overlay</span><span class="km-keys"><kbd>esc</kbd></span></div>
+  </div>
+</div>
 
 <!-- INSTALL MODAL -->
 <div id="install-modal">
@@ -2967,7 +3018,7 @@ async function loadInitData() {
     if (d.portfolio) renderPortfolioTab(d.portfolio);
     if (d.macro) renderMacroStrip(d.macro);
     if (trendData.length) { renderTrending(trendData); renderUltraTrend(trendData); }
-    if (!IS_NANO && CHART_CANDLES > 0) { initPriceChart(); loadPriceChart(); }
+    if (!IS_NANO && CHART_CANDLES > 0) { initPriceChart(); restoreChartWorkspace().then(loadPriceChart); }
     if (d.timeline && !IS_NANO && !IS_MOBILE) initSentChart(d.timeline);
     // Nano-specific
     if (IS_NANO) { updateNanoQuotes(quotesCache); updateNanoSignal(allSignals); updateNanoRisk(d.risk_level); }
@@ -4390,6 +4441,8 @@ function initPriceChart() {
 
 async function loadPriceChart() {
   if (!priceChart) return;
+  if (_compareSyms.length) return loadCompareChart();
+  clearCompareSeries();
   const sym=g('sym-sel').value;
   socket.emit('view_symbol',{symbol:sym});
   const period=IS_MOBILE?'5d':IS_ULTRA?'30d':'5d';
@@ -4538,7 +4591,215 @@ function toggleIndicators(btn) {
       if (priceChart) priceChart.applyOptions({width:g('price-chart').clientWidth,height:g('price-chart').clientHeight});
     });
   }
+  saveChartWorkspace();
 }
+
+// ── CHART WORKSPACE: palette + comparison + saved layout (#109) ───────────
+let _compareSyms = [], _compareSeries = [], _cmdkSel = 0, _cmdkItems = [], _wsRestoring = false, _wsSaveT = null, _aiUniSyms = null;
+const CMP_COLORS = ['#00d2ff', '#00ffaa', '#fb5607', '#8338ec'];
+
+function clearCompareSeries() {
+  _compareSeries.forEach(s => { try { priceChart.removeSeries(s.series) } catch(e){} });
+  _compareSeries = [];
+  const leg = g('cmp-legend'); if (leg) { leg.classList.remove('on'); leg.innerHTML = ''; }
+}
+
+async function loadCompareChart() {
+  if (!priceChart) return;
+  const base = g('sym-sel').value;
+  const syms = [base, ..._compareSyms.filter(s => s !== base)].slice(0, 4);
+  socket.emit('view_symbol', {symbol: base});
+  const period = IS_MOBILE ? '5d' : IS_ULTRA ? '30d' : '5d';
+  try {
+    const results = await Promise.all(syms.map(s =>
+      fetch(`/api/history/${s}?period=${period}&interval=${CHART_INTERVAL}`).then(r => r.json()).catch(() => [])));
+    if (_priceChartSeries) { try { priceChart.removeSeries(_priceChartSeries) } catch(e){} _priceChartSeries = null; }
+    clearCompareSeries();
+    const legendRows = [];
+    results.forEach((data, i) => {
+      if (!Array.isArray(data) || !data.length) return;
+      const pts = data.slice(-CHART_CANDLES)
+        .map(d => ({time: Math.floor(new Date(d.time).getTime() / 1000), close: d.close}))
+        .filter(d => d.time > 0 && !isNaN(d.close));
+      if (!pts.length) return;
+      const first = pts[0].close;
+      const norm = pts.map(p => ({time: p.time, value: +((p.close / first - 1) * 100).toFixed(2)}));
+      const color = CMP_COLORS[i % CMP_COLORS.length];
+      const series = priceChart.addLineSeries({
+        color, lineWidth: 2, priceLineVisible: false,
+        priceFormat: {type: 'custom', minMove: 0.01, formatter: v => v.toFixed(2) + '%'},
+      });
+      series.setData(norm);
+      _compareSeries.push({series, sym: syms[i]});
+      const last = norm[norm.length - 1].value;
+      legendRows.push({sym: syms[i], color, pct: last, isBase: i === 0});
+    });
+    priceChart.timeScale().fitContent();
+    const leg = g('cmp-legend');
+    if (leg && legendRows.length) {
+      leg.innerHTML = legendRows.map(r =>
+        `<span class="cmp-item"><span class="cmp-dot" style="background:${r.color}"></span>${esc(r.sym.replace('-USD',''))} <span class="cmp-pct" style="color:${r.pct>=0?'var(--green)':'var(--red)'}">${r.pct>=0?'+':''}${r.pct.toFixed(2)}%</span>${r.isBase?'':`<span class="cmp-x" onclick="removeCompare('${esc(r.sym)}')" title="Remove">×</span>`}</span>`
+      ).join('') + `<button id="cmp-exit" onclick="exitCompare()">EXIT COMPARE</button>`;
+      leg.classList.add('on');
+    }
+    if (indicatorsOn) toggleIndicators(g('ind-toggle'));
+  } catch(e) { console.error('Compare:', e); }
+}
+
+function setCompare(syms) {
+  _compareSyms = [...new Set(syms.map(s => s.toUpperCase()).filter(s => /^[A-Z0-9.^=-]{1,12}$/.test(s)))].slice(0, 3);
+  loadPriceChart();
+  saveChartWorkspace();
+}
+function removeCompare(sym) {
+  _compareSyms = _compareSyms.filter(s => s !== sym);
+  loadPriceChart();
+  saveChartWorkspace();
+}
+function exitCompare() { setCompare([]); }
+
+// ── workspace persistence via /api/user/layout (page: chart_workspace) ────
+function saveChartWorkspace() {
+  if (_wsRestoring) return;
+  clearTimeout(_wsSaveT);
+  _wsSaveT = setTimeout(() => {
+    fetch('/api/user/layout', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({page: 'chart_workspace', hidden: [], order: {},
+        state: {symbol: g('sym-sel').value, compare: _compareSyms, indicators: indicatorsOn}}),
+    }).catch(() => {});
+  }, 600);
+}
+
+async function restoreChartWorkspace() {
+  try {
+    const r = await fetch('/api/user/layout?page=chart_workspace');
+    if (!r.ok) return;
+    const st = ((await r.json()) || {}).state || {};
+    _wsRestoring = true;
+    if (st.symbol && /^[A-Z0-9.^=-]{1,12}$/.test(st.symbol)) {
+      const sel = g('sym-sel');
+      if (![...sel.options].some(o => o.value === st.symbol)) sel.add(new Option(st.symbol, st.symbol));
+      sel.value = st.symbol;
+    }
+    if (Array.isArray(st.compare)) _compareSyms = st.compare.filter(s => typeof s === 'string' && /^[A-Z0-9.^=-]{1,12}$/.test(s)).slice(0, 3);
+    if (st.indicators && !indicatorsOn && !_compareSyms.length) toggleIndicators(g('ind-toggle'));
+  } catch(e) {} finally { _wsRestoring = false; }
+}
+
+// ── command palette ────────────────────────────────────────────────────────
+function _paletteCandidates() {
+  const seen = new Set(), out = [];
+  const push = (sym, name) => { const s = (sym || '').toUpperCase(); if (s && !seen.has(s)) { seen.add(s); out.push({sym: s, name: name || ''}); } };
+  Object.keys(quotesCache).forEach(s => push(s, (quotesCache[s] || {}).name));
+  (window._watchlist || []).forEach(s => push(s, ''));
+  (window._portfolio || []).forEach(s => push(s, ''));
+  [...(g('sym-sel') || {options: []}).options].forEach(o => push(o.value, ''));
+  (_aiUniSyms || []).forEach(t => push(t.sym, t.name));
+  return out;
+}
+
+function _fuzzyScore(q, sym, name) {
+  const s = sym.toUpperCase(), n = (name || '').toUpperCase();
+  if (s === q) return 100;
+  if (s.startsWith(q)) return 80 - s.length * 0.1;
+  if (s.replace('-USD', '') === q) return 90;
+  if (s.includes(q)) return 50;
+  if (n.includes(q)) return 30;
+  let qi = 0;
+  for (let i = 0; i < s.length && qi < q.length; i++) if (s[i] === q[qi]) qi++;
+  return qi === q.length ? 15 : -1;
+}
+
+function openPalette() {
+  const ov = g('cmdk-overlay'); if (!ov) return;
+  ov.classList.add('on');
+  const inp = g('cmdk-inp');
+  inp.value = ''; _cmdkSel = 0;
+  renderPaletteResults('');
+  setTimeout(() => inp.focus(), 30);
+  if (_aiUniSyms === null) {
+    _aiUniSyms = [];
+    fetch('/api/ai-universe').then(r => r.json())
+      .then(d => { _aiUniSyms = (d.sectors || []).flatMap(sec => (sec.tickers || []).map(t => ({sym: t.symbol, name: t.name || ''}))).filter(t => typeof t.sym === 'string'); })
+      .catch(() => {});
+  }
+}
+function closePalette() { const ov = g('cmdk-overlay'); if (ov) ov.classList.remove('on'); }
+function toggleKeyHelp() { g('keymap-overlay').classList.toggle('on'); }
+function closeKeyHelp() { g('keymap-overlay').classList.remove('on'); }
+
+function renderPaletteResults(raw) {
+  const box = g('cmdk-results');
+  const q = raw.trim().toUpperCase();
+  _cmdkItems = [];
+  const cmd = q.match(/^(COMPARE|CMP)\s+(.+)/);
+  const watch = q.match(/^WATCH\s+([A-Z0-9.^=-]{1,12})$/);
+  if (cmd) {
+    const syms = cmd[2].split(/[\s,]+/).filter(Boolean).slice(0, 3);
+    _cmdkItems = [{type: 'compare', syms, label: `Compare ${syms.join(' vs ')}`}];
+  } else if (watch) {
+    _cmdkItems = [{type: 'watch', sym: watch[1], label: `Add ${watch[1]} to watchlist`}];
+  } else if (q === 'CLEAR') {
+    _cmdkItems = [{type: 'clear', label: 'Exit comparison mode'}];
+  } else if (q) {
+    _cmdkItems = _paletteCandidates()
+      .map(c => ({...c, score: _fuzzyScore(q, c.sym, c.name)}))
+      .filter(c => c.score >= 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 8)
+      .map(c => ({type: 'jump', sym: c.sym, name: c.name, label: c.sym}));
+    if (!_cmdkItems.length && /^[A-Z0-9.^=-]{1,12}$/.test(q)) {
+      _cmdkItems = [{type: 'jump', sym: q, name: 'Load anyway', label: q}];
+    }
+  } else {
+    _cmdkItems = _paletteCandidates().slice(0, 8).map(c => ({type: 'jump', sym: c.sym, name: c.name, label: c.sym}));
+  }
+  _cmdkSel = Math.min(_cmdkSel, Math.max(0, _cmdkItems.length - 1));
+  box.innerHTML = _cmdkItems.map((it, i) => {
+    const act = it.type === 'jump' ? 'chart' : it.type;
+    const name = it.type === 'jump' ? (it.name || '') : '';
+    return `<div class="cmdk-row${i === _cmdkSel ? ' sel' : ''}" onmouseenter="_cmdkSel=${i};renderPaletteResults(g('cmdk-inp').value)" onclick="execPaletteItem(${i})"><span class="cmdk-sym">${esc(it.type === 'jump' ? it.sym.replace('-USD','') : '›')}</span><span class="cmdk-name">${esc(name || it.label)}</span><span class="cmdk-act">${esc(act)}</span></div>`;
+  }).join('') || '<div class="cmdk-row"><span class="cmdk-name">No matches</span></div>';
+}
+
+function execPaletteItem(i) {
+  const it = _cmdkItems[i]; if (!it) return;
+  closePalette();
+  if (it.type === 'jump') { exitCompareQuiet(); loadSymbolChart(it.sym); saveChartWorkspace(); }
+  else if (it.type === 'compare') { switchTab('overview', document.querySelector('.nav-tab')); setCompare(it.syms); }
+  else if (it.type === 'clear') exitCompare();
+  else if (it.type === 'watch') {
+    fetch('/api/watchlist', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({symbol: it.sym})}).then(() => loadWatchlist()).catch(() => {});
+  }
+}
+function exitCompareQuiet() { if (_compareSyms.length) { _compareSyms = []; clearCompareSeries(); } }
+
+document.addEventListener('keydown', e => {
+  const shell = g('app-shell');
+  if (!shell || !shell.classList.contains('visible')) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); g('cmdk-overlay').classList.contains('on') ? closePalette() : openPalette(); return; }
+  const t = e.target;
+  const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
+  if (typing) {
+    if (t.id === 'cmdk-inp') {
+      if (e.key === 'ArrowDown') { e.preventDefault(); _cmdkSel = Math.min(_cmdkSel + 1, _cmdkItems.length - 1); renderPaletteResults(t.value); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); _cmdkSel = Math.max(_cmdkSel - 1, 0); renderPaletteResults(t.value); }
+      else if (e.key === 'Enter') { e.preventDefault(); execPaletteItem(_cmdkSel); }
+      else if (e.key === 'Escape') closePalette();
+    }
+    return;
+  }
+  if (e.key === '/') { e.preventDefault(); openPalette(); }
+  else if (e.key === '?') toggleKeyHelp();
+  else if (e.key === 'Escape') { closePalette(); closeKeyHelp(); }
+  else if (/^[1-6]$/.test(e.key)) {
+    const tabs = document.querySelectorAll('.nav-tab');
+    const btn = tabs[+e.key - 1];
+    if (btn) btn.click();
+  }
+});
+(() => { const inp = g('cmdk-inp'); if (inp) inp.addEventListener('input', () => { _cmdkSel = 0; renderPaletteResults(inp.value); }); })();
 
 // ── SENTIMENT CHART ───────────────────────────────────────────────────────
 function initSentChart(tl) {

@@ -30,6 +30,7 @@ from config import (
     PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI,
 )
 from memory_store import get_signals, get_latest_summary, get_recent_alerts, get_trending_assets
+from backtesting_engine import get_accuracy_report
 
 
 # ── PROVIDER DETECTION ────────────────────────────────────────────────────────
@@ -673,6 +674,7 @@ def generate_summary(signals: list[dict], quotes: dict,
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
     top_assets = _top_mentioned_assets(signals)
+    track_record = _format_briefing_track_record()
 
     prompt = f"""You are FredAI. Generate a board-level financial intelligence briefing.
 
@@ -681,7 +683,7 @@ TOP ASSETS BY SIGNAL VOLUME: {json.dumps(top_assets)}
 
 MARKET DATA:
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:10]}, indent=2)}
-
+{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
 REPRESENTATIVE SIGNALS:
 {_format_signals(signals[:15])}
 
@@ -711,6 +713,23 @@ Direct. Specific. No filler."""
     if "not financial advice" not in result.lower():
         result += DISCLAIMER_FOOTER
     return result
+
+
+def _format_briefing_track_record() -> str:
+    """Per-source 24h accuracy-vs-baseline view, so the briefing can lean
+    into sources proving predictive value instead of treating every source
+    as equally credible."""
+    report = get_accuracy_report().get("24h", {})
+    lines = []
+    for source, stats in report.get("sources", {}).items():
+        if source == "aggregate" or stats.get("total", 0) < 10:
+            continue
+        delta = stats.get("baseline_delta_pct")
+        if delta is None:
+            continue
+        verdict = "proving value" if stats.get("proving_value") else "not proving value"
+        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})")
+    return " | ".join(lines)
 
 
 def _top_mentioned_assets(signals: list[dict]) -> dict:

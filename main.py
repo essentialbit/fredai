@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from fed_funds_futures_client import get_fed_funds_expectations
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/fed-funds-expectations")
+@login_required
+def api_fed_funds_expectations():
+    """CBOT ZQ futures term structure vs current FRED DFF effective rate --
+    market-implied Fed rate-path expectations (FSI L2). Cached 1h, see
+    fed_funds_futures_client.py."""
+    return jsonify(get_fed_funds_expectations() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2237,18 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Fed funds futures term structure -- market-implied rate-path
+        # expectations (cached 1h in fed_funds_futures_client.py)
+        try:
+            ffe = get_fed_funds_expectations()
+            if ffe and ffe.get("contracts"):
+                front = ffe["contracts"][0]
+                _macro_cache = {**_macro_cache, "FED_FUNDS_EXPECT": {
+                    "label": "Fed Funds (front)", "value": front["implied_rate"], "rating": ffe["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] fed_funds_futures error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

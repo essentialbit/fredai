@@ -494,24 +494,24 @@ def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0,
 
 
 def get_signals(hours=4, asset=None, limit=200) -> list[dict]:
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         if asset:
             rows = conn.execute(
                 "SELECT * FROM signals WHERE timestamp > ? AND asset = ? ORDER BY timestamp DESC LIMIT ?",
-                (since.isoformat(), asset, limit)
+                (since, asset, limit)
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT * FROM signals WHERE timestamp > ? ORDER BY timestamp DESC LIMIT ?",
-                (since.isoformat(), limit)
+                (since, limit)
             ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_trending_assets(hours: int = 4, limit: int = 20) -> list[dict]:
     """Return assets ranked by signal volume and sentiment shift in last N hours."""
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT asset,
@@ -524,7 +524,7 @@ def get_trending_assets(hours: int = 4, limit: int = 20) -> list[dict]:
                GROUP BY asset
                ORDER BY signal_count DESC
                LIMIT ?""",
-            (since.isoformat(), limit)
+            (since, limit)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -645,7 +645,7 @@ def get_sentiment_snapshot(symbols: list[str], hours: int = 24, min_real: int = 
 
 
 def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT
@@ -658,7 +658,7 @@ def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
             FROM signals
             WHERE timestamp > ? AND source = 'twitter'
             GROUP BY bucket ORDER BY bucket ASC""",
-            (bucket_minutes, bucket_minutes, since.isoformat())
+            (bucket_minutes, bucket_minutes, since)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -694,11 +694,11 @@ def insert_trend(asset, metric, value, trend_direction):
 
 
 def get_trend_history(asset, metric, hours=24) -> list[dict]:
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM trends WHERE asset=? AND metric=? AND timestamp>? ORDER BY timestamp ASC",
-            (asset, metric, since.isoformat())
+            (asset, metric, since)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -727,11 +727,11 @@ def get_pending_outcomes(checkpoint: str, min_hours: float) -> list[dict]:
     if checkpoint not in _OUTCOME_CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
     col = f"price_at_{checkpoint}"
-    cutoff = datetime.utcnow() - timedelta(hours=min_hours)
+    cutoff = (datetime.utcnow() - timedelta(hours=min_hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             f"SELECT * FROM signal_outcomes WHERE {col} IS NULL AND price_at_t0 IS NOT NULL AND predicted_at<=?",
-            (cutoff.isoformat(),)
+            (cutoff,)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -770,11 +770,11 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
     if checkpoint not in _OUTCOME_CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
     col = f"price_at_{checkpoint}"
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             f"SELECT * FROM signal_outcomes WHERE {col} IS NOT NULL AND predicted_at>?",
-            (since.isoformat(),)
+            (since,)
         ).fetchall()
     rows = [dict(r) for r in rows]
 
@@ -1080,7 +1080,7 @@ def prune_old_data(retention_days: int = 90):
     Personal data (users, portfolio, watchlist) is never auto-pruned.
     """
     from datetime import timedelta
-    cutoff = (datetime.utcnow() - timedelta(days=retention_days)).isoformat()
+    cutoff = (datetime.utcnow() - timedelta(days=retention_days)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         deleted_signals = conn.execute(
             "DELETE FROM signals WHERE timestamp < ?", (cutoff,)

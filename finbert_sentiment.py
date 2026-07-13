@@ -34,7 +34,7 @@ def _init_model():
     _tokenizer = AutoTokenizer.from_pretrained("ProsusAI/finbert")
     _model = AutoModelForSequenceClassification.from_pretrained("ProsusAI/finbert")
 
-def analyze_sentiment(text: str) -> tuple[float, str] | None:
+def analyze_sentiment(text: str, window_hours: int = 4) -> tuple[float, str] | None:
     """Analyze sentiment of text using FinBERT model.
     
     Returns:

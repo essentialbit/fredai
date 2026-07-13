@@ -101,7 +101,7 @@ def sync_proposal_to_issue(proposal: dict) -> int | None:
 def get_open_proposal_issues() -> list[dict]:
     """Fetch open Issues labeled agent-proposal — the debate cycle's input."""
     data = _gh_get(f"repos/{GITHUB_REPO}/issues", {
-        "labels": "agent-proposal", "state": "open", "per_page": 30,
+        "labels": "agent-proposal", "state": "open", "per_page": 100,
     })
     if not data:
         return []

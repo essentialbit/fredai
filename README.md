@@ -24,13 +24,6 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.67
-- fix: insider cluster detection counted raw transactions, not distinct insiders
-
-### FredAI v1.3.66
-- fix: same-day timestamp comparison bug in 7 memory_store query functions
-- docs: sync README changelog to v1.3.65 (#241)
-
 ### FredAI v1.3.65
 - docs: sync README changelog to v1.3.63 (#196)
 - feat: sector rotation / relative-strength ranking (closes #159)
@@ -41,6 +34,14 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 ### FredAI v1.3.63
 - feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
 - feat: Copper/Gold ratio "Dr. Copper" cross-asset regime signal (closes #176)
+
+### FredAI v1.3.62
+- fix: debate.py silently skipped proposals with non-canonical proposed_by labels
+- docs: sync README changelog to v1.3.61 (#181)
+
+### FredAI v1.3.61
+- feat: Landing Zone -- interactive globe, enriched ticker network, price alerts, live refresh (#180)
+- docs: sync README changelog to v1.3.60 (#177)
 
 <!-- CHANGELOG_END -->
 

@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from jolts_openings_client import get_jolts_openings
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/jolts-openings")
+@login_required
+def api_jolts_openings():
+    """JOLTS Job Openings (FRED JTSJOL) -- forward-looking labor-demand
+    signal (FSI L2) -- cached 1h, see jolts_openings_client.py."""
+    return jsonify(get_jolts_openings() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2236,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # JOLTS Job Openings -- forward-looking labor-demand signal
+        # (cached 1h in jolts_openings_client.py)
+        try:
+            jo = get_jolts_openings()
+            if jo:
+                _macro_cache = {**_macro_cache, "JOLTS": {
+                    "label": "JOLTS Openings", "value": jo["change_mom_pct"], "rating": jo["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] jolts_openings_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

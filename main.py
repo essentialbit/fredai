@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from durable_goods_client import get_durable_goods_orders
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/durable-goods")
+@login_required
+def api_durable_goods():
+    """Durable Goods New Orders (FRED DGORDER) -- forward-looking business
+    capex signal (FSI L2) -- cached 1h, see durable_goods_client.py."""
+    return jsonify(get_durable_goods_orders() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2236,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Durable Goods New Orders -- forward-looking business capex signal
+        # (cached 1h in durable_goods_client.py)
+        try:
+            dg = get_durable_goods_orders()
+            if dg:
+                _macro_cache = {**_macro_cache, "DURABLE_GOODS": {
+                    "label": "Durable Goods", "value": dg["change_mom_pct"], "rating": dg["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] durable_goods_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

@@ -1,4 +1,15 @@
-"""
+import finbert_sentiment
+
+# ... existing code ...
+
+def compute_signal_density(text: str) -> float:
+    """Calculate signal density using FinBERT sentiment scoring"""
+    # Replace VADER with FinBERT sentiment scoring
+    score, _ = finbert_sentiment.analyze_sentiment(text)
+    
+    # Existing signal density calculation logic
+    # ... (rest of implementation remains unchanged)
+    return score"""
 Signal Density Scorer — surfaces highest-intelligence stocks.
 
 Score = weighted composite of:

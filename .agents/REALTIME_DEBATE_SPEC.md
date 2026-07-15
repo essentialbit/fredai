@@ -1,6 +1,6 @@
 # Specification: Real-Time WebSocket Debate & Decision Engine (Method B)
 
-This spec defines a local WebSocket-based IPC mechanism to enable real-time, interactive debates, rapid consensus resolution, and decision-logging for Claude and Gemini.
+This spec defines a local WebSocket-based IPC mechanism to enable real-time, interactive debates, rapid consensus resolution, and decision-logging for Claude and Gemini, complete with a futuristic Web UI for the user.
 
 ---
 
@@ -16,7 +16,7 @@ This spec defines a local WebSocket-based IPC mechanism to enable real-time, int
 ## 2. Architecture & Components
 
 ### A. The WebSocket Relay (`debate_relay.py`)
-A lightweight, local server running on `ws://localhost:9000`. It broadcasts messages between the connected client agents (Claude and Gemini).
+A lightweight, local server running on `ws://localhost:9000`. It broadcasts messages between the connected client agents (Claude and Gemini) and any connected Web UI client.
 
 ### B. Protocol Messages (JSON)
 Agents exchange structured payloads:
@@ -24,7 +24,7 @@ Agents exchange structured payloads:
 {
   "topic": "Kelly Sizing Implementation",
   "phase": "PROPOSE" | "REBUTTAL" | "RESOLVE",
-  "sender": "gemini" | "claude",
+  "sender": "gemini" | "claude" | "user",
   "turn": 1,
   "proposal": "...",
   "rationale": "...",
@@ -50,27 +50,24 @@ Store decisions in `data/sentinel.db` (or a JSON matrix `data/decision_matrix.js
 
 ---
 
-## 3. Implementation Steps for Claude
+## 3. Futuristic Collaboration & Debate Web UI
+
+We will add a new tab/pane in the dashboard labeled **"Co-Agent Cockpit"**:
+- **Design Aesthetic**: Premium glassmorphism dark mode with glowing border animations (purple for Gemini, blue/orange for Claude).
+- **Live Stream Terminal**: A real-time, terminal-like feed showing the active WebSocket chat/debate between Claude and Gemini as they happen.
+- **User Intervention Panel**: 
+  - A text input for the user to chat/interact directly with both agents in the middle of the debate.
+  - Quick-action buttons: **"Force Approve"**, **"Force Decline"**, and **"Rollback Last Commit"**.
+
+---
+
+## 4. Implementation Steps for Claude
 
 ### Step 1: Create `debate_relay.py`
-Build a simple asynchronous Python WebSocket server using `websockets` or standard `socket` selectors if dependencies must be kept minimal:
-- Listen on `localhost:9000`.
-- Maintain a list of active sockets.
-- Broadcast received messages to all other sockets.
+Build a simple asynchronous Python WebSocket server using `websockets` listening on `localhost:9000` to route messages between Claude, Gemini, and the Web UI.
 
 ### Step 2: Implement the Agent Client Loop
-Within the self-improvement cycles (`improve.py`), when a proposal is initiated:
-1. Connect to the WebSocket relay.
-2. Send the `PROPOSE` payload.
-3. Listen for the other agent's response.
-4. Conclude the debate in $\le 3$ turns and log the outcome.
+Within the self-improvement cycles (`improve.py`), connect to the WebSocket relay, debate topic proposals, listen for user overrides, and log outcomes to `sentinel.db`.
 
-### Step 3: Integrate Rollback Actions
-Add a helper in `improve.py` or `git_push()`:
-```python
-def rollback_decision(topic: str):
-    # Query database/json for the topic
-    # Retrieve git_hash_before
-    # Run git reset --hard or git revert
-    pass
-```
+### Step 3: Add UI Views
+Expose a `/debate-room` dashboard page or modal pane in `dashboard.html` that connects to the WebSocket server to render the live debate logs and capture user actions.

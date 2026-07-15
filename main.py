@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from personal_income_client import get_personal_income
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/personal-income")
+@login_required
+def api_personal_income():
+    """Real Disposable Personal Income (FRED DSPIC96) -- household
+    income-level macro badge (FSI L2) -- cached 1h, see
+    personal_income_client.py."""
+    return jsonify(get_personal_income() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2237,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Real Disposable Personal Income (cached 1h in personal_income_client.py)
+        try:
+            pi = get_personal_income()
+            if pi:
+                _macro_cache = {**_macro_cache, "PERSONAL_INCOME": {
+                    "label": "Real Income", "value": pi["latest"], "rating": pi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] personal_income_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

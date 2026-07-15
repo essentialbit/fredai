@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from case_shiller_client import get_case_shiller
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/case-shiller")
+@login_required
+def api_case_shiller():
+    """S&P/Case-Shiller U.S. National Home Price Index (FRED CSUSHPINSA)
+    appreciating/depreciating/stable regime signal (FSI L2) -- cached 1h,
+    see case_shiller_client.py."""
+    return jsonify(get_case_shiller() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2237,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # S&P/Case-Shiller home price index regime signal (cached 1h in case_shiller_client.py)
+        try:
+            cs = get_case_shiller()
+            if cs:
+                _macro_cache = {**_macro_cache, "CASE_SHILLER": {
+                    "label": "Home Prices", "value": cs["change_yoy_pct"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] case_shiller error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

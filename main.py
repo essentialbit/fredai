@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from cpi_client import get_cpi
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/cpi-inflation")
+@login_required
+def api_cpi_inflation():
+    """Headline CPI YoY Inflation (FRED CPIAUCSL) -- the actual realized
+    inflation print (FSI L2), distinct from Core PCE/PPI/MICH/T10YIE/Kalshi
+    consensus badges already shipped. Cached 1h, see cpi_client.py."""
+    return jsonify(get_cpi() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2237,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Headline CPI YoY Inflation (cached 1h in cpi_client.py)
+        try:
+            cpi = get_cpi()
+            if cpi:
+                _macro_cache = {**_macro_cache, "CPI": {
+                    "label": "CPI YoY", "value": cpi["yoy_pct"], "rating": cpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] cpi error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

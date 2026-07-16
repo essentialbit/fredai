@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from mich_inflation_expectations_client import get_mich_expectations
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/mich-inflation-expectations")
+@login_required
+def api_mich_inflation_expectations():
+    """University of Michigan year-ahead inflation expectations, survey-based
+    (FSI L2) -- cached 1h, see mich_inflation_expectations_client.py."""
+    return jsonify(get_mich_expectations() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2236,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # University of Michigan year-ahead inflation expectations (cached 1h)
+        try:
+            mich = get_mich_expectations()
+            if mich:
+                _macro_cache = {**_macro_cache, "MICH": {
+                    "label": "Infl. Exp.", "value": mich["latest"], "rating": mich["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] mich_inflation_expectations error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

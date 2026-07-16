@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from pce_price_index_client import get_pce_price_index
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/pce-price-index")
+@login_required
+def api_pce_price_index():
+    """Headline PCE Price Index (PCEPI) -- the Fed's actual inflation-target
+    gauge (FSI L2) -- cached 1h, see pce_price_index_client.py."""
+    return jsonify(get_pce_price_index() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2236,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Headline PCE Price Index -- the Fed's actual inflation target gauge
+        # (cached 1h in pce_price_index_client.py)
+        try:
+            pce = get_pce_price_index()
+            if pce:
+                _macro_cache = {**_macro_cache, "PCE_PRICE_INDEX": {
+                    "label": "PCE Infl.", "value": pce["yoy_pct"], "rating": pce["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] pce_price_index error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

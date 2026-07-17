@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from wti_crude_oil_client import get_wti_crude_oil
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/wti-crude-oil")
+@login_required
+def api_wti_crude_oil():
+    """WTI crude oil spot price (FRED DCOILWTICO, FSI L2) -- headline
+    energy-inflation input, cached 1h, see wti_crude_oil_client.py."""
+    return jsonify(get_wti_crude_oil() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2329,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # WTI crude oil spot price -- headline energy-inflation input (cached 1h in wti_crude_oil_client.py)
+        try:
+            wti = get_wti_crude_oil()
+            if wti:
+                _macro_cache = {**_macro_cache, "WTI_OIL": {
+                    "label": "WTI Crude", "value": wti["latest"], "rating": wti["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] wti_crude_oil error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

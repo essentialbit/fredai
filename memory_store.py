@@ -226,6 +226,17 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS ticker_debates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            bull_json TEXT NOT NULL,
+            bear_json TEXT NOT NULL,
+            verdict_json TEXT NOT NULL,
+            consensus TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS vault_embeddings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             path TEXT NOT NULL,
@@ -289,6 +300,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
         CREATE INDEX IF NOT EXISTS idx_short_volume_symbol ON short_volume_history(symbol, trade_date);
+        CREATE INDEX IF NOT EXISTS idx_ticker_debates_ticker ON ticker_debates(ticker, created_at);
         CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
         CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
         """)
@@ -1451,6 +1463,45 @@ def get_latest_short_volume(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def insert_ticker_debate(ticker: str, bull: dict, bear: dict, verdict: dict):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO ticker_debates
+               (ticker, bull_json, bear_json, verdict_json, consensus, confidence)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (ticker, json.dumps(bull), json.dumps(bear), json.dumps(verdict),
+             verdict.get("consensus"), verdict.get("confidence"))
+        )
+
+
+def get_latest_ticker_debate(ticker: str, max_age_s: float | None = None) -> dict | None:
+    """Latest persisted debate for ticker, or None if there isn't one yet
+    or (when max_age_s is given) the latest one is older than that. Age is
+    computed in Python against SQLite's own CURRENT_TIMESTAMP format
+    ("%Y-%m-%d %H:%M:%S", space-separated, UTC) rather than a SQL WHERE
+    clause -- avoids the isoformat()-vs-CURRENT_TIMESTAMP string-sort bug
+    class already hit elsewhere in this file."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM ticker_debates WHERE ticker=? ORDER BY created_at DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    if max_age_s is not None:
+        created = datetime.strptime(d["created_at"], "%Y-%m-%d %H:%M:%S")
+        if (datetime.utcnow() - created).total_seconds() > max_age_s:
+            return None
+    return {
+        "ticker": d["ticker"],
+        "bull": json.loads(d["bull_json"]),
+        "bear": json.loads(d["bear_json"]),
+        "verdict": json.loads(d["verdict_json"]),
+        "created_at": d["created_at"],
+    }
 
 
 def upsert_vault_chunk(path: str, chunk_text: str, embedding: list[float], mtime: float):

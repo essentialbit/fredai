@@ -34,6 +34,7 @@ from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
+from ticker_debate import get_ticker_debate
 from lead_lag_engine import get_lead_lag
 from vault_semantic_search import semantic_search, reindex_vault
 from param_optimizer import optimize_universe
@@ -1774,6 +1775,18 @@ def api_dark_pool(ticker):
     -- lazy per-symbol, cached 24h, see dark_pool_client.py. Publishes on a
     ~2-3 week lag, never a same-week signal."""
     return jsonify(get_dark_pool_signal(ticker) or {})
+
+
+@app.route("/api/ticker-debate/<symbol>")
+@login_required
+def api_ticker_debate(symbol):
+    """Bull/Bear/Macro-Moderator adversarial debate panel for a ticker
+    (FSI L4) -- serves a cached verdict (<=6h old) or runs a fresh panel.
+    See ticker_debate.py."""
+    result = get_ticker_debate(symbol.upper())
+    if not result:
+        return jsonify({"error": "debate panel unavailable — AI backend or parsing failed"}), 503
+    return jsonify(result)
 
 
 @app.route("/api/lead-lag")

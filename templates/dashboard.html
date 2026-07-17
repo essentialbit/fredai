@@ -1234,10 +1234,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .cw-add-widget{font-size:9px;color:var(--blue);cursor:pointer;padding:6px 16px;border-top:1px solid var(--border)}
 .cw-add-widget:hover{background:rgba(255,255,255,.02)}
 
-/* Landing Zone: adjustable widget grid — small by default, resize/reorder/hide, per-user persisted */
-.nav-tab.lz-tab-btn{color:var(--gold)}
-.nav-tab.lz-tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
-.lz-badge{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(245,166,35,.15);color:var(--gold);border:1px solid rgba(245,166,35,.4);letter-spacing:1px;margin-left:6px;vertical-align:1px}
+/* Home (ex-Landing Zone): adjustable widget grid — small by default, resize/reorder/hide, per-user persisted */
 .lz-head{padding:clamp(6px,1vw,9px) var(--pad);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .lz-head-title{font-size:var(--font-xs);letter-spacing:2px;text-transform:uppercase;color:var(--t3)}
 .lz-head-sub{font-size:var(--font-xs);color:var(--t3);opacity:.8}
@@ -1544,14 +1541,14 @@ html[data-tier="micro"] #ov-globe-stage {
 
   <!-- NAV TABS (desktop/tablet) -->
   <div id="nav-tabs">
-    <button class="nav-tab active" onclick="switchTab('overview',this)">Overview</button>
+    <button class="nav-tab active" id="nav-home-btn" onclick="switchTab('landingzone',this)">Home</button>
+    <button class="nav-tab" onclick="switchTab('overview',this)">Overview</button>
     <button class="nav-tab" onclick="switchTab('watchlist',this)">Watchlist</button>
     <button class="nav-tab" onclick="switchTab('portfolio',this)">Portfolio</button>
     <button class="nav-tab" onclick="switchTab('trending',this)">Trending</button>
     <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
     <button class="nav-tab" onclick="switchTab('globe',this)">◎ Situation Room</button>
     <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
-    <button class="nav-tab lz-tab-btn" onclick="switchTab('landingzone',this)">Landing Zone<span class="lz-badge">TEST</span></button>
   </div>
   <!-- ── FRED QUERY BAR ── -->
   <div id="fred-query-wrap">
@@ -1938,10 +1935,10 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
-    <!-- LANDING ZONE (test) — best-of widget grid pulled from every tab -->
+    <!-- HOME (prod, ex-Landing Zone) — best-of widget grid pulled from every tab -->
     <div class="panel" id="tab-landingzone" style="display:none;grid-column:1/-1;padding:0">
       <div class="lz-head">
-        <span class="lz-head-title">Landing Zone<span class="lz-badge">TEST</span></span>
+        <span class="lz-head-title">Home</span>
         <span class="lz-head-sub">Best-of every tab, in one glance — resize (⤢), reorder (←→), hide (×). Layout is remembered per user.</span>
       </div>
       <div class="scroll">
@@ -2441,7 +2438,11 @@ const CHART_INTERVAL = IS_MOBILE ? '1h' : IS_ULTRA ? '15m' : '30m';
 
 let priceChart = null, sentChart = null, portPieChart = null, trendBarChart = null;
 let allSignals = [], quotesCache = {}, trendData = [], portData = {};
-let nextScanISO = null, activeTab = 'overview', activeChart = 'price';
+// Home (ex-Landing Zone) is only reachable from #nav-tabs, which is hidden
+// on 'nano'/'micro' tiers in favor of the simpler #mobile-nav bar (no Home
+// entry there) -- default to Home only where the nav actually offers it.
+const DEFAULT_TAB = (TIER !== 'nano' && TIER !== 'micro') ? 'landingzone' : 'overview';
+let nextScanISO = null, activeTab = DEFAULT_TAB, activeChart = 'price';
 let _priceChartSeries = null;
 let rsiChart = null, macdChart = null;
 let _rsiSeries = null, _macdHist = null, _macdLine = null, _macdSignal = null;
@@ -3033,6 +3034,12 @@ async function loadInitData() {
       if (d.tech_alerts) renderTechAlerts(d.tech_alerts);
       if (!_dashGlobeInst) initDashGlobe();
     }
+    // Home (ex-Landing Zone) is the default landing tab on tiers where
+    // #nav-tabs is visible (see DEFAULT_TAB) -- switch into it now that
+    // every other tab's data is populated, rather than relying on
+    // Overview's raw-HTML default visibility (kept as a normal tab, no
+    // longer the default there).
+    if (activeTab === 'landingzone') switchTab('landingzone', g('nav-home-btn'));
   } catch(e) { console.error('Init error:',e); }
 }
 

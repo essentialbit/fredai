@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from ticker_debate import get_ticker_debate
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1751,6 +1752,18 @@ def api_copper_gold_ratio():
     """CPER-vs-GLD "Dr. Copper" growth-vs-safe-haven regime signal (FSI L2)
     -- cached 15min, see copper_gold_ratio.py."""
     return jsonify(get_copper_gold_ratio() or {})
+
+
+@app.route("/api/ticker-debate/<symbol>")
+@login_required
+def api_ticker_debate(symbol):
+    """Bull/Bear/Macro-Moderator adversarial debate panel for a ticker
+    (FSI L4) -- serves a cached verdict (<=6h old) or runs a fresh panel.
+    See ticker_debate.py."""
+    result = get_ticker_debate(symbol.upper())
+    if not result:
+        return jsonify({"error": "debate panel unavailable — AI backend or parsing failed"}), 503
+    return jsonify(result)
 
 
 @app.route("/api/ticker-relationships")

@@ -33,6 +33,7 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
 from lead_lag_engine import get_lead_lag
+from param_optimizer import optimize_universe
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -44,6 +45,7 @@ from memory_store import (
     get_latest_short_interest,
     get_recent_insider_transactions,
     get_layout_prefs, save_layout_prefs,
+    get_optimized_params,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
@@ -1762,6 +1764,14 @@ def api_lead_lag():
     return jsonify({"pairs": get_lead_lag()})
 
 
+@app.route("/api/optimized-params/<ticker>")
+@login_required
+def api_optimized_params(ticker):
+    """Best-scoring RSI / MA-cross parameter combo for this ticker, from
+    the daily grid-search backtest (FSI L3) -- see param_optimizer.py."""
+    return jsonify({"ticker": ticker.upper(), "params": get_optimized_params(ticker.upper())})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2466,6 +2476,22 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
 
+    def job_param_optimizer():
+        """Daily grid-search backtest of RSI / MA-cross parameters per
+        portfolio+watchlist ticker (FSI L3) -- see param_optimizer.py."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            result = optimize_universe(symbols)
+            print(f"[ParamOptimizer] Optimized {len(result)}/{len(symbols)} symbols")
+        except Exception as e:
+            print(f"[ParamOptimizer] Error: {e}")
+
     def job_insider_signals_refresh():
         """Refresh SEC Form 4 insider-trading data daily for portfolio + watchlist symbols,
         then check for buying/selling clusters (FSI L2)."""
@@ -2587,6 +2613,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_param_optimizer, "cron", hour=7, minute=45, id="param_optimizer")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
     scheduler.add_job(job_community, "interval", hours=6, id="community", jitter=300)

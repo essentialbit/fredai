@@ -33,6 +33,7 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
 from dark_pool_client import get_dark_pool_signal
+from whale_activity import compute_whale_activity
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1838,6 +1839,17 @@ def api_short_volume(ticker):
     and /api/watchlist."""
     signal = compute_short_volume_signal(ticker.upper())
     return jsonify(signal or {"symbol": ticker.upper(), "short_volume_pct": None, "trend": None})
+
+
+@app.route("/api/whale-activity/<symbol>")
+@login_required
+def api_whale_activity(symbol):
+    """Composite "Whale Activity Index" (FSI L1/L2) blending FINRA short-
+    volume + dark-pool/ATS z-scores -- an honest free-data proxy for
+    institutional activity, not literal block/sweep-print data. See
+    whale_activity.py."""
+    result = compute_whale_activity(symbol.upper())
+    return jsonify(result or {"ticker": symbol.upper(), "whale_index": None, "band": None})
 
 
 @app.route("/api/assessment/<symbol>")

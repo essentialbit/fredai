@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from stablecoin_flow import get_stablecoin_flow
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/stablecoin-flow")
+@login_required
+def api_stablecoin_flow():
+    """USDT+USDC combined market-cap velocity -- crypto systemic liquidity
+    leading indicator (FSI L5). Cached 30min, see stablecoin_flow.py."""
+    return jsonify(get_stablecoin_flow() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2329,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Stablecoin net issuance flow (cached 30min in stablecoin_flow.py)
+        try:
+            sf = get_stablecoin_flow()
+            if sf:
+                _macro_cache = {**_macro_cache, "STABLECOIN_FLOW": {
+                    "label": "Stable Flow", "value": sf["combined_cap_usd"], "rating": sf["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] stablecoin_flow error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

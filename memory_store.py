@@ -226,6 +226,15 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS vault_embeddings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT NOT NULL,
+            chunk_text TEXT NOT NULL,
+            embedding_json TEXT NOT NULL,
+            mtime REAL NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS optimized_params (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -268,6 +277,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
         CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
         """)
 
@@ -1392,6 +1402,37 @@ def get_short_interest_direction(symbol: str) -> str | None:
     if latest < prior:
         return "bullish"
     return None
+
+
+def upsert_vault_chunk(path: str, chunk_text: str, embedding: list[float], mtime: float):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO vault_embeddings (path, chunk_text, embedding_json, mtime) VALUES (?, ?, ?, ?)",
+            (path, chunk_text, json.dumps(embedding), mtime)
+        )
+
+
+def get_all_vault_chunks() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT path, chunk_text, embedding_json FROM vault_embeddings").fetchall()
+    return [
+        {"path": r["path"], "chunk_text": r["chunk_text"], "embedding": json.loads(r["embedding_json"])}
+        for r in rows
+    ]
+
+
+def get_vault_chunk_mtimes() -> dict:
+    """Latest indexed mtime per source file, for incremental reindexing."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT path, MAX(mtime) as mtime FROM vault_embeddings GROUP BY path"
+        ).fetchall()
+    return {r["path"]: r["mtime"] for r in rows}
+
+
+def delete_vault_chunks_for_path(path: str):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM vault_embeddings WHERE path=?", (path,))
 
 
 def upsert_optimized_params(ticker: str, indicator: str, params: dict, score: float, sample_size: int):

@@ -33,6 +33,7 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
 from lead_lag_engine import get_lead_lag
+from vault_semantic_search import semantic_search, reindex_vault
 from param_optimizer import optimize_universe
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
@@ -1764,6 +1765,26 @@ def api_lead_lag():
     return jsonify({"pairs": get_lead_lag()})
 
 
+@app.route("/api/vault/search")
+@login_required
+def api_vault_search():
+    """Local semantic search over the FredAI vault journal (FSI L4) --
+    debugging/direct-testing endpoint for the same search chat uses
+    automatically, see vault_semantic_search.py."""
+    q = request.args.get("q", "")
+    if not q:
+        return jsonify({"results": []})
+    return jsonify({"results": semantic_search(q)})
+
+
+@app.route("/api/vault/reindex", methods=["POST"])
+@login_required
+def api_vault_reindex():
+    """Manually trigger an incremental vault reindex (also runs on its
+    own 6h cron, see job_vault_reindex)."""
+    return jsonify(reindex_vault())
+
+
 @app.route("/api/optimized-params/<ticker>")
 @login_required
 def api_optimized_params(ticker):
@@ -2476,6 +2497,15 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
 
+    def job_vault_reindex():
+        """Incremental semantic-search reindex of the FredAI vault journal
+        (FSI L4) -- see vault_semantic_search.py."""
+        try:
+            result = reindex_vault()
+            print(f"[VaultSearch] Reindexed — {result['indexed']} updated, {result['skipped']} unchanged")
+        except Exception as e:
+            print(f"[VaultSearch] Reindex error: {e}")
+
     def job_param_optimizer():
         """Daily grid-search backtest of RSI / MA-cross parameters per
         portfolio+watchlist ticker (FSI L3) -- see param_optimizer.py."""
@@ -2622,6 +2652,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)
+    scheduler.add_job(job_vault_reindex, "interval", hours=6, id="vault_reindex", jitter=600)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

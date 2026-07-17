@@ -4352,7 +4352,7 @@ function updateIdxBar(q) {
 }
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
-const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)'};
+const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','tightening':'var(--green)','loosening':'var(--red)','stable':'var(--t3)'};
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};

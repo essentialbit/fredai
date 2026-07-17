@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.68
+- feat: self-optimizing technical-indicator parameter tuning loop (closes #315) (#316)
+- docs: sync README changelog to v1.3.67 (#261)
+
 ### FredAI v1.3.67
 - fix: insider cluster detection counted raw transactions, not distinct insiders
 
@@ -37,10 +41,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.64
 - feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
-
-### FredAI v1.3.63
-- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
-- feat: Copper/Gold ratio "Dr. Copper" cross-asset regime signal (closes #176)
 
 <!-- CHANGELOG_END -->
 

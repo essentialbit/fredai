@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from lead_lag_engine import get_lead_lag
 from vault_semantic_search import semantic_search, reindex_vault
 from param_optimizer import optimize_universe
 from memory_store import (
@@ -1754,6 +1755,14 @@ def api_copper_gold_ratio():
     """CPER-vs-GLD "Dr. Copper" growth-vs-safe-haven regime signal (FSI L2)
     -- cached 15min, see copper_gold_ratio.py."""
     return jsonify(get_copper_gold_ratio() or {})
+
+
+@app.route("/api/lead-lag")
+@login_required
+def api_lead_lag():
+    """Granger-causality lead-lag relationships across a curated set of
+    macro-to-market pairs (FSI L2) -- cached 6h, see lead_lag_engine.py."""
+    return jsonify({"pairs": get_lead_lag()})
 
 
 @app.route("/api/vault/search")

@@ -235,6 +235,17 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS optimized_params (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            indicator TEXT NOT NULL,
+            params_json TEXT NOT NULL,
+            score REAL NOT NULL,
+            sample_size INTEGER NOT NULL,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, indicator)
+        );
+
         CREATE TABLE IF NOT EXISTS insider_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -267,6 +278,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
         CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
+        CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1421,6 +1433,37 @@ def get_vault_chunk_mtimes() -> dict:
 def delete_vault_chunks_for_path(path: str):
     with get_conn() as conn:
         conn.execute("DELETE FROM vault_embeddings WHERE path=?", (path,))
+
+
+def upsert_optimized_params(ticker: str, indicator: str, params: dict, score: float, sample_size: int):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO optimized_params (ticker, indicator, params_json, score, sample_size, computed_at)
+               VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(ticker, indicator) DO UPDATE SET
+                   params_json=excluded.params_json, score=excluded.score,
+                   sample_size=excluded.sample_size, computed_at=excluded.computed_at""",
+            (ticker, indicator, json.dumps(params), score, sample_size)
+        )
+
+
+def get_optimized_params(ticker: str, indicator: str | None = None) -> list[dict]:
+    with get_conn() as conn:
+        if indicator:
+            rows = conn.execute(
+                "SELECT * FROM optimized_params WHERE ticker=? AND indicator=?",
+                (ticker, indicator)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM optimized_params WHERE ticker=?", (ticker,)
+            ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["params"] = json.loads(d.pop("params_json"))
+        out.append(d)
+    return out
 
 
 # ── INSIDER TRANSACTIONS (SEC Form 4) ─────────────────────────────────────────

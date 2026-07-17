@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from business_loans_client import get_business_loan_growth
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/business-loans")
+@login_required
+def api_business_loans():
+    """C&I loan volume YoY growth (FRED BUSLOANS) -- realized bank
+    credit-creation signal, distinct from the survey-based lending-standards
+    badges (FSI L2). Cached 1h, see business_loans_client.py."""
+    return jsonify(get_business_loan_growth() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2330,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # C&I loan volume YoY growth -- realized credit-cycle signal (cached 1h)
+        try:
+            bl = get_business_loan_growth()
+            if bl:
+                _macro_cache = {**_macro_cache, "BUSINESS_LOANS": {
+                    "label": "C&I Loans", "value": bl["yoy_growth_pct"], "rating": bl["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] business_loans_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

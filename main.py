@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from eci_client import get_eci
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/employment-cost-index")
+@login_required
+def api_employment_cost_index():
+    """Employment Cost Index (FRED ECIALLCIV) quarterly wage-cost inflation
+    signal (FSI L2) -- cached 6h, see eci_client.py."""
+    return jsonify(get_eci() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2236,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Employment Cost Index quarterly wage-cost inflation signal (cached 6h in eci_client.py)
+        try:
+            eci = get_eci()
+            if eci:
+                _macro_cache = {**_macro_cache, "ECI": {
+                    "label": "ECI YoY", "value": eci["latest_yoy_pct"], "rating": eci["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] eci error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

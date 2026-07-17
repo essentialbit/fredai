@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from dallas_fed_manufacturing_client import get_dallas_fed_manufacturing
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -1753,6 +1754,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/dallas-fed-manufacturing")
+@login_required
+def api_dallas_fed_manufacturing():
+    """Dallas Fed Texas Manufacturing Outlook Survey general business
+    activity diffusion index (FSI L2) -- cached 1h, see
+    dallas_fed_manufacturing_client.py."""
+    return jsonify(get_dallas_fed_manufacturing() or {})
+
+
 @app.route("/api/ticker-relationships")
 @login_required
 def api_ticker_relationships():
@@ -2227,6 +2237,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Dallas Fed Texas Manufacturing Outlook -- general business activity
+        # diffusion index (cached 1h in dallas_fed_manufacturing_client.py)
+        try:
+            dfm = get_dallas_fed_manufacturing()
+            if dfm:
+                _macro_cache = {**_macro_cache, "DALLAS_FED_MFG": {
+                    "label": "Dallas Fed Mfg", "value": dfm["latest"], "rating": dfm["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] dallas_fed_manufacturing error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

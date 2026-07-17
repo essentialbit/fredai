@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from on_rrp_liquidity_client import get_on_rrp_liquidity
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/on-rrp-liquidity")
+@login_required
+def api_on_rrp_liquidity():
+    """Overnight Reverse Repo facility usage (FRED RRPONTSYD, FSI L2)
+    -- money-market liquidity/collateral-scarcity gauge, cached 1h, see
+    on_rrp_liquidity_client.py."""
+    return jsonify(get_on_rrp_liquidity() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2330,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # ON RRP facility usage -- money-market liquidity gauge (cached 1h in on_rrp_liquidity_client.py)
+        try:
+            rrp = get_on_rrp_liquidity()
+            if rrp:
+                _macro_cache = {**_macro_cache, "ON_RRP": {
+                    "label": "ON RRP", "value": rrp["latest"], "rating": rrp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] on_rrp_liquidity error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

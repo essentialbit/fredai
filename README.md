@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.74
+- fix: verify actual FredAI identity, not just port occupancy, in launcher scripts (#411)
+- docs: sync README changelog to v1.3.73 (#379)
+
 ### FredAI v1.3.73
 - feat: promote Landing Zone to prod, rename 'Home' (#371)
 
@@ -36,10 +40,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 ### FredAI v1.3.70
 - feat: institutional Whale Activity Index, FINRA composite (closes #369) (#370)
 - feat: adversarial Bull/Bear/Moderator debate panel per ticker (closes #367) (#368)
-
-### FredAI v1.3.69
-- feat: cross-asset lead-lag detector via Granger causality (closes #365) (#366)
-- feat: local semantic search over the FredAI vault journal (closes #363) (#364)
 
 <!-- CHANGELOG_END -->
 

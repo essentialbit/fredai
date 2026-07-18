@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from credit_card_delinquency_client import get_credit_card_delinquency
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,16 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/credit-card-delinquency")
+@login_required
+def api_credit_card_delinquency():
+    """Credit card delinquency rate at all commercial banks (FRED DRCCLACBS)
+    -- household credit-quality/stress signal (FSI L2), distinct from
+    consumer credit outstanding volume and personal savings rate. Cached 6h,
+    see credit_card_delinquency_client.py."""
+    return jsonify(get_credit_card_delinquency() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2331,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Credit card delinquency rate -- household credit-quality signal
+        # (cached 6h in credit_card_delinquency_client.py)
+        try:
+            ccd = get_credit_card_delinquency()
+            if ccd:
+                _macro_cache = {**_macro_cache, "CC_DELINQ": {
+                    "label": "CC Delinq", "value": ccd["latest"], "rating": ccd["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_card_delinquency error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

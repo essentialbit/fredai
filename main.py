@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from commercial_re_delinquency_client import get_commercial_re_delinquency
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,17 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/commercial-re-delinquency")
+@login_required
+def api_commercial_re_delinquency():
+    """Commercial real estate loan delinquency rate at all commercial banks
+    (FRED DRCRELEXFACBS) -- business/corporate credit-quality signal (FSI
+    L2), distinct from the household-debt delinquency badges and the
+    bond-market credit-spread badges. Cached 6h, see
+    commercial_re_delinquency_client.py."""
+    return jsonify(get_commercial_re_delinquency() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2332,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Commercial real estate loan delinquency rate -- business/corporate
+        # credit-quality signal (cached 6h in commercial_re_delinquency_client.py)
+        try:
+            cred = get_commercial_re_delinquency()
+            if cred:
+                _macro_cache = {**_macro_cache, "CRE_DELINQ": {
+                    "label": "CRE Delinq", "value": cred["latest"], "rating": cred["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] commercial_re_delinquency error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

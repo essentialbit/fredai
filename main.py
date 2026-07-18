@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from u6_unemployment_client import get_u6_unemployment
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/u6-unemployment")
+@login_required
+def api_u6_unemployment():
+    """U-6 Broader Unemployment Rate (FRED U6RATE) -- underemployment
+    macro badge (FSI L2), distinct from the headline U-3 rate. Cached 1h,
+    see u6_unemployment_client.py."""
+    return jsonify(get_u6_unemployment() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2330,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # U-6 Broader Unemployment Rate (cached 1h in u6_unemployment_client.py)
+        try:
+            u6 = get_u6_unemployment()
+            if u6:
+                _macro_cache = {**_macro_cache, "U6_UNEMPLOYMENT": {
+                    "label": "U-6 Unemployment", "value": u6["latest_pct"], "rating": u6["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] u6_unemployment error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

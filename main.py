@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from household_debt_service_client import get_household_debt_service
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/household-debt-service")
+@login_required
+def api_household_debt_service():
+    """Household Debt Service Ratio (FRED TDSP) -- debt payments as % of
+    disposable income, a forward-leading household leverage-burden signal
+    (FSI L2). Cached 6h, see household_debt_service_client.py."""
+    return jsonify(get_household_debt_service() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2330,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Household Debt Service Ratio (FRED TDSP, cached 6h in household_debt_service_client.py)
+        try:
+            hds = get_household_debt_service()
+            if hds:
+                _macro_cache = {**_macro_cache, "HOUSEHOLD_DEBT_SERVICE": {
+                    "label": "HH Debt Service", "value": hds["latest"], "rating": hds["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] household_debt_service error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

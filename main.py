@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from moody_credit_quality_spread import get_moody_credit_quality_spread
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,15 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/moody-credit-quality-spread")
+@login_required
+def api_moody_credit_quality_spread():
+    """Moody's Aaa-Baa corporate bond quality spread -- within-credit-quality
+    flight-to-quality signal (FSI L2), distinct from the Baa/10Y treasury-
+    relative spread. Cached 1h, see moody_credit_quality_spread.py."""
+    return jsonify(get_moody_credit_quality_spread() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2330,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Moody's Aaa-Baa credit quality spread (cached 1h in moody_credit_quality_spread.py)
+        try:
+            mcs = get_moody_credit_quality_spread()
+            if mcs:
+                _macro_cache = {**_macro_cache, "MOODY_SPREAD": {
+                    "label": "Aaa-Baa", "value": mcs["spread"], "rating": mcs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] moody_credit_quality_spread error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

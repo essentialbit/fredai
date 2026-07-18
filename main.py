@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from auto_loan_delinquency_client import get_auto_loan_delinquency
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,16 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/auto-loan-delinquency")
+@login_required
+def api_auto_loan_delinquency():
+    """Auto loan delinquency rate at all commercial banks (FRED DRALACBS)
+    -- secured-debt household credit-quality signal (FSI L2), distinct
+    from credit card delinquency and mortgage delinquency. Cached 6h, see
+    auto_loan_delinquency_client.py."""
+    return jsonify(get_auto_loan_delinquency() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2331,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Auto loan delinquency rate -- secured-debt household
+        # credit-quality signal (cached 6h in auto_loan_delinquency_client.py)
+        try:
+            ald = get_auto_loan_delinquency()
+            if ald:
+                _macro_cache = {**_macro_cache, "AUTO_LOAN_DELINQ": {
+                    "label": "Auto Delinq", "value": ald["latest"], "rating": ald["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] auto_loan_delinquency error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from epu_index import get_epu_index
 from fed_liquidity import get_liquidity_snapshot
 from breakeven_inflation import get_breakeven_inflation
 from skew_index import get_skew_index
@@ -1772,6 +1773,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/epu-index")
+@login_required
+def api_epu_index():
+    """Economic Policy Uncertainty Index (Baker/Bloom/Davis) news-based
+    macro-uncertainty trend badge (FSI L2) -- cached 15min, see epu_index.py."""
+    return jsonify(get_epu_index() or {})
 @app.route("/api/fed-liquidity")
 @login_required
 def api_fed_liquidity():
@@ -2344,6 +2351,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Economic Policy Uncertainty index (cached 15min in epu_index.py)
+        try:
+            epu = get_epu_index()
+            if epu:
+                _macro_cache = {**_macro_cache, "EPU": {
+                    "label": "EPU", "value": epu["value"], "rating": epu["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] epu_index error: {e}")
         # Fed balance sheet / M2 liquidity regime (cached 12h in fed_liquidity.py)
         try:
             liq = get_liquidity_snapshot()

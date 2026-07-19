@@ -1234,10 +1234,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .cw-add-widget{font-size:9px;color:var(--blue);cursor:pointer;padding:6px 16px;border-top:1px solid var(--border)}
 .cw-add-widget:hover{background:rgba(255,255,255,.02)}
 
-/* Landing Zone: adjustable widget grid — small by default, resize/reorder/hide, per-user persisted */
-.nav-tab.lz-tab-btn{color:var(--gold)}
-.nav-tab.lz-tab-btn.active{color:var(--gold);border-bottom-color:var(--gold)}
-.lz-badge{font-size:8px;font-weight:700;padding:1px 5px;border-radius:3px;background:rgba(245,166,35,.15);color:var(--gold);border:1px solid rgba(245,166,35,.4);letter-spacing:1px;margin-left:6px;vertical-align:1px}
+/* Home (ex-Landing Zone): adjustable widget grid — small by default, resize/reorder/hide, per-user persisted */
 .lz-head{padding:clamp(6px,1vw,9px) var(--pad);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0}
 .lz-head-title{font-size:var(--font-xs);letter-spacing:2px;text-transform:uppercase;color:var(--t3)}
 .lz-head-sub{font-size:var(--font-xs);color:var(--t3);opacity:.8}
@@ -1544,14 +1541,14 @@ html[data-tier="micro"] #ov-globe-stage {
 
   <!-- NAV TABS (desktop/tablet) -->
   <div id="nav-tabs">
-    <button class="nav-tab active" onclick="switchTab('overview',this)">Overview</button>
+    <button class="nav-tab active" id="nav-home-btn" onclick="switchTab('landingzone',this)">Home</button>
+    <button class="nav-tab" onclick="switchTab('overview',this)">Overview</button>
     <button class="nav-tab" onclick="switchTab('watchlist',this)">Watchlist</button>
     <button class="nav-tab" onclick="switchTab('portfolio',this)">Portfolio</button>
     <button class="nav-tab" onclick="switchTab('trending',this)">Trending</button>
     <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
     <button class="nav-tab" onclick="switchTab('globe',this)">◎ Situation Room</button>
     <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
-    <button class="nav-tab lz-tab-btn" onclick="switchTab('landingzone',this)">Landing Zone<span class="lz-badge">TEST</span></button>
   </div>
   <!-- ── FRED QUERY BAR ── -->
   <div id="fred-query-wrap">
@@ -1938,10 +1935,10 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
-    <!-- LANDING ZONE (test) — best-of widget grid pulled from every tab -->
+    <!-- HOME (prod, ex-Landing Zone) — best-of widget grid pulled from every tab -->
     <div class="panel" id="tab-landingzone" style="display:none;grid-column:1/-1;padding:0">
       <div class="lz-head">
-        <span class="lz-head-title">Landing Zone<span class="lz-badge">TEST</span></span>
+        <span class="lz-head-title">Home</span>
         <span class="lz-head-sub">Best-of every tab, in one glance — resize (⤢), reorder (←→), hide (×). Layout is remembered per user.</span>
       </div>
       <div class="scroll">
@@ -2441,7 +2438,11 @@ const CHART_INTERVAL = IS_MOBILE ? '1h' : IS_ULTRA ? '15m' : '30m';
 
 let priceChart = null, sentChart = null, portPieChart = null, trendBarChart = null;
 let allSignals = [], quotesCache = {}, trendData = [], portData = {};
-let nextScanISO = null, activeTab = 'overview', activeChart = 'price';
+// Home (ex-Landing Zone) is only reachable from #nav-tabs, which is hidden
+// on 'nano'/'micro' tiers in favor of the simpler #mobile-nav bar (no Home
+// entry there) -- default to Home only where the nav actually offers it.
+const DEFAULT_TAB = (TIER !== 'nano' && TIER !== 'micro') ? 'landingzone' : 'overview';
+let nextScanISO = null, activeTab = DEFAULT_TAB, activeChart = 'price';
 let _priceChartSeries = null;
 let rsiChart = null, macdChart = null;
 let _rsiSeries = null, _macdHist = null, _macdLine = null, _macdSignal = null;
@@ -3033,6 +3034,12 @@ async function loadInitData() {
       if (d.tech_alerts) renderTechAlerts(d.tech_alerts);
       if (!_dashGlobeInst) initDashGlobe();
     }
+    // Home (ex-Landing Zone) is the default landing tab on tiers where
+    // #nav-tabs is visible (see DEFAULT_TAB) -- switch into it now that
+    // every other tab's data is populated, rather than relying on
+    // Overview's raw-HTML default visibility (kept as a normal tab, no
+    // longer the default there).
+    if (activeTab === 'landingzone') switchTab('landingzone', g('nav-home-btn'));
   } catch(e) { console.error('Init error:',e); }
 }
 
@@ -4333,7 +4340,9 @@ function renderPositions(positions, cid) {
     const currency=quotesCache[p.symbol]?.currency||(isAsx(p.symbol)?'AUD':'USD');
     const cTag=currency==='AUD'?`<span style="font-size:7px;color:#f5a623;margin-left:3px">AUD</span>`:'';
     const siTag=(p.short_float_pct!=null)?`<span title="Short float / days-to-cover" style="font-size:7px;color:${p.short_float_pct>=10?'#ff3b5c':'var(--t3)'};margin-left:5px">SI ${p.short_float_pct.toFixed(1)}%${p.short_ratio!=null?` / ${p.short_ratio.toFixed(1)}d`:''}</span>`:'';
-    return `<div class="pos-row"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
+    const sv=p.short_volume;
+    const svTag=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};margin-left:5px">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
+    return `<div class="pos-row" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -4352,7 +4361,7 @@ function updateIdxBar(q) {
 }
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
-const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','crisis':'var(--red)','normal':'var(--t3)','complacent_tight':'var(--green)'};
+const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','normal':'var(--green)','elevated':'var(--yellow)','high_stress':'var(--red)','crisis':'var(--red)','complacent_tight':'var(--green)'};
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};
@@ -4828,7 +4837,32 @@ function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(t
 
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
 async function loadWatchlist(){const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[])}
+// FSI L5 open-source engineering velocity (#208) -- only meaningful for a
+// small curated set of open-source-native tickers, lazily fetched per
+// symbol (24h server-side cache) and merged back in via a re-render rather
+// than blocking the initial watchlist paint.
+const OSS_TRACKED=['MDB','ESTC','GTLB','HCP','CFLT','NET'];
+let ossVelocityCache={},darkPoolCache={},_wlLastItems=null,_wlLastInterests=null;
+async function loadOssVelocity(sym){
+  if(ossVelocityCache[sym]!==undefined)return;
+  ossVelocityCache[sym]=null;
+  try{
+    const r=await fetch('/api/oss-velocity/'+sym);
+    const d=await r.json();
+    if(d&&d.trend_52wk){ossVelocityCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+  }catch(e){}
+}
+async function loadDarkPool(sym){
+  if(darkPoolCache[sym]!==undefined)return;
+  darkPoolCache[sym]=null;
+  try{
+    const r=await fetch('/api/dark-pool/'+sym);
+    const d=await r.json();
+    if(d&&d.trend){darkPoolCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+  }catch(e){}
+}
 function renderWatchlist(items,interests){
+  _wlLastItems=items;_wlLastInterests=interests;
   const im={};(interests||[]).forEach(i=>im[i.symbol]=i.interest_score);
   const tbody=g('wl-body');
   if(!items.length){g('wl-empty').style.display='';tbody.innerHTML='';g('wl-cnt').textContent='0 symbols';return}
@@ -4852,7 +4886,34 @@ function renderWatchlist(items,interests){
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span></td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    let ossBadge='';
+    if(OSS_TRACKED.includes(sym)){
+      const ov=ossVelocityCache[sym];
+      if(ov===undefined)loadOssVelocity(sym);
+      if(ov&&ov.trend_52wk){
+        const dir=ov.trend_52wk.direction,arrow=dir==='rising'?'↑':dir==='falling'?'↓':'→';
+        const dirColor=dir==='rising'?'var(--green)':dir==='falling'?'var(--red)':'var(--t3)';
+        const delta=ov.contributor_count_delta;
+        const tip=`${ov.owner_repo} — ${ov.weekly_commits_4wk_avg} commits/wk (4wk avg), z=${ov.trend_52wk.z_score}, ${ov.contributor_count||'?'} contributors${delta?(delta>0?' (+':' (')+delta+')':''}`;
+        ossBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(0,180,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">OSS ${arrow}</span>`;
+      }
+    }
+    const cluster=w.insider_cluster;
+    const clusterBadge=cluster?`<span title="${cluster.distinct_owners} distinct insiders ${cluster.direction==='buy'?'bought':'sold'} in the trailing window" style="font-size:7px;background:${cluster.direction==='buy'?'#0e3a1f':'#3a1414'};color:${cluster.direction==='buy'?'var(--green)':'var(--red)'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">${cluster.direction==='buy'?'▲':'▼'}INSIDER×${cluster.distinct_owners}</span>`:'';
+    const sv=w.short_volume;
+    const svBadge=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;background:${sv.trend&&sv.trend.direction==='rising'?'#3c1a1a':'#1a1a1a'};color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
+    let dpBadge='';
+    if(!isAsx(sym)){
+      const dp=darkPoolCache[sym];
+      if(dp===undefined)loadDarkPool(sym);
+      else if(dp&&dp.trend){
+        const arrow=dp.trend.direction==='rising'?'▲':dp.trend.direction==='falling'?'▼':'▬';
+        const dirColor=dp.trend.direction==='rising'?'var(--green)':dp.trend.direction==='falling'?'var(--red)':'var(--t3)';
+        const tip=`Dark pool (ATS) volume week of ${dp.week_start_date}: ${dp.trend.direction} (z=${dp.trend.z_score}). Publishes ~2-3wk delayed.`;
+        dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
+      }
+    }
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -4904,6 +4965,18 @@ async function loadPortfolioRisk(p){
       chip('Beta',d.beta_spy??'--',RISK_TIPS.beta)+
       `<div style="grid-column:1/-1;font-size:8px;color:var(--t3);text-align:right">${d.days}d daily history · rf=0 · vs ${d.benchmark}</div>`;
     strip.style.display='grid';
+    (d.positions||[]).forEach(kp=>{
+      const row=document.querySelector(`#port-positions-list .pos-row[data-sym="${kp.symbol}"]`);
+      if(!row) return;
+      row.querySelectorAll('.kelly-line').forEach(e=>e.remove());
+      const k=kp.kelly; if(!k) return;
+      const el=document.createElement('div');
+      el.className='kelly-line';
+      el.style.cssText='grid-column:1/-1;font-size:8px;color:var(--t3);padding:0 10px 4px;text-align:right';
+      el.title=`Kelly f* = win rate − (1−win rate)/ratio · win rate ${k.win_rate_pct}% · win/loss ratio ${k.win_loss_ratio}x · ${k.sample_size}d sample`;
+      el.textContent=`Kelly (half) ${k.half_kelly_pct}% · full ${k.full_kelly_pct}%`;
+      row.appendChild(el);
+    });
   }catch(e){strip.style.display='none'}
 }
 function renderPortfolioTab(p){

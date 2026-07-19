@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from variance_risk_premium import get_variance_risk_premium
 from dollar_index_client import get_dollar_index
 from oss_velocity_client import get_velocity_snapshot, TRACKED_REPOS
 from crypto_fear_greed import get_crypto_fear_greed
@@ -1777,6 +1778,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/variance-risk-premium")
+@login_required
+def api_variance_risk_premium():
+    """VIX implied vol vs SPY trailing realized vol gap (FSI L2)
+    -- cached 15min, see variance_risk_premium.py."""
+    return jsonify(get_variance_risk_premium() or {})
 @app.route("/api/dollar-index")
 @login_required
 def api_dollar_index():
@@ -2385,6 +2392,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Variance risk premium: VIX implied vol vs SPY realized vol (cached 15min)
+        try:
+            vrp = get_variance_risk_premium()
+            if vrp:
+                _macro_cache = {**_macro_cache, "VRP": {
+                    "label": "VRP", "value": vrp["vrp"], "rating": vrp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] variance_risk_premium error: {e}")
         # Broad Dollar Index / DTWEXBGS currency regime signal (cached 1h in dollar_index_client.py)
         try:
             di = get_dollar_index()

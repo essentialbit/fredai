@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from housing_starts import get_housing_starts
 from repo_funding_stress import get_repo_stress
 from treasury_auction_client import get_treasury_auction_demand
 from credit_oas_spread import get_credit_oas_spread
@@ -1780,6 +1781,14 @@ def api_sector_rotation():
     return jsonify({"sectors": rankings, "benchmark": "SPY"})
 
 
+@app.route("/api/housing-starts")
+@login_required
+def api_housing_starts():
+    """Housing starts & building permits (FRED HOUST/PERMIT), real-economy
+    leading-indicator macro badge (FSI L2) -- cached 6h, see housing_starts.py."""
+    return jsonify(get_housing_starts() or {})
+
+
 @app.route("/api/copper-gold-ratio")
 @login_required
 def api_copper_gold_ratio():
@@ -2469,6 +2478,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Housing starts & building permits real-economy leading indicator (cached 6h in housing_starts.py)
+        try:
+            hs = get_housing_starts()
+            if hs:
+                _macro_cache = {**_macro_cache, "HOUSING_STARTS": {
+                    "label": "Housing Starts", "value": hs["starts"]["latest"], "rating": hs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] housing_starts error: {e}")
         # Repo funding-market stress: SOFR vs EFFR spread (cached 1h in repo_funding_stress.py)
         try:
             rs = get_repo_stress()

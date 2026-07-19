@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.77
+- docs: sync README changelog to v1.3.76 (#428)
+- feat: sentiment reversal early warning -- bearish/bullish flip detection (closes #132)
+
 ### FredAI v1.3.76
 - fix: gitignore .claude/worktrees to prevent accidental gitlink commits (#373)
 
@@ -37,9 +41,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.73
 - feat: promote Landing Zone to prod, rename 'Home' (#371)
-
-### FredAI v1.3.72
-- feat: local semantic search over the FredAI vault journal (closes #363) (#364)
 
 <!-- CHANGELOG_END -->
 

@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from fed_liquidity import get_liquidity_snapshot
 from breakeven_inflation import get_breakeven_inflation
 from skew_index import get_skew_index
 from dark_pool_client import get_dark_pool_signal
@@ -1771,6 +1772,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/fed-liquidity")
+@login_required
+def api_fed_liquidity():
+    """Fed balance sheet (WALCL) / M2 money supply (M2SL) liquidity regime
+    (FSI L2) -- cached 12h, see fed_liquidity.py."""
+    return jsonify(get_liquidity_snapshot() or {})
 @app.route("/api/breakeven-inflation")
 @login_required
 def api_breakeven_inflation():
@@ -2337,6 +2344,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Fed balance sheet / M2 liquidity regime (cached 12h in fed_liquidity.py)
+        try:
+            liq = get_liquidity_snapshot()
+            if liq:
+                _macro_cache = {**_macro_cache, "FED_LIQUIDITY": {
+                    "label": "Fed Liquidity", "value": liq["walcl"]["change_wow_pct"], "rating": liq["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] fed_liquidity error: {e}")
         # 10Y breakeven inflation rate (cached 1h in breakeven_inflation.py)
         try:
             be = get_breakeven_inflation()

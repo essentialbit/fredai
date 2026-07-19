@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from stlfsi_index import get_stlfsi_index
 from consumer_sentiment import get_consumer_sentiment
 from cross_market_contagion import get_cross_market_contagion
 from nfci_index import get_nfci_index
@@ -1782,6 +1783,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/stlfsi-index")
+@login_required
+def api_stlfsi_index():
+    """St. Louis Fed Financial Stress Index -- weekly 18-variable
+    interest-rate/credit/volatility composite (FSI L2) -- cached 12h,
+    see stlfsi_index.py."""
+    return jsonify(get_stlfsi_index() or {})
 @app.route("/api/consumer-sentiment")
 @login_required
 def api_consumer_sentiment():
@@ -2423,6 +2431,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # St. Louis Fed STLFSI4 financial-stress regime signal (cached 12h in stlfsi_index.py)
+        try:
+            stlfsi = get_stlfsi_index()
+            if stlfsi:
+                _macro_cache = {**_macro_cache, "STLFSI": {
+                    "label": "STLFSI", "value": stlfsi["latest"], "rating": stlfsi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] stlfsi_index error: {e}")
         # UMCSENT consumer sentiment survey regime (cached daily in consumer_sentiment.py)
         try:
             cs = get_consumer_sentiment()

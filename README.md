@@ -24,20 +24,21 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.96
+- feat: Treasury auction indirect-bidder demand tracker (closes #192) (#247)
+
+### FredAI v1.3.95
+- feat: ICE BofA OAS credit-stress badge (closes #230) (#245)
+
+### FredAI v1.3.94
+- feat: commodity futures curve contango/backwardation signal (#242) (#243)
+- docs: sync README changelog to v1.3.93 (#450)
+
 ### FredAI v1.3.93
 - feat: CBOE VVIX volatility-of-volatility tail-risk badge (closes #232) (#238)
 
 ### FredAI v1.3.92
 - feat: St. Louis Fed Financial Stress Index (STLFSI4) macro-strip badge
-
-### FredAI v1.3.91
-- feat: University of Michigan Consumer Sentiment Index (UMCSENT) macro badge (closes #226) (#229)
-
-### FredAI v1.3.90
-- feat: cross-market contagion tracking (closes #223) (#227)
-
-### FredAI v1.3.89
-- feat: Chicago Fed NFCI financial-conditions macro-strip badge (closes #221) (#225)
 
 <!-- CHANGELOG_END -->
 

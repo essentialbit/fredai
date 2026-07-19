@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from credit_spread_client import get_credit_spread
 from core_pce_client import get_core_pce
 from industrial_production_client import get_industrial_production
 from fed_funds_futures_client import get_fed_funds_expectations
@@ -1803,6 +1804,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/credit-spread")
+@login_required
+def api_credit_spread():
+    """Moody's Baa Corporate Yield Spread (BAA10Y) -- investment-grade
+    credit stress gauge (FSI L3) -- cached 1h, see credit_spread_client.py."""
+    return jsonify(get_credit_spread() or {})
 @app.route("/api/core-pce")
 @login_required
 def api_core_pce():
@@ -2524,6 +2531,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Moody's Baa/10Y credit spread -- investment-grade credit stress (cached 1h in credit_spread_client.py)
+        try:
+            cs = get_credit_spread()
+            if cs:
+                _macro_cache = {**_macro_cache, "CREDIT_SPREAD": {
+                    "label": "Baa-10Y", "value": cs["latest"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_spread error: {e}")
         # Core PCE Price Index -- Fed's actual inflation-target gauge (cached 1h in core_pce_client.py)
         try:
             pce = get_core_pce()

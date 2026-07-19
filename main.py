@@ -26,6 +26,7 @@ from memory_store import (
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
 from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters, detect_short_volume_pressure
+from reversal_detector import check_reversals
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
@@ -2347,6 +2348,17 @@ def job_scan_cycle():
 
             quotes = _quotes_cache or fetch_quotes()
             alerts = detect_trends(quotes)
+
+            try:
+                from memory_store import get_conn as _gc
+                with _gc() as c:
+                    port_syms = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                    wl_syms = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+                reversal_alerts = check_reversals(list(set(WATCHLIST + port_syms + wl_syms)))
+                alerts += reversal_alerts
+            except Exception as e:
+                print(f"[Scan] Reversal detection error: {e}")
+
             for alert in alerts:
                 socketio.emit("alert", alert)
 

@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from treasury_auction_client import get_treasury_auction_demand
 from credit_oas_spread import get_credit_oas_spread
 from commodity_futures_curve import get_commodity_futures_curve, most_extreme_basket
 from vvix_index import get_vvix_index
@@ -1786,6 +1787,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/treasury-auction-demand")
+@login_required
+def api_treasury_auction_demand():
+    """10Y/30Y Treasury auction indirect-bidder share + bid-to-cover trend
+    (FSI L2) -- cached 1h, see treasury_auction_client.py."""
+    return jsonify(get_treasury_auction_demand() or {})
 @app.route("/api/credit-oas-spread")
 @login_required
 def api_credit_oas_spread():
@@ -2454,6 +2461,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Treasury auction indirect-bidder demand (cached 1h in treasury_auction_client.py)
+        try:
+            ta = get_treasury_auction_demand()
+            if ta:
+                _macro_cache = {**_macro_cache, "TREASURY_AUCTION": {
+                    "label": "Auction Demand", "value": ta["demand"], "rating": ta["demand"],
+                }}
+        except Exception as e:
+            print(f"[Job] treasury_auction_client error: {e}")
         # ICE BofA OAS credit-stress signal (cached 1h in credit_oas_spread.py)
         try:
             oas = get_credit_oas_spread()

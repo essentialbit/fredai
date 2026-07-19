@@ -24,20 +24,20 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.93
-- feat: CBOE VVIX volatility-of-volatility tail-risk badge (closes #232) (#238)
+### FredAI v1.3.105
+- feat: Moody's Baa/10Y credit spread (BAA10Y) macro badge (#286)
 
-### FredAI v1.3.92
-- feat: St. Louis Fed Financial Stress Index (STLFSI4) macro-strip badge
+### FredAI v1.3.104
+- feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
 
-### FredAI v1.3.91
-- feat: University of Michigan Consumer Sentiment Index (UMCSENT) macro badge (closes #226) (#229)
+### FredAI v1.3.103
+- feat: Industrial Production Index (INDPRO) macro badge (closes #273) (#274)
 
-### FredAI v1.3.90
-- feat: cross-market contagion tracking (closes #223) (#227)
+### FredAI v1.3.102
+- feat: Fed funds futures term structure market-implied rate-path badge (closes #248) (#267)
 
-### FredAI v1.3.89
-- feat: Chicago Fed NFCI financial-conditions macro-strip badge (closes #221) (#225)
+### FredAI v1.3.101
+- feat: Kalshi KXCPIYOY CPI-YoY consensus market badge (#264)
 
 <!-- CHANGELOG_END -->
 

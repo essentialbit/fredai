@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from industrial_production_client import get_industrial_production
 from fed_funds_futures_client import get_fed_funds_expectations
 from cpi_consensus_market import get_cpi_consensus
 from payrolls_consensus_market import get_payrolls_consensus
@@ -1801,6 +1802,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/industrial-production")
+@login_required
+def api_industrial_production():
+    """Industrial Production Index (INDPRO) real-economy hard-data
+    manufacturing/output badge (FSI L2) -- cached 1h, see
+    industrial_production_client.py."""
+    return jsonify(get_industrial_production() or {})
 @app.route("/api/fed-funds-expectations")
 @login_required
 def api_fed_funds_expectations():
@@ -2509,6 +2517,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Industrial Production Index (cached 1h in industrial_production_client.py)
+        try:
+            ip = get_industrial_production()
+            if ip:
+                _macro_cache = {**_macro_cache, "INDUSTRIAL_PRODUCTION": {
+                    "label": "Ind. Prod.", "value": ip["latest"], "rating": ip["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] industrial_production error: {e}")
         # Fed funds futures term structure -- market-implied rate-path
         # expectations (cached 1h in fed_funds_futures_client.py)
         try:

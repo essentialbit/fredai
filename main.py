@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from fed_decision_market import get_fed_decision_odds
 from housing_starts import get_housing_starts
 from repo_funding_stress import get_repo_stress
 from treasury_auction_client import get_treasury_auction_demand
@@ -1797,6 +1798,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/fed-decision-odds")
+@login_required
+def api_fed_decision_odds():
+    """Kalshi FOMC-decision prediction market -- real-money implied probability
+    distribution over the next Fed rate decision (FSI L2). Cached 1h, see
+    fed_decision_market.py."""
+    return jsonify(get_fed_decision_odds() or {})
 @app.route("/api/repo-stress")
 @login_required
 def api_repo_stress():
@@ -2478,6 +2486,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Kalshi FOMC-decision market odds (cached 1h in fed_decision_market.py)
+        try:
+            fd = get_fed_decision_odds()
+            if fd:
+                _macro_cache = {**_macro_cache, "FED_DECISION": {
+                    "label": "Fed Odds", "value": round(fd["hold"] * 100, 1), "rating": fd["dominant_label"],
+                }}
+        except Exception as e:
+            print(f"[Job] fed_decision_market error: {e}")
         # Housing starts & building permits real-economy leading indicator (cached 6h in housing_starts.py)
         try:
             hs = get_housing_starts()

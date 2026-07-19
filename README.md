@@ -24,22 +24,20 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.76
-- fix: gitignore .claude/worktrees to prevent accidental gitlink commits (#373)
+### FredAI v1.3.91
+- feat: University of Michigan Consumer Sentiment Index (UMCSENT) macro badge (closes #226) (#229)
 
-### FredAI v1.3.75
-- fix: branch off before committing in git_push() to stop stray commits landing on main (closes #265) (#266)
-- docs: sync README changelog to v1.3.74 (#412)
+### FredAI v1.3.90
+- feat: cross-market contagion tracking (closes #223) (#227)
 
-### FredAI v1.3.74
-- fix: verify actual FredAI identity, not just port occupancy, in launcher scripts (#411)
-- docs: sync README changelog to v1.3.73 (#379)
+### FredAI v1.3.89
+- feat: Chicago Fed NFCI financial-conditions macro-strip badge (closes #221) (#225)
 
-### FredAI v1.3.73
-- feat: promote Landing Zone to prod, rename 'Home' (#371)
+### FredAI v1.3.88
+- feat: Sahm Rule recession-trigger indicator (closes #219) (#224)
 
-### FredAI v1.3.72
-- feat: local semantic search over the FredAI vault journal (closes #363) (#364)
+### FredAI v1.3.87
+- feat: variance risk premium (VIX vs SPY realized vol) macro-strip badge (closes #212) (#218)
 
 <!-- CHANGELOG_END -->
 

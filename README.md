@@ -24,22 +24,20 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.76
-- fix: gitignore .claude/worktrees to prevent accidental gitlink commits (#373)
+### FredAI v1.3.84
+- feat: crypto Fear & Greed Index macro-strip badge (closes #206) (#213)
 
-### FredAI v1.3.75
-- fix: branch off before committing in git_push() to stop stray commits landing on main (closes #265) (#266)
-- docs: sync README changelog to v1.3.74 (#412)
+### FredAI v1.3.83
+- feat: market breadth -- equal-weight vs cap-weight S&P 500 (RSP/SPY) concentration signal (closes #204) (#211)
 
-### FredAI v1.3.74
-- fix: verify actual FredAI identity, not just port occupancy, in launcher scripts (#411)
-- docs: sync README changelog to v1.3.73 (#379)
+### FredAI v1.3.82
+- feat: Economic Policy Uncertainty (EPU) Index macro-strip badge (closes #187) (#203)
 
-### FredAI v1.3.73
-- feat: promote Landing Zone to prod, rename 'Home' (#371)
+### FredAI v1.3.81
+- feat: Fed balance sheet / M2 liquidity regime macro-strip badge (closes #190) (#207)
 
-### FredAI v1.3.72
-- feat: local semantic search over the FredAI vault journal (closes #363) (#364)
+### FredAI v1.3.80
+- feat: 10Y breakeven inflation rate (T10YIE) macro-strip badge (closes #189) (#205)
 
 <!-- CHANGELOG_END -->
 

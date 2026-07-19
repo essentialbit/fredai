@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from repo_funding_stress import get_repo_stress
 from treasury_auction_client import get_treasury_auction_demand
 from credit_oas_spread import get_credit_oas_spread
 from commodity_futures_curve import get_commodity_futures_curve, most_extreme_basket
@@ -1787,6 +1788,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/repo-stress")
+@login_required
+def api_repo_stress():
+    """Repo funding-market stress (SOFR vs EFFR overnight spread), dealer
+    balance-sheet/collateral plumbing signal (FSI L2) -- cached 1h, see
+    repo_funding_stress.py."""
+    return jsonify(get_repo_stress() or {})
 @app.route("/api/treasury-auction-demand")
 @login_required
 def api_treasury_auction_demand():
@@ -2461,6 +2469,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Repo funding-market stress: SOFR vs EFFR spread (cached 1h in repo_funding_stress.py)
+        try:
+            rs = get_repo_stress()
+            if rs:
+                _macro_cache = {**_macro_cache, "REPO_STRESS": {
+                    "label": "Repo Stress", "value": rs["spread_bps"], "rating": rs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] repo_funding_stress error: {e}")
         # Treasury auction indirect-bidder demand (cached 1h in treasury_auction_client.py)
         try:
             ta = get_treasury_auction_demand()

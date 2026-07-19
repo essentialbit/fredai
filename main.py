@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from cross_market_contagion import get_cross_market_contagion
 from nfci_index import get_nfci_index
 from sahm_rule import get_sahm_rule
 from variance_risk_premium import get_variance_risk_premium
@@ -1780,6 +1781,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/cross-market-contagion")
+@login_required
+def api_cross_market_contagion():
+    """SPY vs EEM/EWJ/EWG/FXI rolling correlation regime -- contagion_risk
+    flags when 3+ pairs read "coupled" simultaneously (FSI L5) -- cached
+    15min, see cross_market_contagion.py."""
+    return jsonify(get_cross_market_contagion() or {})
 @app.route("/api/nfci-index")
 @login_required
 def api_nfci_index():
@@ -2407,6 +2415,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Cross-market contagion: SPY vs EEM/EWJ/EWG/FXI rolling correlation (cached 15min in cross_market_contagion.py)
+        try:
+            xmc = get_cross_market_contagion()
+            if xmc:
+                _macro_cache = {**_macro_cache, "CONTAGION": {
+                    "label": "Contagion", "value": xmc["coupled_count"],
+                    "rating": "risk" if xmc["contagion_risk"] else "normal",
+                }}
+        except Exception as e:
+            print(f"[Job] cross_market_contagion error: {e}")
         # Chicago Fed NFCI broad financial-conditions regime signal (cached 1h in nfci_index.py)
         try:
             nfci = get_nfci_index()

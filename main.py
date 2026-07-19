@@ -32,6 +32,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from beige_book_client import get_beige_book_sentiment
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1768,6 +1769,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/beige-book-sentiment")
+@login_required
+def api_beige_book_sentiment():
+    """Federal Reserve Beige Book regional-conditions VADER sentiment score
+    (FSI L2, nlp_signal) -- cached 24h, see beige_book_client.py."""
+    return jsonify(get_beige_book_sentiment() or {})
+
+
 @app.route("/api/dark-pool/<ticker>")
 @login_required
 def api_dark_pool(ticker):
@@ -2320,6 +2329,17 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
+
+        # Fed Beige Book regional-sentiment score (cached 24h in beige_book_client.py)
+        try:
+            bb = get_beige_book_sentiment()
+            if bb:
+                _macro_cache = {**_macro_cache, "BEIGE_BOOK": {
+                    "label": "Beige Book", "value": bb["composite_score"], "rating": bb["rating"],
+                    "change": bb["score_delta"],
+                }}
+        except Exception as e:
+            print(f"[Job] beige_book_sentiment error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

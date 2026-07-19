@@ -24,24 +24,22 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.65
-- docs: sync README changelog to v1.3.63 (#196)
-- feat: sector rotation / relative-strength ranking (closes #159)
+### FredAI v1.3.76
+- fix: gitignore .claude/worktrees to prevent accidental gitlink commits (#373)
 
-### FredAI v1.3.64
-- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
+### FredAI v1.3.75
+- fix: branch off before committing in git_push() to stop stray commits landing on main (closes #265) (#266)
+- docs: sync README changelog to v1.3.74 (#412)
 
-### FredAI v1.3.63
-- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
-- feat: Copper/Gold ratio "Dr. Copper" cross-asset regime signal (closes #176)
+### FredAI v1.3.74
+- fix: verify actual FredAI identity, not just port occupancy, in launcher scripts (#411)
+- docs: sync README changelog to v1.3.73 (#379)
 
-### FredAI v1.3.62
-- fix: debate.py silently skipped proposals with non-canonical proposed_by labels
-- docs: sync README changelog to v1.3.61 (#181)
+### FredAI v1.3.73
+- feat: promote Landing Zone to prod, rename 'Home' (#371)
 
-### FredAI v1.3.61
-- feat: Landing Zone -- interactive globe, enriched ticker network, price alerts, live refresh (#180)
-- docs: sync README changelog to v1.3.60 (#177)
+### FredAI v1.3.72
+- feat: local semantic search over the FredAI vault journal (closes #363) (#364)
 
 <!-- CHANGELOG_END -->
 

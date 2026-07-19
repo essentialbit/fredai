@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from payrolls_consensus_market import get_payrolls_consensus
 from fed_decision_market import get_fed_decision_odds
 from housing_starts import get_housing_starts
 from repo_funding_stress import get_repo_stress
@@ -1798,6 +1799,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/payrolls-consensus")
+@login_required
+def api_payrolls_consensus():
+    """Kalshi KXPAYROLLS threshold ladder -- market-implied median Non-Farm
+    Payrolls forecast ahead of the BLS print (FSI L2). Cached 1h, see
+    payrolls_consensus_market.py."""
+    return jsonify(get_payrolls_consensus() or {})
 @app.route("/api/fed-decision-odds")
 @login_required
 def api_fed_decision_odds():
@@ -2486,6 +2494,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Kalshi KXPAYROLLS market-implied median NFP forecast (cached 1h in payrolls_consensus_market.py)
+        try:
+            pc = get_payrolls_consensus()
+            if pc:
+                _macro_cache = {**_macro_cache, "PAYROLLS_CONSENSUS": {
+                    "label": "NFP Est.", "value": pc["implied_median_k"], "rating": pc["release_date"],
+                }}
+        except Exception as e:
+            print(f"[Job] payrolls_consensus_market error: {e}")
         # Kalshi FOMC-decision market odds (cached 1h in fed_decision_market.py)
         try:
             fd = get_fed_decision_odds()

@@ -24,6 +24,13 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.76
+- fix: gitignore .claude/worktrees to prevent accidental gitlink commits (#373)
+
+### FredAI v1.3.75
+- fix: branch off before committing in git_push() to stop stray commits landing on main (closes #265) (#266)
+- docs: sync README changelog to v1.3.74 (#412)
+
 ### FredAI v1.3.74
 - fix: verify actual FredAI identity, not just port occupancy, in launcher scripts (#411)
 - docs: sync README changelog to v1.3.73 (#379)
@@ -33,13 +40,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.72
 - feat: local semantic search over the FredAI vault journal (closes #363) (#364)
-
-### FredAI v1.3.71
-- feat: adversarial Bull/Bear/Moderator debate panel per ticker (closes #367) (#368)
-
-### FredAI v1.3.70
-- feat: institutional Whale Activity Index, FINRA composite (closes #369) (#370)
-- feat: adversarial Bull/Bear/Moderator debate panel per ticker (closes #367) (#368)
 
 <!-- CHANGELOG_END -->
 

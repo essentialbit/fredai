@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from vvix_index import get_vvix_index
 from stlfsi_index import get_stlfsi_index
 from consumer_sentiment import get_consumer_sentiment
 from cross_market_contagion import get_cross_market_contagion
@@ -1783,6 +1784,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/vvix-index")
+@login_required
+def api_vvix_index():
+    """CBOE VVIX (volatility-of-VIX) tail-risk hedging badge (FSI L2)
+    -- cached 15min, see vvix_index.py."""
+    return jsonify(get_vvix_index() or {})
 @app.route("/api/stlfsi-index")
 @login_required
 def api_stlfsi_index():
@@ -2431,6 +2438,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # CBOE VVIX volatility-of-volatility tail-risk badge (cached 15min in vvix_index.py)
+        try:
+            vvix = get_vvix_index()
+            if vvix:
+                _macro_cache = {**_macro_cache, "VVIX": {
+                    "label": "VVIX", "value": vvix["value"], "rating": vvix["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] vvix_index error: {e}")
         # St. Louis Fed STLFSI4 financial-stress regime signal (cached 12h in stlfsi_index.py)
         try:
             stlfsi = get_stlfsi_index()

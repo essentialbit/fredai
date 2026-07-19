@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from cpi_consensus_market import get_cpi_consensus
 from payrolls_consensus_market import get_payrolls_consensus
 from fed_decision_market import get_fed_decision_odds
 from housing_starts import get_housing_starts
@@ -1799,6 +1800,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/cpi-consensus")
+@login_required
+def api_cpi_consensus():
+    """Kalshi KXCPIYOY threshold-ladder market-implied median CPI-YoY forecast
+    (FSI L2) -- cached 1h, see cpi_consensus_market.py."""
+    return jsonify(get_cpi_consensus() or {})
 @app.route("/api/payrolls-consensus")
 @login_required
 def api_payrolls_consensus():
@@ -2494,6 +2501,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Kalshi KXCPIYOY threshold ladder -- market-implied median CPI-YoY forecast (cached 1h in cpi_consensus_market.py)
+        try:
+            cpi = get_cpi_consensus()
+            if cpi:
+                _macro_cache = {**_macro_cache, "CPI_CONSENSUS": {
+                    "label": "CPI Consensus", "value": cpi["implied_median_pct"], "rating": cpi["release_date"],
+                }}
+        except Exception as e:
+            print(f"[Job] cpi_consensus_market error: {e}")
         # Kalshi KXPAYROLLS market-implied median NFP forecast (cached 1h in payrolls_consensus_market.py)
         try:
             pc = get_payrolls_consensus()

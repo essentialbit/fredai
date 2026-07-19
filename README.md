@@ -24,24 +24,22 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.61
-- feat: Landing Zone -- interactive globe, enriched ticker network, price alerts, live refresh (#180)
-- docs: sync README changelog to v1.3.60 (#177)
+### FredAI v1.3.76
+- fix: gitignore .claude/worktrees to prevent accidental gitlink commits (#373)
 
-### FredAI v1.3.60
-- feat: Test Landing Zone -- adjustable best-of widget grid (#129)
-- docs: sync README changelog to v1.3.59 (#119)
+### FredAI v1.3.75
+- fix: branch off before committing in git_push() to stop stray commits landing on main (closes #265) (#266)
+- docs: sync README changelog to v1.3.74 (#412)
 
-### FredAI v1.3.59
-- feat: backtest v2 -- per-source attribution + naive baseline (closes #108) (#118)
-- docs: sync README changelog to v1.3.58 (#117)
+### FredAI v1.3.74
+- fix: verify actual FredAI identity, not just port occupancy, in launcher scripts (#411)
+- docs: sync README changelog to v1.3.73 (#379)
 
-### FredAI v1.3.58
-- feat: portfolio risk metrics -- VaR, Sharpe/Sortino, max drawdown, beta (closes #107) (#115)
-- docs: sync README changelog to v1.3.57 (#116)
+### FredAI v1.3.73
+- feat: promote Landing Zone to prod, rename 'Home' (#371)
 
-### FredAI v1.3.57
-- fix: release README-sync PRs now open with a PAT so CI actually runs (#114)
+### FredAI v1.3.72
+- feat: local semantic search over the FredAI vault journal (closes #363) (#364)
 
 <!-- CHANGELOG_END -->
 

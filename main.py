@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from labor_participation_client import get_labor_participation
 from u6_unemployment_client import get_u6_unemployment
 from real_interest_rate_client import get_real_interest_rate
 from productivity_client import get_labor_productivity
@@ -1929,6 +1930,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/labor-participation")
+@login_required
+def api_labor_participation():
+    """Labor Force Participation Rate (FRED CIVPART) -- workforce-engagement
+    macro badge (FSI L2), distinct from the U-3/U-6 unemployment-rate
+    badges. Cached 1h, see labor_participation_client.py."""
+    return jsonify(get_labor_participation() or {})
 @app.route("/api/u6-unemployment")
 @login_required
 def api_u6_unemployment():
@@ -2895,6 +2903,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Labor Force Participation Rate (cached 1h in labor_participation_client.py)
+        try:
+            lp = get_labor_participation()
+            if lp:
+                _macro_cache = {**_macro_cache, "LABOR_PARTICIPATION": {
+                    "label": "Labor Participation", "value": lp["latest_pct"], "rating": lp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] labor_participation error: {e}")
         # U-6 Broader Unemployment Rate (cached 1h in u6_unemployment_client.py)
         try:
             u6 = get_u6_unemployment()

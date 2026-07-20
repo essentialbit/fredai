@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from core_capex_client import get_core_capex_orders
 from gscpi_client import get_gscpi
 from m2_velocity_client import get_m2_velocity
 from business_loans_client import get_business_loan_growth
@@ -1923,6 +1924,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/core-capex-orders")
+@login_required
+def api_core_capex_orders():
+    """Core capital goods orders (FRED NEWORDER, nondefense ex-aircraft) --
+    business-investment leading indicator (FSI L2), cached 1h, see
+    core_capex_client.py."""
+    return jsonify(get_core_capex_orders() or {})
 @app.route("/api/gscpi")
 @login_required
 def api_gscpi():
@@ -2850,6 +2858,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Core capital goods orders (FRED NEWORDER, cached 1h in core_capex_client.py)
+        try:
+            cx = get_core_capex_orders()
+            if cx:
+                _macro_cache = {**_macro_cache, "CORE_CAPEX": {
+                    "label": "Core Capex", "value": cx["latest"], "rating": cx["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] core_capex_client error: {e}")
         # NY Fed Global Supply Chain Pressure Index (cached 1h in gscpi_client.py)
         try:
             gscpi = get_gscpi()

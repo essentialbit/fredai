@@ -578,6 +578,11 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         if risk_line:
             port_block += f"\n{_strip_portfolio(risk_line)}"
 
+        from confluence_engine import format_confluence_line
+        confluence_line = format_confluence_line([p["symbol"] for p in positions])
+        if confluence_line:
+            port_block += f"\n{_strip_portfolio(confluence_line)}"
+
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "
         "rate-limited, or the app just started. Do not invent prices, historical highs, or figures "

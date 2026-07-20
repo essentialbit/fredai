@@ -80,6 +80,7 @@ from memory_store import (
     get_latest_short_interest,
     get_recent_insider_transactions,
     get_layout_prefs, save_layout_prefs,
+    insert_alert,
     get_optimized_params,
 )
 from news_client import fetch_all_news, fetch_ticker_info
@@ -94,6 +95,7 @@ from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from confluence_engine import compute_confluence, refresh_confluence, get_cached_confluence
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -2116,6 +2118,27 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/confluence/<symbol>")
+@login_required
+def api_confluence(symbol):
+    """On-demand signal confluence for one symbol -- computed fresh
+    (includes a live technical read), not served from the 6h cache (FSI L3)."""
+    result = compute_confluence(symbol.upper(), include_technical=True)
+    return jsonify(result)
+
+
+@app.route("/api/confluence")
+@login_required
+def api_confluence_tracked():
+    """Cached confluence for the user's portfolio + watchlist symbols --
+    only returns symbols the 6h background job has already scored, never
+    computes on the request thread."""
+    uid = session["user_id"]
+    wl_rows = get_watchlist(uid)
+    portfolio_rows = get_portfolio(uid)
+    tracked = sorted(set([r["symbol"] for r in wl_rows] + [r["symbol"] for r in portfolio_rows]))
+    results = [get_cached_confluence(s) for s in tracked]
+    return jsonify({"symbols": [r for r in results if r]})
 @app.route("/api/short-volume/<ticker>")
 @login_required
 def api_short_volume(ticker):
@@ -3198,6 +3221,31 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Correlation] Refresh error: {e}")
 
+    def job_confluence_refresh():
+        """Recompute signal confluence (sentiment + insider + short-interest +
+        technical) for portfolio + watchlist symbols every 6h (FSI L3 —
+        synthesis over existing signals, MISSION.md Principle #2)."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows + WATCHLIST) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            alertable = refresh_confluence(symbols)
+            for result in alertable:
+                factor_parts = [f"{name} ({f['detail']})" for name, f in result["factors"].items()]
+                msg = (f"{result['factor_count']} independent signals agree {result['direction']}: "
+                       + ", ".join(factor_parts))
+                insert_alert("info" if result["direction"] == "bullish" else "warning",
+                              f"${result['symbol']} Signal Confluence", msg, result["symbol"])
+                socketio.emit("alert", {"title": f"${result['symbol']} Signal Confluence",
+                                        "message": msg, "level": "info"})
+            print(f"[Confluence] Refreshed {len(symbols)} symbol(s), {len(alertable)} full-confluence alert(s)")
+        except Exception as e:
+            print(f"[Confluence] Refresh error: {e}")
+
     def job_crypto_spread_refresh():
         """Cross-exchange crypto spread (BTC/ETH) via public exchange
         tickers -- a periodic enrichment signal, not real-time, so this runs
@@ -3241,6 +3289,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
+    scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)
     scheduler.add_job(job_vault_reindex, "interval", hours=6, id="vault_reindex", jitter=600)
     scheduler.start()

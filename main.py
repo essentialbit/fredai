@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from gasoline_price_client import get_gasoline_price
 from ci_loan_delinquency_client import get_ci_loan_delinquency
 from commercial_re_delinquency_client import get_commercial_re_delinquency
 from auto_loan_delinquency_client import get_auto_loan_delinquency
@@ -1940,6 +1941,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/gasoline-price")
+@login_required
+def api_gasoline_price():
+    """Weekly US retail gasoline price (FRED GASREGW), consumer energy-cost
+    pass-through signal (FSI L2) -- cached 6h, see gasoline_price_client.py."""
+    return jsonify(get_gasoline_price() or {})
 @app.route("/api/ci-loan-delinquency")
 @login_required
 def api_ci_loan_delinquency():
@@ -2987,6 +2994,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Weekly retail gasoline price (cached 6h in gasoline_price_client.py)
+        try:
+            gp = get_gasoline_price()
+            if gp:
+                _macro_cache = {**_macro_cache, "GASOLINE": {
+                    "label": "Gas $/gal", "value": gp["latest"], "rating": gp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] gasoline_price error: {e}")
         # C&I business loan delinquency rate (cached 6h in ci_loan_delinquency_client.py)
         try:
             cild = get_ci_loan_delinquency()

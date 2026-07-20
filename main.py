@@ -32,6 +32,7 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
 from commercial_paper_client import get_commercial_paper
 from gasoline_price_client import get_gasoline_price
@@ -1917,6 +1918,14 @@ def api_correlation():
     })
 
 
+@app.route("/api/vix-term-structure")
+@login_required
+def api_vix_term_structure():
+    """VIX term-structure contango/backwardation regime (FSI L2) -- cached
+    hourly, see vix_term_structure.py."""
+    return jsonify(get_vix_term_structure() or {})
+
+
 @app.route("/api/sector-rotation")
 @login_required
 def api_sector_rotation():
@@ -2991,6 +3000,16 @@ def job_market_refresh():
                     insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
+
+        # VIX term-structure regime (cached 1h in vix_term_structure.py)
+        try:
+            vts = get_vix_term_structure()
+            if vts:
+                _macro_cache = {**_macro_cache, "VIX_TERM": {
+                    "label": "VIX Term", "value": vts["front_back_spread_pct"], "rating": vts["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] vix_term_structure error: {e}")
 
         # Copper/Gold "Dr. Copper" regime signal (cached 15min in copper_gold_ratio.py)
         try:

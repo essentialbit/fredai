@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from federal_debt_gdp_client import get_federal_debt_gdp
 from federal_deficit_client import get_federal_deficit
 from credit_card_delinquency_client import get_credit_card_delinquency
 from t10y3m_spread_client import get_t10y3m_spread
@@ -1933,6 +1934,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/federal-debt-gdp")
+@login_required
+def api_federal_debt_gdp():
+    """Federal Debt as % of GDP -- fiscal debt-burden stock signal (FSI L2),
+    distinct from the deficit run-rate flow badge. Cached 1h, see
+    federal_debt_gdp_client.py."""
+    return jsonify(get_federal_debt_gdp() or {})
 @app.route("/api/federal-deficit")
 @login_required
 def api_federal_deficit():
@@ -2927,6 +2935,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Federal Debt as % of GDP (fiscal debt-burden stock signal, cached 1h in federal_debt_gdp_client.py)
+        try:
+            fdg = get_federal_debt_gdp()
+            if fdg:
+                _macro_cache = {**_macro_cache, "FEDERAL_DEBT_GDP": {
+                    "label": "Debt/GDP", "value": fdg["latest"], "rating": fdg["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] federal_debt_gdp error: {e}")
         # Federal Surplus/Deficit fiscal-balance signal (cached 6h in federal_deficit_client.py)
         try:
             fd = get_federal_deficit()

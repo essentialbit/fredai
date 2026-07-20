@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from personal_income_client import get_personal_income
 from capacity_utilization_client import get_capacity_utilization
 from savings_rate_client import get_savings_rate
 from consumer_credit_client import get_consumer_credit
@@ -1815,6 +1816,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/personal-income")
+@login_required
+def api_personal_income():
+    """Real Disposable Personal Income (FRED DSPIC96) -- household
+    income-level macro badge (FSI L2) -- cached 1h, see
+    personal_income_client.py."""
+    return jsonify(get_personal_income() or {})
 @app.route("/api/capacity-utilization")
 @login_required
 def api_capacity_utilization():
@@ -2619,6 +2627,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Real Disposable Personal Income (cached 1h in personal_income_client.py)
+        try:
+            pi = get_personal_income()
+            if pi:
+                _macro_cache = {**_macro_cache, "PERSONAL_INCOME": {
+                    "label": "Real Income", "value": pi["latest"], "rating": pi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] personal_income_client error: {e}")
         # Capacity Utilization: Total Industry -- industrial slack/tightness
         # signal (cached 1h in capacity_utilization_client.py)
         try:

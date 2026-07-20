@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from existing_home_sales_client import get_existing_home_sales
 from personal_income_client import get_personal_income
 from capacity_utilization_client import get_capacity_utilization
 from savings_rate_client import get_savings_rate
@@ -1816,6 +1817,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/existing-home-sales")
+@login_required
+def api_existing_home_sales():
+    """Existing Home Sales (FRED EXHOSLUSM495S) resale transaction-volume
+    badge (FSI L2) -- cached 1h, see existing_home_sales_client.py."""
+    return jsonify(get_existing_home_sales() or {})
 @app.route("/api/personal-income")
 @login_required
 def api_personal_income():
@@ -2627,6 +2634,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Existing Home Sales resale-volume badge (cached 1h in existing_home_sales_client.py)
+        try:
+            ehs = get_existing_home_sales()
+            if ehs:
+                _macro_cache = {**_macro_cache, "EXISTING_HOME_SALES": {
+                    "label": "Existing Home Sales", "value": ehs["latest"], "rating": ehs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] existing_home_sales error: {e}")
         # Real Disposable Personal Income (cached 1h in personal_income_client.py)
         try:
             pi = get_personal_income()

@@ -72,6 +72,10 @@ from ticker_debate import get_ticker_debate
 from lead_lag_engine import get_lead_lag
 from vault_semantic_search import semantic_search, reindex_vault
 from param_optimizer import optimize_universe
+from tracked_entities import (
+    create_entity, link_entities, add_evidence, get_entity,
+    get_user_entities, get_entity_graph, format_context_summary, VALID_ENTITY_TYPES,
+)
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -854,6 +858,71 @@ def api_watchlist():
             entry["short_volume"] = sv
         result.append(entry)
     return jsonify(result)
+
+
+# ── TRACKED ENTITIES ROUTES ───────────────────────────────────────────────────
+
+@app.route("/api/entities", methods=["GET", "POST"])
+@login_required
+def api_entities():
+    uid = session["user_id"]
+    if request.method == "POST":
+        data = request.json or {}
+        entity_type = data.get("entity_type", "").strip()
+        name = data.get("name", "").strip()
+        if entity_type not in VALID_ENTITY_TYPES:
+            return jsonify({"error": f"entity_type must be one of {sorted(VALID_ENTITY_TYPES)}"}), 400
+        if not name:
+            return jsonify({"error": "name required"}), 400
+        eid = create_entity(uid, entity_type, name, data.get("thesis", ""), float(data.get("confidence", 0.5)))
+        return jsonify({"status": "ok", "id": eid})
+    entity_type = request.args.get("entity_type")
+    return jsonify(get_user_entities(uid, entity_type))
+
+
+@app.route("/api/entities/graph", methods=["GET"])
+@login_required
+def api_entities_graph():
+    return jsonify(get_entity_graph(session["user_id"]))
+
+
+@app.route("/api/entities/<int:entity_id>", methods=["GET"])
+@login_required
+def api_entity_detail(entity_id):
+    entity = get_entity(entity_id)
+    if not entity or entity["user_id"] != session["user_id"]:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(entity)
+
+
+@app.route("/api/entities/<int:entity_id>/evidence", methods=["POST"])
+@login_required
+def api_entity_evidence(entity_id):
+    entity = get_entity(entity_id)
+    if not entity or entity["user_id"] != session["user_id"]:
+        return jsonify({"error": "not found"}), 404
+    data = request.json or {}
+    note = data.get("note", "").strip()
+    if not note:
+        return jsonify({"error": "note required"}), 400
+    add_evidence(entity_id, note, data.get("source", ""))
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/entities/link", methods=["POST"])
+@login_required
+def api_entities_link():
+    uid = session["user_id"]
+    data = request.json or {}
+    from_id, to_id = data.get("from_id"), data.get("to_id")
+    relationship = data.get("relationship", "").strip()
+    if not (from_id and to_id and relationship):
+        return jsonify({"error": "from_id, to_id, relationship required"}), 400
+    from_entity, to_entity = get_entity(from_id), get_entity(to_id)
+    if not from_entity or from_entity["user_id"] != uid or not to_entity or to_entity["user_id"] != uid:
+        return jsonify({"error": "not found"}), 404
+    link_id = link_entities(uid, from_id, to_id, relationship)
+    return jsonify({"status": "ok", "id": link_id})
 
 
 # ── PORTFOLIO ROUTES ──────────────────────────────────────────────────────────
@@ -3023,8 +3092,10 @@ def on_chat(data):
     # Pass portfolio for context — values anonymized per privacy settings in agent.py
     holdings = get_portfolio(user_id) if user_id else []
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    entities_context = format_context_summary(user_id) if user_id else ""
     response = chat(user_msg, history, quotes=_quotes_cache,
-                    user_interests=interests, portfolio=portfolio)
+                    user_interests=interests, portfolio=portfolio,
+                    tracked_entities=entities_context)
 
     history.append({"role": "assistant", "content": response})
     if len(history) > 24:

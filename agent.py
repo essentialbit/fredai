@@ -549,7 +549,7 @@ current.
 # ── CONTEXT BLOCK ─────────────────────────────────────────────────────────────
 
 def build_context_block(quotes: dict = None, user_interests: list = None,
-                        portfolio: dict = None) -> str:
+                        portfolio: dict = None, tracked_entities: str = "") -> str:
     signals = get_signals(hours=4, limit=50)
     summary = get_latest_summary()
     alerts = get_recent_alerts(limit=8)
@@ -563,6 +563,8 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     if user_interests:
         top = [f"{i['symbol']} (score:{i['interest_score']:.1f})" for i in user_interests[:5]]
         interest_block = f"\nUSER'S TOP INTERESTS: {', '.join(top)}"
+
+    entities_block = f"\n{tracked_entities}" if tracked_entities else ""
 
     # Portfolio context — strip exact values if privacy mode active
     port_block = ""
@@ -591,7 +593,7 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
 
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
 {_build_privacy_notice()}
-{interest_block}{port_block}
+{interest_block}{port_block}{entities_block}
 
 MARKET SNAPSHOT:{market_snapshot_warning}
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}
@@ -644,8 +646,9 @@ def _needs_disclaimer(user_msg: str, response: str) -> bool:
 
 
 def chat(user_message: str, history: list[dict], quotes: dict = None,
-         user_interests: list = None, portfolio: dict = None) -> str:
-    context = build_context_block(quotes, user_interests, portfolio)
+         user_interests: list = None, portfolio: dict = None,
+         tracked_entities: str = "") -> str:
+    context = build_context_block(quotes, user_interests, portfolio, tracked_entities)
     try:
         from vault_semantic_search import get_vault_context
         vault_context = get_vault_context(user_message)

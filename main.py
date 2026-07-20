@@ -3414,12 +3414,10 @@ def on_chat(data):
     holdings = get_portfolio(user_id) if user_id else []
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
     tool_log = []
-    response = chat(user_msg, history, quotes=_quotes_cache,
-                    user_interests=interests, portfolio=portfolio, tool_log=tool_log)
     entities_context = format_context_summary(user_id) if user_id else ""
     response = chat(user_msg, history, quotes=_quotes_cache,
                     user_interests=interests, portfolio=portfolio,
-                    tracked_entities=entities_context)
+                    tracked_entities=entities_context, tool_log=tool_log)
 
     history.append({"role": "assistant", "content": response})
     if len(history) > 24:

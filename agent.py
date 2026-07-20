@@ -830,9 +830,7 @@ def _needs_disclaimer(user_msg: str, response: str) -> bool:
 
 def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None,
-         tool_log: list | None = None) -> str:
-    context = build_context_block(quotes, user_interests, portfolio)
-         tracked_entities: str = "") -> str:
+         tracked_entities: str = "", tool_log: list | None = None) -> str:
     context = build_context_block(quotes, user_interests, portfolio, tracked_entities)
     try:
         from vault_semantic_search import get_vault_context

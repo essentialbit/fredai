@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from bank_lending_standards_client import get_bank_lending_standards
 from inventory_sales_ratio_client import get_inventory_sales_ratio
 from dallas_fed_manufacturing_client import get_dallas_fed_manufacturing
 from philly_fed_client import get_philly_fed
@@ -1845,6 +1846,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/bank-lending-standards")
+@login_required
+def api_bank_lending_standards():
+    """Senior Loan Officer Opinion Survey net pct of banks tightening C&I
+    lending standards (FSI L2) -- cached 6h, see
+    bank_lending_standards_client.py."""
+    return jsonify(get_bank_lending_standards() or {})
 @app.route("/api/inventory-sales-ratio")
 @login_required
 def api_inventory_sales_ratio():
@@ -2714,6 +2722,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Senior Loan Officer Opinion Survey bank lending standards (cached 6h in bank_lending_standards_client.py)
+        try:
+            bls = get_bank_lending_standards()
+            if bls:
+                _macro_cache = {**_macro_cache, "BANK_LENDING": {
+                    "label": "Lending Standards", "value": bls["latest"], "rating": bls["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] bank_lending_standards error: {e}")
         # Business Inventories-to-Sales Ratio (cached 1h in inventory_sales_ratio_client.py)
         try:
             isr = get_inventory_sales_ratio()

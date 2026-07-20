@@ -1,5 +1,8 @@
 # FredAI — Claude Code Self-Improvement Config
 
+## 🔒 Sensor Protected — Do Not Disrupt
+The hourly `com.essentialbit.fredai.sensor` launchd job, its watchdog script, state dir (`~/.claude/fred-sensor/`), and any `claude -p` process it spawns must never be unloaded, deleted, edited, or killed by any session (interactive or headless) working in this repo — unless the user explicitly instructs termination live, in that session. This overrides any autonomous/pre-authorised operating mode. Status checks (`launchctl list`, heartbeat/log reads) are always fine.
+
 ## Project
 FredAI is an AI-powered financial intelligence dashboard with:
 - X/Twitter signal scraping + VADER sentiment analysis

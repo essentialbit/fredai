@@ -1913,10 +1913,10 @@ def api_ai_universe():
 @app.route("/api/correlation")
 @login_required
 def api_correlation():
-    """Latest 30-day/90-day rolling cross-asset correlation matrix (FSI L2)."""
+    """Latest 30-day/90-day/180-day rolling cross-asset correlation matrix (FSI L2)."""
     window = request.args.get("window", "30", type=int)
-    if window not in (30, 90):
-        return jsonify({"error": "window must be 30 or 90"}), 400
+    if window not in (30, 90, 180):
+        return jsonify({"error": "window must be 30, 90, or 180"}), 400
     pairs = get_latest_correlation_matrix(window)
     return jsonify({
         "window_days": window,
@@ -4164,7 +4164,7 @@ if __name__ == "__main__":
             print(f"[Debate] Error: {e}")
 
     def job_correlation_refresh():
-        """Recompute 30d/90d rolling cross-asset correlation matrix every 6h (FSI L2)."""
+        """Recompute 30d/90d/180d rolling cross-asset correlation matrix every 6h (FSI L2)."""
         try:
             from memory_store import get_conn as _gc
             with _gc() as c:

@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.108
+- feat: Median Sales Price of Houses Sold macro badge (closes #464) (#465)
+- docs: sync README changelog to v1.3.107 (#467)
+
 ### FredAI v1.3.107
 - fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
 - docs: sync README changelog to v1.3.106 (#463)
@@ -36,9 +40,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.104
 - feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
-
-### FredAI v1.3.103
-- feat: Industrial Production Index (INDPRO) macro badge (closes #273) (#274)
 
 <!-- CHANGELOG_END -->
 

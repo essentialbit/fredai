@@ -26,6 +26,7 @@ from memory_store import (
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
 from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters, detect_short_volume_pressure
+from reversal_detector import check_reversals
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
@@ -33,12 +34,78 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
 from t10y3m_spread_client import get_t10y3m_spread
+from labor_participation_client import get_labor_participation
+from u6_unemployment_client import get_u6_unemployment
+from real_interest_rate_client import get_real_interest_rate
+from productivity_client import get_labor_productivity
+from wti_crude_oil_client import get_wti_crude_oil
+from on_rrp_liquidity_client import get_on_rrp_liquidity
+from core_capex_client import get_core_capex_orders
+from gscpi_client import get_gscpi
+from m2_velocity_client import get_m2_velocity
+from business_loans_client import get_business_loan_growth
+from energy_extraction_production_client import get_energy_extraction_production
+from corporate_profits_client import get_corporate_profits
+from tsi_freight_client import get_tsi_freight
+from eci_client import get_eci
+from consumer_credit_standards_client import get_consumer_credit_standards
+from bank_lending_standards_client import get_bank_lending_standards
+from inventory_sales_ratio_client import get_inventory_sales_ratio
+from dallas_fed_manufacturing_client import get_dallas_fed_manufacturing
+from philly_fed_client import get_philly_fed
+from core_cpi_client import get_core_cpi
+from t5yifr_client import get_t5yifr
+from geopolitical_risk import get_geopolitical_risk
+from new_home_sales_client import get_new_home_sales
+from mich_inflation_expectations_client import get_mich_expectations
+from existing_home_sales_client import get_existing_home_sales
+from personal_income_client import get_personal_income
+from capacity_utilization_client import get_capacity_utilization
+from savings_rate_client import get_savings_rate
+from consumer_credit_client import get_consumer_credit
+from trade_balance_client import get_trade_balance
+from continuing_claims_client import get_continuing_claims
+from jolts_openings_client import get_jolts_openings
+from retail_sales_client import get_retail_sales
+from durable_goods_client import get_durable_goods_orders
+from credit_spread_client import get_credit_spread
+from core_pce_client import get_core_pce
+from industrial_production_client import get_industrial_production
+from fed_funds_futures_client import get_fed_funds_expectations
+from cpi_consensus_market import get_cpi_consensus
+from payrolls_consensus_market import get_payrolls_consensus
+from fed_decision_market import get_fed_decision_odds
+from housing_starts import get_housing_starts
+from repo_funding_stress import get_repo_stress
+from treasury_auction_client import get_treasury_auction_demand
+from credit_oas_spread import get_credit_oas_spread
+from commodity_futures_curve import get_commodity_futures_curve, most_extreme_basket
+from vvix_index import get_vvix_index
+from stlfsi_index import get_stlfsi_index
+from consumer_sentiment import get_consumer_sentiment
+from cross_market_contagion import get_cross_market_contagion
+from nfci_index import get_nfci_index
+from sahm_rule import get_sahm_rule
+from variance_risk_premium import get_variance_risk_premium
+from dollar_index_client import get_dollar_index
+from oss_velocity_client import get_velocity_snapshot, TRACKED_REPOS
+from crypto_fear_greed import get_crypto_fear_greed
+from market_breadth import get_market_breadth
+from epu_index import get_epu_index
+from fed_liquidity import get_liquidity_snapshot
+from breakeven_inflation import get_breakeven_inflation
+from skew_index import get_skew_index
+from median_home_price_client import get_median_home_price
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
 from lead_lag_engine import get_lead_lag
 from vault_semantic_search import semantic_search, reindex_vault
 from param_optimizer import optimize_universe
+from tracked_entities import (
+    create_entity, link_entities, add_evidence, get_entity,
+    get_user_entities, get_entity_graph, format_context_summary, VALID_ENTITY_TYPES,
+)
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -50,6 +117,7 @@ from memory_store import (
     get_latest_short_interest,
     get_recent_insider_transactions,
     get_layout_prefs, save_layout_prefs,
+    insert_alert,
     get_optimized_params,
 )
 from news_client import fetch_all_news, fetch_ticker_info
@@ -64,6 +132,7 @@ from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from confluence_engine import compute_confluence, refresh_confluence, get_cached_confluence
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
 import updater as _updater
@@ -821,6 +890,71 @@ def api_watchlist():
     return jsonify(result)
 
 
+# ── TRACKED ENTITIES ROUTES ───────────────────────────────────────────────────
+
+@app.route("/api/entities", methods=["GET", "POST"])
+@login_required
+def api_entities():
+    uid = session["user_id"]
+    if request.method == "POST":
+        data = request.json or {}
+        entity_type = data.get("entity_type", "").strip()
+        name = data.get("name", "").strip()
+        if entity_type not in VALID_ENTITY_TYPES:
+            return jsonify({"error": f"entity_type must be one of {sorted(VALID_ENTITY_TYPES)}"}), 400
+        if not name:
+            return jsonify({"error": "name required"}), 400
+        eid = create_entity(uid, entity_type, name, data.get("thesis", ""), float(data.get("confidence", 0.5)))
+        return jsonify({"status": "ok", "id": eid})
+    entity_type = request.args.get("entity_type")
+    return jsonify(get_user_entities(uid, entity_type))
+
+
+@app.route("/api/entities/graph", methods=["GET"])
+@login_required
+def api_entities_graph():
+    return jsonify(get_entity_graph(session["user_id"]))
+
+
+@app.route("/api/entities/<int:entity_id>", methods=["GET"])
+@login_required
+def api_entity_detail(entity_id):
+    entity = get_entity(entity_id)
+    if not entity or entity["user_id"] != session["user_id"]:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(entity)
+
+
+@app.route("/api/entities/<int:entity_id>/evidence", methods=["POST"])
+@login_required
+def api_entity_evidence(entity_id):
+    entity = get_entity(entity_id)
+    if not entity or entity["user_id"] != session["user_id"]:
+        return jsonify({"error": "not found"}), 404
+    data = request.json or {}
+    note = data.get("note", "").strip()
+    if not note:
+        return jsonify({"error": "note required"}), 400
+    add_evidence(entity_id, note, data.get("source", ""))
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/entities/link", methods=["POST"])
+@login_required
+def api_entities_link():
+    uid = session["user_id"]
+    data = request.json or {}
+    from_id, to_id = data.get("from_id"), data.get("to_id")
+    relationship = data.get("relationship", "").strip()
+    if not (from_id and to_id and relationship):
+        return jsonify({"error": "from_id, to_id, relationship required"}), 400
+    from_entity, to_entity = get_entity(from_id), get_entity(to_id)
+    if not from_entity or from_entity["user_id"] != uid or not to_entity or to_entity["user_id"] != uid:
+        return jsonify({"error": "not found"}), 404
+    link_id = link_entities(uid, from_id, to_id, relationship)
+    return jsonify({"status": "ok", "id": link_id})
+
+
 # ── PORTFOLIO ROUTES ──────────────────────────────────────────────────────────
 
 @app.route("/api/portfolio", methods=["GET", "POST", "DELETE"])
@@ -1346,6 +1480,26 @@ def api_analyst_debate(ticker):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/sector-specialist/<ticker>")
+@login_required
+def api_sector_specialist(ticker):
+    """Sector Specialist Agents (FSI L5, closes #235) -- one persona's sector-framed
+    reasoning take on a ticker (Tech/Energy/Financials/Macro), reusing agent.py's
+    existing provider path + live context block. Falls back to the Macro persona
+    for any ticker not in the hand-curated sector map."""
+    ticker = ticker.upper().strip()
+    if not ticker:
+        return jsonify({"error": "Invalid ticker symbol."}), 400
+
+    from agent import build_context_block
+    from sector_specialist import get_sector_take
+    context = build_context_block(quotes=_quotes_cache or {})
+    try:
+        return jsonify(get_sector_take(ticker, context))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/analyst/report/<ticker>")
 @login_required
 def api_analyst_report(ticker):
@@ -1761,6 +1915,14 @@ def api_sector_rotation():
     return jsonify({"sectors": rankings, "benchmark": "SPY"})
 
 
+@app.route("/api/housing-starts")
+@login_required
+def api_housing_starts():
+    """Housing starts & building permits (FRED HOUST/PERMIT), real-economy
+    leading-indicator macro badge (FSI L2) -- cached 6h, see housing_starts.py."""
+    return jsonify(get_housing_starts() or {})
+
+
 @app.route("/api/copper-gold-ratio")
 @login_required
 def api_copper_gold_ratio():
@@ -1776,6 +1938,403 @@ def api_t10y3m_spread():
     preferred recession-probability term-spread signal (FSI L3), distinct
     from the 2s10s spread. Cached 1h, see t10y3m_spread_client.py."""
     return jsonify(get_t10y3m_spread() or {})
+@app.route("/api/labor-participation")
+@login_required
+def api_labor_participation():
+    """Labor Force Participation Rate (FRED CIVPART) -- workforce-engagement
+    macro badge (FSI L2), distinct from the U-3/U-6 unemployment-rate
+    badges. Cached 1h, see labor_participation_client.py."""
+    return jsonify(get_labor_participation() or {})
+@app.route("/api/u6-unemployment")
+@login_required
+def api_u6_unemployment():
+    """U-6 Broader Unemployment Rate (FRED U6RATE) -- underemployment
+    macro badge (FSI L2), distinct from the headline U-3 rate. Cached 1h,
+    see u6_unemployment_client.py."""
+    return jsonify(get_u6_unemployment() or {})
+@app.route("/api/real-interest-rate")
+@login_required
+def api_real_interest_rate():
+    """10-Year TIPS real yield (FRED DFII10, FSI L2) -- market real interest
+    rate, cached 1h, see real_interest_rate_client.py."""
+    return jsonify(get_real_interest_rate() or {})
+@app.route("/api/labor-productivity")
+@login_required
+def api_labor_productivity():
+    """Nonfarm business sector labor productivity (FRED OPHNFB, FSI L2) --
+    quarterly real output per hour, cached 6h, see productivity_client.py."""
+    return jsonify(get_labor_productivity() or {})
+@app.route("/api/wti-crude-oil")
+@login_required
+def api_wti_crude_oil():
+    """WTI crude oil spot price (FRED DCOILWTICO, FSI L2) -- headline
+    energy-inflation input, cached 1h, see wti_crude_oil_client.py."""
+    return jsonify(get_wti_crude_oil() or {})
+@app.route("/api/on-rrp-liquidity")
+@login_required
+def api_on_rrp_liquidity():
+    """Overnight Reverse Repo facility usage (FRED RRPONTSYD, FSI L2)
+    -- money-market liquidity/collateral-scarcity gauge, cached 1h, see
+    on_rrp_liquidity_client.py."""
+    return jsonify(get_on_rrp_liquidity() or {})
+@app.route("/api/core-capex-orders")
+@login_required
+def api_core_capex_orders():
+    """Core capital goods orders (FRED NEWORDER, nondefense ex-aircraft) --
+    business-investment leading indicator (FSI L2), cached 1h, see
+    core_capex_client.py."""
+    return jsonify(get_core_capex_orders() or {})
+@app.route("/api/gscpi")
+@login_required
+def api_gscpi():
+    """NY Fed Global Supply Chain Pressure Index -- composite supply-chain
+    stress signal (FSI L2/L5). Cached 1h, see gscpi_client.py."""
+    return jsonify(get_gscpi() or {})
+@app.route("/api/m2-velocity")
+@login_required
+def api_m2_velocity():
+    """Velocity of M2 Money Stock (FRED M2V) -- monetary-circulation regime
+    signal (FSI L2) -- cached 6h, see m2_velocity_client.py."""
+    return jsonify(get_m2_velocity() or {})
+@app.route("/api/business-loans")
+@login_required
+def api_business_loans():
+    """C&I loan volume YoY growth (FRED BUSLOANS) -- realized bank
+    credit-creation signal, distinct from the survey-based lending-standards
+    badges (FSI L2). Cached 1h, see business_loans_client.py."""
+    return jsonify(get_business_loan_growth() or {})
+@app.route("/api/energy-extraction-production")
+@login_required
+def api_energy_extraction_production():
+    """Oil & Gas Extraction Industrial Production Index (FRED IPG211S,
+    FSI L2) -- cached 1h, see energy_extraction_production_client.py."""
+    return jsonify(get_energy_extraction_production() or {})
+@app.route("/api/corporate-profits")
+@login_required
+def api_corporate_profits():
+    """Corporate Profits After Tax (FRED CPATAX) quarterly corporate
+    profitability signal (FSI L2) -- cached 6h, see corporate_profits_client.py."""
+    return jsonify(get_corporate_profits() or {})
+@app.route("/api/tsi-freight")
+@login_required
+def api_tsi_freight():
+    """BTS Transportation Services Index: Freight (FRED TSIFRGHT) domestic
+    freight/logistics activity badge (FSI L2) -- cached 1h, see
+    tsi_freight_client.py."""
+    return jsonify(get_tsi_freight() or {})
+@app.route("/api/employment-cost-index")
+@login_required
+def api_employment_cost_index():
+    """Employment Cost Index (FRED ECIALLCIV) quarterly wage-cost inflation
+    signal (FSI L2) -- cached 6h, see eci_client.py."""
+    return jsonify(get_eci() or {})
+@app.route("/api/consumer-credit-standards")
+@login_required
+def api_consumer_credit_standards():
+    """Senior Loan Officer Opinion Survey net pct of banks tightening
+    credit-card lending standards (FSI L2) -- cached 6h, see
+    consumer_credit_standards_client.py."""
+    return jsonify(get_consumer_credit_standards() or {})
+@app.route("/api/bank-lending-standards")
+@login_required
+def api_bank_lending_standards():
+    """Senior Loan Officer Opinion Survey net pct of banks tightening C&I
+    lending standards (FSI L2) -- cached 6h, see
+    bank_lending_standards_client.py."""
+    return jsonify(get_bank_lending_standards() or {})
+@app.route("/api/inventory-sales-ratio")
+@login_required
+def api_inventory_sales_ratio():
+    """Total Business Inventories-to-Sales Ratio (FRED ISRATIO) macro-strip
+    badge -- cached 1h, see inventory_sales_ratio_client.py."""
+    return jsonify(get_inventory_sales_ratio() or {})
+@app.route("/api/dallas-fed-manufacturing")
+@login_required
+def api_dallas_fed_manufacturing():
+    """Dallas Fed Texas Manufacturing Outlook Survey general business
+    activity diffusion index (FSI L2) -- cached 1h, see
+    dallas_fed_manufacturing_client.py."""
+    return jsonify(get_dallas_fed_manufacturing() or {})
+@app.route("/api/philly-fed")
+@login_required
+def api_philly_fed():
+    """Philadelphia Fed Manufacturing Business Outlook Survey general
+    activity index (FSI L2) -- cached 1h, see philly_fed_client.py."""
+    return jsonify(get_philly_fed() or {})
+@app.route("/api/core-cpi")
+@login_required
+def api_core_cpi():
+    """Core CPI YoY Inflation (FRED CPILFESL) -- ex food/energy, the Fed and
+    markets' primary underlying-inflation read (FSI L2) -- cached 1h, see
+    core_cpi_client.py."""
+    return jsonify(get_core_cpi() or {})
+@app.route("/api/t5yifr")
+@login_required
+def api_t5yifr():
+    """5Y5Y forward inflation expectation rate (FRED T5YIFR) -- the FOMC's
+    own long-run inflation-anchor gauge (FSI L2) -- cached 1h, see
+    t5yifr_client.py."""
+    return jsonify(get_t5yifr() or {})
+@app.route("/api/geopolitical-risk")
+@login_required
+def api_geopolitical_risk():
+    """Keyword-weighted conflict/sanctions severity score over FredAI's own
+    'geopolitical' news category (FSI L5) -- cached 15min, see
+    geopolitical_risk.py."""
+    return jsonify(get_geopolitical_risk() or {})
+@app.route("/api/new-home-sales")
+@login_required
+def api_new_home_sales():
+    """New single-family home sales (FRED HSN1F) -- new-construction
+    closings macro badge (FSI L2), cached 1h, see new_home_sales_client.py."""
+    return jsonify(get_new_home_sales() or {})
+@app.route("/api/mich-inflation-expectations")
+@login_required
+def api_mich_inflation_expectations():
+    """University of Michigan year-ahead inflation expectations, survey-based
+    (FSI L2) -- cached 1h, see mich_inflation_expectations_client.py."""
+    return jsonify(get_mich_expectations() or {})
+@app.route("/api/existing-home-sales")
+@login_required
+def api_existing_home_sales():
+    """Existing Home Sales (FRED EXHOSLUSM495S) resale transaction-volume
+    badge (FSI L2) -- cached 1h, see existing_home_sales_client.py."""
+    return jsonify(get_existing_home_sales() or {})
+@app.route("/api/personal-income")
+@login_required
+def api_personal_income():
+    """Real Disposable Personal Income (FRED DSPIC96) -- household
+    income-level macro badge (FSI L2) -- cached 1h, see
+    personal_income_client.py."""
+    return jsonify(get_personal_income() or {})
+@app.route("/api/capacity-utilization")
+@login_required
+def api_capacity_utilization():
+    """Capacity Utilization: Total Industry (FRED TCU) -- industrial
+    slack/tightness signal (FSI L2) -- cached 1h, see
+    capacity_utilization_client.py."""
+    return jsonify(get_capacity_utilization() or {})
+@app.route("/api/savings-rate")
+@login_required
+def api_savings_rate():
+    """Personal Savings Rate (FRED PSAVERT) -- household balance-sheet macro
+    badge (FSI L2) -- cached 1h, see savings_rate_client.py."""
+    return jsonify(get_savings_rate() or {})
+@app.route("/api/consumer-credit")
+@login_required
+def api_consumer_credit():
+    """Total Consumer Credit Outstanding (FRED TOTALSL) -- household-leverage
+    macro badge (FSI L2). Cached 1h, see consumer_credit_client.py."""
+    return jsonify(get_consumer_credit() or {})
+@app.route("/api/trade-balance")
+@login_required
+def api_trade_balance():
+    """U.S. Trade Balance (FRED BOPGSTB) -- goods & services net-export
+    macro badge (FSI L2) -- cached 1h, see trade_balance_client.py."""
+    return jsonify(get_trade_balance() or {})
+@app.route("/api/continuing-claims")
+@login_required
+def api_continuing_claims():
+    """Continuing Jobless Claims (FRED CCSA) -- unemployment-duration stock
+    signal (FSI L2) -- cached 1h, see continuing_claims_client.py."""
+    return jsonify(get_continuing_claims() or {})
+@app.route("/api/jolts-openings")
+@login_required
+def api_jolts_openings():
+    """JOLTS Job Openings (FRED JTSJOL) -- forward-looking labor-demand
+    signal (FSI L2) -- cached 1h, see jolts_openings_client.py."""
+    return jsonify(get_jolts_openings() or {})
+@app.route("/api/retail-sales")
+@login_required
+def api_retail_sales():
+    """Advance Retail Sales (FRED RSAFS) -- forward consumer-demand signal
+    (FSI L2) -- cached 1h, see retail_sales_client.py."""
+    return jsonify(get_retail_sales() or {})
+@app.route("/api/durable-goods")
+@login_required
+def api_durable_goods():
+    """Durable Goods New Orders (FRED DGORDER) -- forward-looking business
+    capex signal (FSI L2) -- cached 1h, see durable_goods_client.py."""
+    return jsonify(get_durable_goods_orders() or {})
+@app.route("/api/credit-spread")
+@login_required
+def api_credit_spread():
+    """Moody's Baa Corporate Yield Spread (BAA10Y) -- investment-grade
+    credit stress gauge (FSI L3) -- cached 1h, see credit_spread_client.py."""
+    return jsonify(get_credit_spread() or {})
+@app.route("/api/core-pce")
+@login_required
+def api_core_pce():
+    """Core PCE Price Index (PCEPILFE) -- the Fed's actual inflation-target
+    gauge (FSI L2) -- cached 1h, see core_pce_client.py."""
+    return jsonify(get_core_pce() or {})
+@app.route("/api/industrial-production")
+@login_required
+def api_industrial_production():
+    """Industrial Production Index (INDPRO) real-economy hard-data
+    manufacturing/output badge (FSI L2) -- cached 1h, see
+    industrial_production_client.py."""
+    return jsonify(get_industrial_production() or {})
+@app.route("/api/fed-funds-expectations")
+@login_required
+def api_fed_funds_expectations():
+    """CBOT ZQ futures term structure vs current FRED DFF effective rate --
+    market-implied Fed rate-path expectations (FSI L2). Cached 1h, see
+    fed_funds_futures_client.py."""
+    return jsonify(get_fed_funds_expectations() or {})
+@app.route("/api/cpi-consensus")
+@login_required
+def api_cpi_consensus():
+    """Kalshi KXCPIYOY threshold-ladder market-implied median CPI-YoY forecast
+    (FSI L2) -- cached 1h, see cpi_consensus_market.py."""
+    return jsonify(get_cpi_consensus() or {})
+@app.route("/api/payrolls-consensus")
+@login_required
+def api_payrolls_consensus():
+    """Kalshi KXPAYROLLS threshold ladder -- market-implied median Non-Farm
+    Payrolls forecast ahead of the BLS print (FSI L2). Cached 1h, see
+    payrolls_consensus_market.py."""
+    return jsonify(get_payrolls_consensus() or {})
+@app.route("/api/fed-decision-odds")
+@login_required
+def api_fed_decision_odds():
+    """Kalshi FOMC-decision prediction market -- real-money implied probability
+    distribution over the next Fed rate decision (FSI L2). Cached 1h, see
+    fed_decision_market.py."""
+    return jsonify(get_fed_decision_odds() or {})
+@app.route("/api/repo-stress")
+@login_required
+def api_repo_stress():
+    """Repo funding-market stress (SOFR vs EFFR overnight spread), dealer
+    balance-sheet/collateral plumbing signal (FSI L2) -- cached 1h, see
+    repo_funding_stress.py."""
+    return jsonify(get_repo_stress() or {})
+@app.route("/api/treasury-auction-demand")
+@login_required
+def api_treasury_auction_demand():
+    """10Y/30Y Treasury auction indirect-bidder share + bid-to-cover trend
+    (FSI L2) -- cached 1h, see treasury_auction_client.py."""
+    return jsonify(get_treasury_auction_demand() or {})
+@app.route("/api/credit-oas-spread")
+@login_required
+def api_credit_oas_spread():
+    """ICE BofA option-adjusted credit spreads (HY/IG, actual bps level, not
+    an ETF relative-strength proxy) -- credit-stress regime signal (FSI L4)
+    -- cached 1h, see credit_oas_spread.py."""
+    return jsonify(get_credit_oas_spread() or {})
+@app.route("/api/commodity-curve")
+@login_required
+def api_commodity_curve():
+    """WTI crude + gold contract-month curves, contango/backwardation
+    classification per basket (FSI L3) -- cached 15min, see
+    commodity_futures_curve.py."""
+    return jsonify(get_commodity_futures_curve() or {})
+@app.route("/api/vvix-index")
+@login_required
+def api_vvix_index():
+    """CBOE VVIX (volatility-of-VIX) tail-risk hedging badge (FSI L2)
+    -- cached 15min, see vvix_index.py."""
+    return jsonify(get_vvix_index() or {})
+@app.route("/api/stlfsi-index")
+@login_required
+def api_stlfsi_index():
+    """St. Louis Fed Financial Stress Index -- weekly 18-variable
+    interest-rate/credit/volatility composite (FSI L2) -- cached 12h,
+    see stlfsi_index.py."""
+    return jsonify(get_stlfsi_index() or {})
+@app.route("/api/consumer-sentiment")
+@login_required
+def api_consumer_sentiment():
+    """University of Michigan Consumer Sentiment Index (UMCSENT), the only
+    survey-based consumer-psychology macro badge (FSI L2) -- cached daily,
+    see consumer_sentiment.py."""
+    return jsonify(get_consumer_sentiment() or {})
+@app.route("/api/cross-market-contagion")
+@login_required
+def api_cross_market_contagion():
+    """SPY vs EEM/EWJ/EWG/FXI rolling correlation regime -- contagion_risk
+    flags when 3+ pairs read "coupled" simultaneously (FSI L5) -- cached
+    15min, see cross_market_contagion.py."""
+    return jsonify(get_cross_market_contagion() or {})
+@app.route("/api/nfci-index")
+@login_required
+def api_nfci_index():
+    """Chicago Fed National Financial Conditions Index -- broad market-wide
+    liquidity/leverage/risk regime signal (FSI L2) -- cached 1h, see
+    nfci_index.py."""
+    return jsonify(get_nfci_index() or {})
+@app.route("/api/sahm-rule")
+@login_required
+def api_sahm_rule():
+    """Sahm Rule recession-trigger indicator (FSI L3) -- cached daily,
+    see sahm_rule.py."""
+    return jsonify(get_sahm_rule() or {})
+@app.route("/api/variance-risk-premium")
+@login_required
+def api_variance_risk_premium():
+    """VIX implied vol vs SPY trailing realized vol gap (FSI L2)
+    -- cached 15min, see variance_risk_premium.py."""
+    return jsonify(get_variance_risk_premium() or {})
+@app.route("/api/dollar-index")
+@login_required
+def api_dollar_index():
+    """Broad Dollar Index (FRED DTWEXBGS), currency-market macro regime
+    signal (FSI L2) -- cached 1h, see dollar_index_client.py."""
+    return jsonify(get_dollar_index() or {})
+@app.route("/api/oss-velocity/<ticker>")
+@login_required
+def api_oss_velocity(ticker):
+    """Weekly commit-count/contributor trend for open-source-native tickers
+    where the ticker->flagship-repo mapping is unambiguous (FSI L5) --
+    cached 24h, see oss_velocity_client.py."""
+    ticker = ticker.upper()
+    if ticker not in TRACKED_REPOS:
+        return jsonify({"error": "ticker not tracked", "tracked": sorted(TRACKED_REPOS)}), 404
+    snapshot = get_velocity_snapshot(ticker)
+    return jsonify(snapshot or {"ticker": ticker, "status": "unavailable"})
+@app.route("/api/crypto-fear-greed")
+@login_required
+def api_crypto_fear_greed():
+    """Crypto-specific Fear & Greed composite (alternative.me), distinct from
+    the equity CNN Fear & Greed badge and the BTC on-chain health metrics --
+    cached 1h, see crypto_fear_greed.py."""
+    return jsonify(get_crypto_fear_greed() or {})
+@app.route("/api/market-breadth")
+@login_required
+def api_market_breadth():
+    """RSP-vs-SPY equal-weight/cap-weight market breadth signal (FSI L2)
+    -- cached 15min, see market_breadth.py."""
+    return jsonify(get_market_breadth() or {})
+@app.route("/api/epu-index")
+@login_required
+def api_epu_index():
+    """Economic Policy Uncertainty Index (Baker/Bloom/Davis) news-based
+    macro-uncertainty trend badge (FSI L2) -- cached 15min, see epu_index.py."""
+    return jsonify(get_epu_index() or {})
+@app.route("/api/fed-liquidity")
+@login_required
+def api_fed_liquidity():
+    """Fed balance sheet (WALCL) / M2 money supply (M2SL) liquidity regime
+    (FSI L2) -- cached 12h, see fed_liquidity.py."""
+    return jsonify(get_liquidity_snapshot() or {})
+@app.route("/api/breakeven-inflation")
+@login_required
+def api_breakeven_inflation():
+    """10Y breakeven inflation rate (FRED T10YIE), market-implied inflation
+    expectation (FSI L2) -- cached 1h, see breakeven_inflation.py."""
+    return jsonify(get_breakeven_inflation() or {})
+@app.route("/api/skew-index")
+@login_required
+def api_skew_index():
+    """CBOE SKEW Index tail-risk gauge (FSI L2) -- cached 15min, see skew_index.py."""
+    return jsonify(get_skew_index() or {})
+@app.route("/api/median-home-price")
+@login_required
+def api_median_home_price():
+    """Median Sales Price of Houses Sold (FRED MSPUS), absolute housing-price
+    level vs Case-Shiller's index-based appreciation rate (FSI L2) -- cached
+    6h, see median_home_price_client.py."""
+    return jsonify(get_median_home_price() or {})
 
 
 @app.route("/api/dark-pool/<ticker>")
@@ -1894,6 +2453,27 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/confluence/<symbol>")
+@login_required
+def api_confluence(symbol):
+    """On-demand signal confluence for one symbol -- computed fresh
+    (includes a live technical read), not served from the 6h cache (FSI L3)."""
+    result = compute_confluence(symbol.upper(), include_technical=True)
+    return jsonify(result)
+
+
+@app.route("/api/confluence")
+@login_required
+def api_confluence_tracked():
+    """Cached confluence for the user's portfolio + watchlist symbols --
+    only returns symbols the 6h background job has already scored, never
+    computes on the request thread."""
+    uid = session["user_id"]
+    wl_rows = get_watchlist(uid)
+    portfolio_rows = get_portfolio(uid)
+    tracked = sorted(set([r["symbol"] for r in wl_rows] + [r["symbol"] for r in portfolio_rows]))
+    results = [get_cached_confluence(s) for s in tracked]
+    return jsonify({"symbols": [r for r in results if r]})
 @app.route("/api/short-volume/<ticker>")
 @login_required
 def api_short_volume(ticker):
@@ -2341,6 +2921,568 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] t10y3m_spread error: {e}")
+        # Labor Force Participation Rate (cached 1h in labor_participation_client.py)
+        try:
+            lp = get_labor_participation()
+            if lp:
+                _macro_cache = {**_macro_cache, "LABOR_PARTICIPATION": {
+                    "label": "Labor Participation", "value": lp["latest_pct"], "rating": lp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] labor_participation error: {e}")
+        # U-6 Broader Unemployment Rate (cached 1h in u6_unemployment_client.py)
+        try:
+            u6 = get_u6_unemployment()
+            if u6:
+                _macro_cache = {**_macro_cache, "U6_UNEMPLOYMENT": {
+                    "label": "U-6 Unemployment", "value": u6["latest_pct"], "rating": u6["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] u6_unemployment error: {e}")
+        # Real interest rate -- 10Y TIPS yield (cached 1h in real_interest_rate_client.py)
+        try:
+            rir = get_real_interest_rate()
+            if rir:
+                _macro_cache = {**_macro_cache, "REAL_RATE": {
+                    "label": "Real Rate", "value": rir["latest"], "rating": rir["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] real_interest_rate error: {e}")
+        # Labor productivity -- unit-labor-cost inflation pressure gauge (cached 6h in productivity_client.py)
+        try:
+            prod = get_labor_productivity()
+            if prod:
+                _macro_cache = {**_macro_cache, "PRODUCTIVITY": {
+                    "label": "Productivity", "value": prod["latest"], "rating": prod["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] productivity error: {e}")
+        # WTI crude oil spot price -- headline energy-inflation input (cached 1h in wti_crude_oil_client.py)
+        try:
+            wti = get_wti_crude_oil()
+            if wti:
+                _macro_cache = {**_macro_cache, "WTI_OIL": {
+                    "label": "WTI Crude", "value": wti["latest"], "rating": wti["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] wti_crude_oil error: {e}")
+        # ON RRP facility usage -- money-market liquidity gauge (cached 1h in on_rrp_liquidity_client.py)
+        try:
+            rrp = get_on_rrp_liquidity()
+            if rrp:
+                _macro_cache = {**_macro_cache, "ON_RRP": {
+                    "label": "ON RRP", "value": rrp["latest"], "rating": rrp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] on_rrp_liquidity error: {e}")
+        # Core capital goods orders (FRED NEWORDER, cached 1h in core_capex_client.py)
+        try:
+            cx = get_core_capex_orders()
+            if cx:
+                _macro_cache = {**_macro_cache, "CORE_CAPEX": {
+                    "label": "Core Capex", "value": cx["latest"], "rating": cx["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] core_capex_client error: {e}")
+        # NY Fed Global Supply Chain Pressure Index (cached 1h in gscpi_client.py)
+        try:
+            gscpi = get_gscpi()
+            if gscpi:
+                _macro_cache = {**_macro_cache, "GSCPI": {
+                    "label": "Supply Chain", "value": gscpi["latest"], "rating": gscpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] gscpi_client error: {e}")
+        # Velocity of M2 Money Stock -- monetary-circulation regime signal (cached 6h)
+        try:
+            m2v = get_m2_velocity()
+            if m2v:
+                _macro_cache = {**_macro_cache, "M2_VELOCITY": {
+                    "label": "M2 Velocity", "value": m2v["latest"], "rating": m2v["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] m2_velocity_client error: {e}")
+        # C&I loan volume YoY growth -- realized credit-cycle signal (cached 1h)
+        try:
+            bl = get_business_loan_growth()
+            if bl:
+                _macro_cache = {**_macro_cache, "BUSINESS_LOANS": {
+                    "label": "C&I Loans", "value": bl["yoy_growth_pct"], "rating": bl["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] business_loans_client error: {e}")
+        # Oil & Gas Extraction Industrial Production (cached 1h in energy_extraction_production_client.py)
+        try:
+            eep = get_energy_extraction_production()
+            if eep:
+                _macro_cache = {**_macro_cache, "ENERGY_EXTRACTION": {
+                    "label": "Oil & Gas Extr.", "value": eep["latest"], "rating": eep["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] energy_extraction_production error: {e}")
+        # Corporate Profits After Tax quarterly profitability signal (cached 6h in corporate_profits_client.py)
+        try:
+            cp = get_corporate_profits()
+            if cp:
+                _macro_cache = {**_macro_cache, "CORP_PROFITS": {
+                    "label": "Corp Profits YoY", "value": cp["latest_yoy_pct"], "rating": cp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] corporate_profits error: {e}")
+        # BTS Transportation Services Index: Freight (cached 1h in tsi_freight_client.py)
+        try:
+            tsi = get_tsi_freight()
+            if tsi:
+                _macro_cache = {**_macro_cache, "TSI_FREIGHT": {
+                    "label": "Freight TSI", "value": tsi["latest"], "rating": tsi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] tsi_freight error: {e}")
+        # Employment Cost Index quarterly wage-cost inflation signal (cached 6h in eci_client.py)
+        try:
+            eci = get_eci()
+            if eci:
+                _macro_cache = {**_macro_cache, "ECI": {
+                    "label": "ECI YoY", "value": eci["latest_yoy_pct"], "rating": eci["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] eci error: {e}")
+        # Senior Loan Officer Opinion Survey consumer credit-card lending standards
+        # (cached 6h in consumer_credit_standards_client.py)
+        try:
+            ccs = get_consumer_credit_standards()
+            if ccs:
+                _macro_cache = {**_macro_cache, "CONSUMER_CREDIT_STANDARDS": {
+                    "label": "CC Lending Std", "value": ccs["latest"], "rating": ccs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] consumer_credit_standards error: {e}")
+        # Senior Loan Officer Opinion Survey bank lending standards (cached 6h in bank_lending_standards_client.py)
+        try:
+            bls = get_bank_lending_standards()
+            if bls:
+                _macro_cache = {**_macro_cache, "BANK_LENDING": {
+                    "label": "Lending Standards", "value": bls["latest"], "rating": bls["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] bank_lending_standards error: {e}")
+        # Business Inventories-to-Sales Ratio (cached 1h in inventory_sales_ratio_client.py)
+        try:
+            isr = get_inventory_sales_ratio()
+            if isr:
+                _macro_cache = {**_macro_cache, "INVENTORY_SALES_RATIO": {
+                    "label": "Inv/Sales", "value": isr["latest"], "rating": isr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] inventory_sales_ratio error: {e}")
+        # Dallas Fed Texas Manufacturing Outlook -- general business activity
+        # diffusion index (cached 1h in dallas_fed_manufacturing_client.py)
+        try:
+            dfm = get_dallas_fed_manufacturing()
+            if dfm:
+                _macro_cache = {**_macro_cache, "DALLAS_FED_MFG": {
+                    "label": "Dallas Fed Mfg", "value": dfm["latest"], "rating": dfm["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] dallas_fed_manufacturing error: {e}")
+        # Philly Fed manufacturing survey (cached 1h in philly_fed_client.py)
+        try:
+            pf = get_philly_fed()
+            if pf:
+                _macro_cache = {**_macro_cache, "PHILLY_FED": {
+                    "label": "Philly Fed", "value": pf["latest"], "rating": pf["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] philly_fed error: {e}")
+        # Core CPI YoY (ex food/energy) -- cached 1h in core_cpi_client.py
+        try:
+            core_cpi = get_core_cpi()
+            if core_cpi:
+                _macro_cache = {**_macro_cache, "CORE_CPI": {
+                    "label": "Core CPI YoY", "value": core_cpi["yoy_pct"], "rating": core_cpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] core_cpi_client error: {e}")
+        # 5Y5Y forward inflation expectations, FOMC's long-run anchor gauge (cached 1h in t5yifr_client.py)
+        try:
+            t5 = get_t5yifr()
+            if t5:
+                _macro_cache = {**_macro_cache, "T5YIFR": {
+                    "label": "5Y5Y Infl.", "value": t5["latest"], "rating": t5["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] t5yifr error: {e}")
+        # Geopolitical risk score (cached 15min in geopolitical_risk.py)
+        try:
+            gr = get_geopolitical_risk()
+            if gr:
+                _macro_cache = {**_macro_cache, "GEOPOLITICAL_RISK": {
+                    "label": "Geopolitical", "value": gr["score"], "rating": gr["band"],
+                }}
+        except Exception as e:
+            print(f"[Job] geopolitical_risk error: {e}")
+        # New Home Sales (FRED HSN1F, cached 1h) -- new-construction closings
+        try:
+            nhs = get_new_home_sales()
+            if nhs:
+                _macro_cache = {**_macro_cache, "NEW_HOME_SALES": {
+                    "label": "New Home Sales", "value": nhs["latest"], "rating": nhs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] new_home_sales error: {e}")
+        # University of Michigan year-ahead inflation expectations (cached 1h)
+        try:
+            mich = get_mich_expectations()
+            if mich:
+                _macro_cache = {**_macro_cache, "MICH": {
+                    "label": "Infl. Exp.", "value": mich["latest"], "rating": mich["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] mich_inflation_expectations error: {e}")
+        # Existing Home Sales resale-volume badge (cached 1h in existing_home_sales_client.py)
+        try:
+            ehs = get_existing_home_sales()
+            if ehs:
+                _macro_cache = {**_macro_cache, "EXISTING_HOME_SALES": {
+                    "label": "Existing Home Sales", "value": ehs["latest"], "rating": ehs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] existing_home_sales error: {e}")
+        # Real Disposable Personal Income (cached 1h in personal_income_client.py)
+        try:
+            pi = get_personal_income()
+            if pi:
+                _macro_cache = {**_macro_cache, "PERSONAL_INCOME": {
+                    "label": "Real Income", "value": pi["latest"], "rating": pi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] personal_income_client error: {e}")
+        # Capacity Utilization: Total Industry -- industrial slack/tightness
+        # signal (cached 1h in capacity_utilization_client.py)
+        try:
+            cu = get_capacity_utilization()
+            if cu:
+                _macro_cache = {**_macro_cache, "CAPACITY_UTIL": {
+                    "label": "Capacity Util", "value": cu["change_mom_pts"], "rating": cu["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] capacity_utilization_client error: {e}")
+        # Personal Savings Rate (FRED PSAVERT) -- household balance-sheet
+        # regime signal (cached 1h in savings_rate_client.py)
+        try:
+            sr = get_savings_rate()
+            if sr:
+                _macro_cache = {**_macro_cache, "SAVINGS_RATE": {
+                    "label": "Savings Rate", "value": sr["latest"], "rating": sr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] savings_rate_client error: {e}")
+        # Total Consumer Credit Outstanding (cached 1h in consumer_credit_client.py)
+        try:
+            cc = get_consumer_credit()
+            if cc:
+                _macro_cache = {**_macro_cache, "CONSUMER_CREDIT": {
+                    "label": "Consumer Credit", "value": cc["latest_billions"], "rating": cc["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] consumer_credit error: {e}")
+        # Trade Balance (FRED BOPGSTB) -- goods & services net-export
+        # regime signal (cached 1h in trade_balance_client.py)
+        try:
+            tb = get_trade_balance()
+            if tb:
+                _macro_cache = {**_macro_cache, "TRADE_BALANCE": {
+                    "label": "Trade Bal", "value": tb["latest"], "rating": tb["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] trade_balance_client error: {e}")
+        # Continuing Jobless Claims -- unemployment-duration stock signal
+        # (cached 1h in continuing_claims_client.py)
+        try:
+            cc = get_continuing_claims()
+            if cc:
+                _macro_cache = {**_macro_cache, "CONTINUING_CLAIMS": {
+                    "label": "Continuing Claims", "value": cc["change_wow_pct"], "rating": cc["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] continuing_claims_client error: {e}")
+        # JOLTS Job Openings -- forward-looking labor-demand signal
+        # (cached 1h in jolts_openings_client.py)
+        try:
+            jo = get_jolts_openings()
+            if jo:
+                _macro_cache = {**_macro_cache, "JOLTS": {
+                    "label": "JOLTS Openings", "value": jo["change_mom_pct"], "rating": jo["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] jolts_openings_client error: {e}")
+        # Advance Retail Sales -- forward consumer-demand signal
+        # (cached 1h in retail_sales_client.py)
+        try:
+            rs = get_retail_sales()
+            if rs:
+                _macro_cache = {**_macro_cache, "RETAIL_SALES": {
+                    "label": "Retail Sales", "value": rs["change_mom_pct"], "rating": rs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] retail_sales_client error: {e}")
+        # Durable Goods New Orders -- forward-looking business capex signal
+        # (cached 1h in durable_goods_client.py)
+        try:
+            dg = get_durable_goods_orders()
+            if dg:
+                _macro_cache = {**_macro_cache, "DURABLE_GOODS": {
+                    "label": "Durable Goods", "value": dg["change_mom_pct"], "rating": dg["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] durable_goods_client error: {e}")
+        # Moody's Baa/10Y credit spread -- investment-grade credit stress (cached 1h in credit_spread_client.py)
+        try:
+            cs = get_credit_spread()
+            if cs:
+                _macro_cache = {**_macro_cache, "CREDIT_SPREAD": {
+                    "label": "Baa-10Y", "value": cs["latest"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_spread error: {e}")
+        # Core PCE Price Index -- Fed's actual inflation-target gauge (cached 1h in core_pce_client.py)
+        try:
+            pce = get_core_pce()
+            if pce:
+                _macro_cache = {**_macro_cache, "CORE_PCE": {
+                    "label": "Core PCE", "value": pce["yoy_pct"], "rating": pce["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] core_pce error: {e}")
+        # Industrial Production Index (cached 1h in industrial_production_client.py)
+        try:
+            ip = get_industrial_production()
+            if ip:
+                _macro_cache = {**_macro_cache, "INDUSTRIAL_PRODUCTION": {
+                    "label": "Ind. Prod.", "value": ip["latest"], "rating": ip["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] industrial_production error: {e}")
+        # Fed funds futures term structure -- market-implied rate-path
+        # expectations (cached 1h in fed_funds_futures_client.py)
+        try:
+            ffe = get_fed_funds_expectations()
+            if ffe and ffe.get("contracts"):
+                front = ffe["contracts"][0]
+                _macro_cache = {**_macro_cache, "FED_FUNDS_EXPECT": {
+                    "label": "Fed Funds (front)", "value": front["implied_rate"], "rating": ffe["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] fed_funds_futures error: {e}")
+        # Kalshi KXCPIYOY threshold ladder -- market-implied median CPI-YoY forecast (cached 1h in cpi_consensus_market.py)
+        try:
+            cpi = get_cpi_consensus()
+            if cpi:
+                _macro_cache = {**_macro_cache, "CPI_CONSENSUS": {
+                    "label": "CPI Consensus", "value": cpi["implied_median_pct"], "rating": cpi["release_date"],
+                }}
+        except Exception as e:
+            print(f"[Job] cpi_consensus_market error: {e}")
+        # Kalshi KXPAYROLLS market-implied median NFP forecast (cached 1h in payrolls_consensus_market.py)
+        try:
+            pc = get_payrolls_consensus()
+            if pc:
+                _macro_cache = {**_macro_cache, "PAYROLLS_CONSENSUS": {
+                    "label": "NFP Est.", "value": pc["implied_median_k"], "rating": pc["release_date"],
+                }}
+        except Exception as e:
+            print(f"[Job] payrolls_consensus_market error: {e}")
+        # Kalshi FOMC-decision market odds (cached 1h in fed_decision_market.py)
+        try:
+            fd = get_fed_decision_odds()
+            if fd:
+                _macro_cache = {**_macro_cache, "FED_DECISION": {
+                    "label": "Fed Odds", "value": round(fd["hold"] * 100, 1), "rating": fd["dominant_label"],
+                }}
+        except Exception as e:
+            print(f"[Job] fed_decision_market error: {e}")
+        # Housing starts & building permits real-economy leading indicator (cached 6h in housing_starts.py)
+        try:
+            hs = get_housing_starts()
+            if hs:
+                _macro_cache = {**_macro_cache, "HOUSING_STARTS": {
+                    "label": "Housing Starts", "value": hs["starts"]["latest"], "rating": hs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] housing_starts error: {e}")
+        # Repo funding-market stress: SOFR vs EFFR spread (cached 1h in repo_funding_stress.py)
+        try:
+            rs = get_repo_stress()
+            if rs:
+                _macro_cache = {**_macro_cache, "REPO_STRESS": {
+                    "label": "Repo Stress", "value": rs["spread_bps"], "rating": rs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] repo_funding_stress error: {e}")
+        # Treasury auction indirect-bidder demand (cached 1h in treasury_auction_client.py)
+        try:
+            ta = get_treasury_auction_demand()
+            if ta:
+                _macro_cache = {**_macro_cache, "TREASURY_AUCTION": {
+                    "label": "Auction Demand", "value": ta["demand"], "rating": ta["demand"],
+                }}
+        except Exception as e:
+            print(f"[Job] treasury_auction_client error: {e}")
+        # ICE BofA OAS credit-stress signal (cached 1h in credit_oas_spread.py)
+        try:
+            oas = get_credit_oas_spread()
+            if oas:
+                _macro_cache = {**_macro_cache, "CREDIT_OAS": {
+                    "label": "HY OAS", "value": oas["hy_oas"], "rating": oas["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_oas_spread error: {e}")
+        # Commodity futures curve contango/backwardation (cached 15min in commodity_futures_curve.py)
+        try:
+            curve = get_commodity_futures_curve()
+            extreme = most_extreme_basket(curve) if curve else None
+            if extreme:
+                _macro_cache = {**_macro_cache, "COMMODITY_CURVE": {
+                    "label": "Cmdty Curve", "value": extreme["spread_pct"], "rating": extreme["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] commodity_futures_curve error: {e}")
+        # CBOE VVIX volatility-of-volatility tail-risk badge (cached 15min in vvix_index.py)
+        try:
+            vvix = get_vvix_index()
+            if vvix:
+                _macro_cache = {**_macro_cache, "VVIX": {
+                    "label": "VVIX", "value": vvix["value"], "rating": vvix["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] vvix_index error: {e}")
+        # St. Louis Fed STLFSI4 financial-stress regime signal (cached 12h in stlfsi_index.py)
+        try:
+            stlfsi = get_stlfsi_index()
+            if stlfsi:
+                _macro_cache = {**_macro_cache, "STLFSI": {
+                    "label": "STLFSI", "value": stlfsi["latest"], "rating": stlfsi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] stlfsi_index error: {e}")
+        # UMCSENT consumer sentiment survey regime (cached daily in consumer_sentiment.py)
+        try:
+            cs = get_consumer_sentiment()
+            if cs:
+                _macro_cache = {**_macro_cache, "CONSUMER_SENTIMENT": {
+                    "label": "Cons. Sentiment", "value": cs["latest"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] consumer_sentiment error: {e}")
+        # Cross-market contagion: SPY vs EEM/EWJ/EWG/FXI rolling correlation (cached 15min in cross_market_contagion.py)
+        try:
+            xmc = get_cross_market_contagion()
+            if xmc:
+                _macro_cache = {**_macro_cache, "CONTAGION": {
+                    "label": "Contagion", "value": xmc["coupled_count"],
+                    "rating": "risk" if xmc["contagion_risk"] else "normal",
+                }}
+        except Exception as e:
+            print(f"[Job] cross_market_contagion error: {e}")
+        # Chicago Fed NFCI broad financial-conditions regime signal (cached 1h in nfci_index.py)
+        try:
+            nfci = get_nfci_index()
+            if nfci:
+                _macro_cache = {**_macro_cache, "NFCI": {
+                    "label": "NFCI", "value": nfci["latest"], "rating": nfci["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] nfci_index error: {e}")
+        # Sahm Rule recession-trigger indicator (cached daily in sahm_rule.py)
+        try:
+            sahm = get_sahm_rule()
+            if sahm:
+                _macro_cache = {**_macro_cache, "SAHM_RULE": {
+                    "label": "Sahm Rule", "value": sahm["value"], "rating": sahm["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] sahm_rule error: {e}")
+        # Variance risk premium: VIX implied vol vs SPY realized vol (cached 15min)
+        try:
+            vrp = get_variance_risk_premium()
+            if vrp:
+                _macro_cache = {**_macro_cache, "VRP": {
+                    "label": "VRP", "value": vrp["vrp"], "rating": vrp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] variance_risk_premium error: {e}")
+        # Broad Dollar Index / DTWEXBGS currency regime signal (cached 1h in dollar_index_client.py)
+        try:
+            di = get_dollar_index()
+            if di:
+                _macro_cache = {**_macro_cache, "DOLLAR_INDEX": {
+                    "label": "Broad $", "value": di["latest"], "rating": di["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] dollar_index error: {e}")
+        # Crypto Fear & Greed Index (cached 1h in crypto_fear_greed.py)
+        try:
+            cfg = get_crypto_fear_greed()
+            if cfg:
+                _macro_cache = {**_macro_cache, "CRYPTO_FNG": {
+                    "label": "Crypto F&G", "value": cfg["value"], "rating": cfg["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] crypto_fear_greed error: {e}")
+        # Market breadth: RSP/SPY equal-weight vs cap-weight (cached 15min in market_breadth.py)
+        try:
+            mb = get_market_breadth()
+            if mb:
+                _macro_cache = {**_macro_cache, "MARKET_BREADTH": {
+                    "label": "Breadth", "value": mb["ratio"], "rating": mb["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] market_breadth error: {e}")
+        # Economic Policy Uncertainty index (cached 15min in epu_index.py)
+        try:
+            epu = get_epu_index()
+            if epu:
+                _macro_cache = {**_macro_cache, "EPU": {
+                    "label": "EPU", "value": epu["value"], "rating": epu["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] epu_index error: {e}")
+        # Fed balance sheet / M2 liquidity regime (cached 12h in fed_liquidity.py)
+        try:
+            liq = get_liquidity_snapshot()
+            if liq:
+                _macro_cache = {**_macro_cache, "FED_LIQUIDITY": {
+                    "label": "Fed Liquidity", "value": liq["walcl"]["change_wow_pct"], "rating": liq["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] fed_liquidity error: {e}")
+        # 10Y breakeven inflation rate (cached 1h in breakeven_inflation.py)
+        try:
+            be = get_breakeven_inflation()
+            if be:
+                _macro_cache = {**_macro_cache, "BREAKEVEN_INFLATION": {
+                    "label": "10Y Breakeven", "value": be["latest"], "rating": be["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] breakeven_inflation error: {e}")
+        # CBOE SKEW Index tail-risk gauge (cached 15min in skew_index.py)
+        try:
+            sk = get_skew_index()
+            if sk:
+                _macro_cache = {**_macro_cache, "SKEW": {
+                    "label": "SKEW", "value": sk["value"], "rating": sk["band"],
+                }}
+        except Exception as e:
+            print(f"[Job] skew_index error: {e}")
+        # Median Sales Price of Houses Sold (cached 6h in median_home_price_client.py)
+        try:
+            mhp = get_median_home_price()
+            if mhp:
+                _macro_cache = {**_macro_cache, "MEDIAN_HOME_PRICE": {
+                    "label": "Median Home $", "value": mhp["latest"], "rating": mhp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] median_home_price_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,
@@ -2368,6 +3510,17 @@ def job_scan_cycle():
 
             quotes = _quotes_cache or fetch_quotes()
             alerts = detect_trends(quotes)
+
+            try:
+                from memory_store import get_conn as _gc
+                with _gc() as c:
+                    port_syms = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                    wl_syms = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+                reversal_alerts = check_reversals(list(set(WATCHLIST + port_syms + wl_syms)))
+                alerts += reversal_alerts
+            except Exception as e:
+                print(f"[Scan] Reversal detection error: {e}")
+
             for alert in alerts:
                 socketio.emit("alert", alert)
 
@@ -2459,8 +3612,10 @@ def on_chat(data):
     # Pass portfolio for context — values anonymized per privacy settings in agent.py
     holdings = get_portfolio(user_id) if user_id else []
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    entities_context = format_context_summary(user_id) if user_id else ""
     response = chat(user_msg, history, quotes=_quotes_cache,
-                    user_interests=interests, portfolio=portfolio)
+                    user_interests=interests, portfolio=portfolio,
+                    tracked_entities=entities_context)
 
     history.append({"role": "assistant", "content": response})
     if len(history) > 24:
@@ -2708,6 +3863,31 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Correlation] Refresh error: {e}")
 
+    def job_confluence_refresh():
+        """Recompute signal confluence (sentiment + insider + short-interest +
+        technical) for portfolio + watchlist symbols every 6h (FSI L3 —
+        synthesis over existing signals, MISSION.md Principle #2)."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows + WATCHLIST) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            alertable = refresh_confluence(symbols)
+            for result in alertable:
+                factor_parts = [f"{name} ({f['detail']})" for name, f in result["factors"].items()]
+                msg = (f"{result['factor_count']} independent signals agree {result['direction']}: "
+                       + ", ".join(factor_parts))
+                insert_alert("info" if result["direction"] == "bullish" else "warning",
+                              f"${result['symbol']} Signal Confluence", msg, result["symbol"])
+                socketio.emit("alert", {"title": f"${result['symbol']} Signal Confluence",
+                                        "message": msg, "level": "info"})
+            print(f"[Confluence] Refreshed {len(symbols)} symbol(s), {len(alertable)} full-confluence alert(s)")
+        except Exception as e:
+            print(f"[Confluence] Refresh error: {e}")
+
     def job_crypto_spread_refresh():
         """Cross-exchange crypto spread (BTC/ETH) via public exchange
         tickers -- a periodic enrichment signal, not real-time, so this runs
@@ -2751,6 +3931,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
+    scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)
     scheduler.add_job(job_vault_reindex, "interval", hours=6, id="vault_reindex", jitter=600)
     scheduler.start()

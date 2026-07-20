@@ -646,6 +646,13 @@ def _needs_disclaimer(user_msg: str, response: str) -> bool:
 def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None) -> str:
     context = build_context_block(quotes, user_interests, portfolio)
+    try:
+        from vault_semantic_search import get_vault_context
+        vault_context = get_vault_context(user_message)
+        if vault_context:
+            context = f"{context}\n\n{vault_context}"
+    except Exception:
+        pass  # local Ollama embeddings unavailable -- chat degrades gracefully without vault context
     messages = []
     # Copy previous history items and retain image payloads
     for h in history[:-1][-7:]:

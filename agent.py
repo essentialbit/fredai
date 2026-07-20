@@ -742,6 +742,11 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         if risk_line:
             port_block += f"\n{_strip_portfolio(risk_line)}"
 
+        from confluence_engine import format_confluence_line
+        confluence_line = format_confluence_line([p["symbol"] for p in positions])
+        if confluence_line:
+            port_block += f"\n{_strip_portfolio(confluence_line)}"
+
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "
         "rate-limited, or the app just started. Do not invent prices, historical highs, or figures "
@@ -806,6 +811,13 @@ def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None,
          tool_log: list | None = None) -> str:
     context = build_context_block(quotes, user_interests, portfolio)
+    try:
+        from vault_semantic_search import get_vault_context
+        vault_context = get_vault_context(user_message)
+        if vault_context:
+            context = f"{context}\n\n{vault_context}"
+    except Exception:
+        pass  # local Ollama embeddings unavailable -- chat degrades gracefully without vault context
     messages = []
     # Copy previous history items and retain image payloads
     for h in history[:-1][-7:]:

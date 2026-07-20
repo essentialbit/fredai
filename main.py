@@ -32,6 +32,7 @@ from reversal_detector import check_reversals
 from agent import chat, generate_summary, generate_recommendations
 from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_available
 from nasdaq_client import get_macro_snapshot
+from yield_curve import compute_yield_curve_spread
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from supply_chain_client import get_supply_chain_stress
@@ -1921,6 +1922,14 @@ def api_correlation():
     })
 
 
+@app.route("/api/yield-curve")
+@login_required
+def api_yield_curve():
+    """2s10s Treasury yield curve spread and inversion flag (FSI L2)."""
+    yc = compute_yield_curve_spread(_macro_cache)
+    if not yc:
+        return jsonify({"error": "yield curve data not available yet"}), 503
+    return jsonify(yc)
 @app.route("/api/supply-chain")
 @login_required
 def api_supply_chain():
@@ -3010,6 +3019,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
 
+        # 2s10s yield curve spread (pure arithmetic on the macro snapshot above)
+        try:
+            yc = compute_yield_curve_spread(_macro_cache)
+            if yc:
+                _macro_cache = {**_macro_cache, "YIELD_CURVE": {
+                    "label": "2s10s", "value": yc["spread_2s10s"],
+                    "rating": "inverted" if yc["inverted"] else "normal",
+                }}
+        except Exception as e:
+            print(f"[Job] yield_curve error: {e}")
         # Supply-chain stress -- BDRY vs SPY relative strength (cached 15min in supply_chain_client.py)
         try:
             sc = get_supply_chain_stress()

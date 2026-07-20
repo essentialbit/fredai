@@ -299,10 +299,53 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+
+        CREATE TABLE IF NOT EXISTS geopolitical_risk_daily (
+            date TEXT PRIMARY KEY,
+            score REAL NOT NULL,
+            article_count INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE INDEX IF NOT EXISTS idx_short_volume_symbol ON short_volume_history(symbol, trade_date);
         CREATE INDEX IF NOT EXISTS idx_ticker_debates_ticker ON ticker_debates(ticker, created_at);
         CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
         CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
+
+        CREATE TABLE IF NOT EXISTS tracked_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            entity_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            thesis TEXT DEFAULT '',
+            confidence REAL DEFAULT 0.5,
+            status TEXT DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, entity_type, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            from_entity_id INTEGER NOT NULL,
+            to_entity_id INTEGER NOT NULL,
+            relationship TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(from_entity_id, to_entity_id, relationship)
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            source TEXT DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tracked_entities_user ON tracked_entities(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_entity_links_from ON entity_links(from_entity_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_links_to ON entity_links(to_entity_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_evidence_entity ON entity_evidence(entity_id, created_at);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -1600,6 +1643,32 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     query += " ORDER BY transaction_date DESC"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def record_geopolitical_risk_daily(date: str, score: float, article_count: int) -> bool:
+    """Idempotent per date -- returns False if today's row already exists
+    (already recorded this cycle, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT date FROM geopolitical_risk_daily WHERE date=?", (date,)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO geopolitical_risk_daily (date, score, article_count) VALUES (?,?,?)",
+            (date, score, article_count)
+        )
+        return True
+
+
+def get_geopolitical_risk_history(days: int = 90) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM geopolitical_risk_daily WHERE date >= ? ORDER BY date ASC",
+            (since,)
+        ).fetchall()
         return [dict(r) for r in rows]
 
 

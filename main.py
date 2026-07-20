@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from inventory_sales_ratio_client import get_inventory_sales_ratio
 from dallas_fed_manufacturing_client import get_dallas_fed_manufacturing
 from philly_fed_client import get_philly_fed
 from core_cpi_client import get_core_cpi
@@ -1844,6 +1845,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/inventory-sales-ratio")
+@login_required
+def api_inventory_sales_ratio():
+    """Total Business Inventories-to-Sales Ratio (FRED ISRATIO) macro-strip
+    badge -- cached 1h, see inventory_sales_ratio_client.py."""
+    return jsonify(get_inventory_sales_ratio() or {})
 @app.route("/api/dallas-fed-manufacturing")
 @login_required
 def api_dallas_fed_manufacturing():
@@ -2707,6 +2714,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Business Inventories-to-Sales Ratio (cached 1h in inventory_sales_ratio_client.py)
+        try:
+            isr = get_inventory_sales_ratio()
+            if isr:
+                _macro_cache = {**_macro_cache, "INVENTORY_SALES_RATIO": {
+                    "label": "Inv/Sales", "value": isr["latest"], "rating": isr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] inventory_sales_ratio error: {e}")
         # Dallas Fed Texas Manufacturing Outlook -- general business activity
         # diffusion index (cached 1h in dallas_fed_manufacturing_client.py)
         try:

@@ -123,6 +123,10 @@ def git_push(message: str, agent: str = "claude", branch: str | None = None):
     try:
         root = Path(__file__).parent
 
+        current_branch = subprocess.run(
+            ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=root
+        ).stdout.strip()
+
         # Commit anything still sitting in the working tree. Note this can
         # legitimately be empty even when there's real work to push — the
         # code agents (claude_code_agent.py / gemini_code_agent.py) already
@@ -130,6 +134,13 @@ def git_push(message: str, agent: str = "claude", branch: str | None = None):
         # get here the tree may already be clean with commits still unpushed.
         dirty = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, cwd=root).stdout.strip()
         if dirty:
+            # main is shared + branch-protected — never commit directly onto it.
+            # A cycle that finds nothing to implement can still reach here with
+            # the checkout sitting on main; branch off *before* committing so
+            # the commit can never land on local main.
+            if not current_branch or current_branch == "main":
+                current_branch = branch or f"agent/{agent}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
+                subprocess.run(["git", "checkout", "-B", current_branch], cwd=root)
             subprocess.run(["git", "add", "-A"], cwd=root)
             subprocess.run(["git", "commit", "-m", message], cwd=root)
 
@@ -140,9 +151,6 @@ def git_push(message: str, agent: str = "claude", branch: str | None = None):
             print("[Git] Nothing to push")
             return
 
-        current_branch = subprocess.run(
-            ["git", "branch", "--show-current"], capture_output=True, text=True, cwd=root
-        ).stdout.strip()
         if not branch:
             branch = current_branch if current_branch and current_branch != "main" else (
                 f"agent/{agent}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}"
@@ -172,8 +180,11 @@ def git_push(message: str, agent: str = "claude", branch: str | None = None):
         print(f"[Git] Opened PR: {pr.get('html_url')}" if pr else "[Git] PR creation skipped (may already exist, or GITHUB_TOKEN unset)")
 
         # Return to a clean, up-to-date main so the next cycle starts fresh.
+        # A hard reset (not a ff-only pull) so any stray local-only commit on
+        # main from an earlier interrupted run self-heals instead of persisting.
         subprocess.run(["git", "checkout", "main"], cwd=root, capture_output=True)
-        subprocess.run(["git", "pull", "--ff-only", "origin", "main"], cwd=root, capture_output=True)
+        subprocess.run(["git", "fetch", "origin", "main"], cwd=root, capture_output=True)
+        subprocess.run(["git", "reset", "--hard", "origin/main"], cwd=root, capture_output=True)
     except Exception as e:
         print(f"[Git] Error: {e}")
 

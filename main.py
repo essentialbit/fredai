@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from t5yifr_client import get_t5yifr
 from geopolitical_risk import get_geopolitical_risk
 from new_home_sales_client import get_new_home_sales
 from mich_inflation_expectations_client import get_mich_expectations
@@ -1840,6 +1841,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/t5yifr")
+@login_required
+def api_t5yifr():
+    """5Y5Y forward inflation expectation rate (FRED T5YIFR) -- the FOMC's
+    own long-run inflation-anchor gauge (FSI L2) -- cached 1h, see
+    t5yifr_client.py."""
+    return jsonify(get_t5yifr() or {})
 @app.route("/api/geopolitical-risk")
 @login_required
 def api_geopolitical_risk():
@@ -2676,6 +2684,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # 5Y5Y forward inflation expectations, FOMC's long-run anchor gauge (cached 1h in t5yifr_client.py)
+        try:
+            t5 = get_t5yifr()
+            if t5:
+                _macro_cache = {**_macro_cache, "T5YIFR": {
+                    "label": "5Y5Y Infl.", "value": t5["latest"], "rating": t5["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] t5yifr error: {e}")
         # Geopolitical risk score (cached 15min in geopolitical_risk.py)
         try:
             gr = get_geopolitical_risk()

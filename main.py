@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from natural_gas_client import get_natural_gas
 from household_debt_service_client import get_household_debt_service
 from federal_debt_gdp_client import get_federal_debt_gdp
 from federal_deficit_client import get_federal_deficit
@@ -1935,6 +1936,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/natural-gas")
+@login_required
+def api_natural_gas():
+    """Henry Hub Natural Gas Spot Price (FRED DHHNGSP) -- energy-sector
+    input-cost signal (FSI L2), second leg alongside the WTI crude oil spot
+    badge. Cached 1h, see natural_gas_client.py."""
+    return jsonify(get_natural_gas() or {})
 @app.route("/api/household-debt-service")
 @login_required
 def api_household_debt_service():
@@ -2943,6 +2951,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Henry Hub Natural Gas Spot Price (cached 1h in natural_gas_client.py)
+        try:
+            ng = get_natural_gas()
+            if ng:
+                _macro_cache = {**_macro_cache, "NATURAL_GAS": {
+                    "label": "Nat Gas", "value": ng["latest"], "rating": ng["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] natural_gas_client error: {e}")
         # Household Debt Service Ratio (FRED TDSP, cached 6h in household_debt_service_client.py)
         try:
             hds = get_household_debt_service()

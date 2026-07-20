@@ -13,9 +13,13 @@ never auto-merge regardless of consensus).
 import json
 import re
 
+from dotenv import load_dotenv
+load_dotenv()  # Ensure .env is parsed into os.environ before community.py loads GITHUB_TOKEN
+
 from community import _gh_get, _gh_post, GITHUB_REPO
 from github_sync import get_open_proposal_issues, _ensure_label
 from memory_store import get_track_record
+
 
 _STANCE_MARKER = re.compile(r"<!--fredai:stance:(claude|gemini)-->")
 _IMPACT_RE = re.compile(r"Impact score:\*\*\s*([\d.]+)")

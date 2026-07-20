@@ -81,33 +81,56 @@ def detect_trends(quotes: dict) -> list[dict]:
 
 
 def detect_insider_clusters(tickers: list[str], lookback_days: int = 30, min_cluster_size: int = 2) -> list[dict]:
-    """Flag tickers with 2+ open-market insider transactions (same direction)
-    within lookback_days -- a cluster of insiders acting the same way close
-    together is a materially stronger signal than any single Form 4 filing
-    (which is routinely just compensation/diversification noise)."""
+    """Flag tickers with 2+ *distinct* insiders filing open-market transactions
+    (same direction) within lookback_days -- clustered independent conviction
+    from multiple people is a materially stronger signal than any single Form 4
+    filing (which is routinely just compensation/diversification noise), and is
+    also stronger than one insider filing several transactions on their own."""
     alerts = []
     for ticker in tickers:
         txns = get_recent_insider_transactions(ticker, days=lookback_days, signal_only=True)
-        if len(txns) < min_cluster_size:
+        if not txns:
             continue
 
         buys = [t for t in txns if t["signal_type"] == "open_market_purchase"]
         sells = [t for t in txns if t["signal_type"] == "open_market_sale"]
 
-        if len(buys) >= min_cluster_size:
-            owners = sorted(set(t["owner_name"] for t in buys))
+        buy_owners = sorted(set(t["owner_name"] for t in buys))
+        if len(buy_owners) >= min_cluster_size:
             total_shares = sum(t["shares"] or 0 for t in buys)
-            msg = f"{len(buys)} insider purchases in {ticker} over {lookback_days}d ({', '.join(owners[:3])}{'...' if len(owners) > 3 else ''}), {total_shares:,.0f} shares total"
-            alerts.append({"level": "info", "title": f"${ticker} Insider Buying Cluster", "message": msg, "asset": ticker})
+            msg = f"{len(buy_owners)} distinct insiders bought {ticker} over {lookback_days}d ({', '.join(buy_owners[:3])}{'...' if len(buy_owners) > 3 else ''}), {total_shares:,.0f} shares total"
+            alerts.append({"level": "info", "title": f"${ticker} Insider Buying Cluster", "message": msg,
+                           "asset": ticker, "direction": "buy", "distinct_owners": len(buy_owners)})
             insert_alert("info", f"${ticker} Insider Buying Cluster", msg, ticker)
 
-        if len(sells) >= min_cluster_size:
-            owners = sorted(set(t["owner_name"] for t in sells))
+        sell_owners = sorted(set(t["owner_name"] for t in sells))
+        if len(sell_owners) >= min_cluster_size:
             total_shares = sum(t["shares"] or 0 for t in sells)
-            msg = f"{len(sells)} insider sales in {ticker} over {lookback_days}d ({', '.join(owners[:3])}{'...' if len(owners) > 3 else ''}), {total_shares:,.0f} shares total"
-            alerts.append({"level": "warning", "title": f"${ticker} Insider Selling Cluster", "message": msg, "asset": ticker})
+            msg = f"{len(sell_owners)} distinct insiders sold {ticker} over {lookback_days}d ({', '.join(sell_owners[:3])}{'...' if len(sell_owners) > 3 else ''}), {total_shares:,.0f} shares total"
+            alerts.append({"level": "warning", "title": f"${ticker} Insider Selling Cluster", "message": msg,
+                           "asset": ticker, "direction": "sell", "distinct_owners": len(sell_owners)})
             insert_alert("warning", f"${ticker} Insider Selling Cluster", msg, ticker)
 
+    return alerts
+
+
+def detect_short_volume_pressure(tickers: list[str], z_threshold: float = 2.0) -> list[dict]:
+    """Flag tickers whose daily FINRA Reg SHO short-volume ratio has spiked
+    well above its own trailing baseline -- a fast-moving flow signal,
+    distinct from the slower Finviz short-interest snapshot which has no
+    per-day resolution to alert on."""
+    from finra_short_volume import compute_short_volume_signal
+
+    alerts = []
+    for ticker in tickers:
+        signal = compute_short_volume_signal(ticker)
+        if not signal or not signal.get("trend"):
+            continue
+        z = signal["trend"]["z_score"]
+        if z >= z_threshold:
+            msg = f"Short volume ratio for {ticker} at {signal['short_volume_pct']:.1f}% ({signal['trade_date']}), z-score {z:+.2f} vs its own 30d baseline"
+            alerts.append({"level": "warning", "title": f"${ticker} Short Volume Pressure", "message": msg, "asset": ticker})
+            insert_alert("warning", f"${ticker} Short Volume Pressure", msg, ticker)
     return alerts
 
 

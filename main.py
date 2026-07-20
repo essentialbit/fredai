@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from mich_inflation_expectations_client import get_mich_expectations
 from existing_home_sales_client import get_existing_home_sales
 from personal_income_client import get_personal_income
 from capacity_utilization_client import get_capacity_utilization
@@ -1817,6 +1818,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/mich-inflation-expectations")
+@login_required
+def api_mich_inflation_expectations():
+    """University of Michigan year-ahead inflation expectations, survey-based
+    (FSI L2) -- cached 1h, see mich_inflation_expectations_client.py."""
+    return jsonify(get_mich_expectations() or {})
 @app.route("/api/existing-home-sales")
 @login_required
 def api_existing_home_sales():
@@ -2634,6 +2641,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # University of Michigan year-ahead inflation expectations (cached 1h)
+        try:
+            mich = get_mich_expectations()
+            if mich:
+                _macro_cache = {**_macro_cache, "MICH": {
+                    "label": "Infl. Exp.", "value": mich["latest"], "rating": mich["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] mich_inflation_expectations error: {e}")
         # Existing Home Sales resale-volume badge (cached 1h in existing_home_sales_client.py)
         try:
             ehs = get_existing_home_sales()

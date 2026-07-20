@@ -27,9 +27,11 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
+load_dotenv()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_REPO  = os.getenv("GITHUB_REPO", "essentialbit/fredai")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")

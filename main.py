@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from gscpi_client import get_gscpi
 from m2_velocity_client import get_m2_velocity
 from business_loans_client import get_business_loan_growth
 from energy_extraction_production_client import get_energy_extraction_production
@@ -1922,6 +1923,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/gscpi")
+@login_required
+def api_gscpi():
+    """NY Fed Global Supply Chain Pressure Index -- composite supply-chain
+    stress signal (FSI L2/L5). Cached 1h, see gscpi_client.py."""
+    return jsonify(get_gscpi() or {})
 @app.route("/api/m2-velocity")
 @login_required
 def api_m2_velocity():
@@ -2843,6 +2850,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # NY Fed Global Supply Chain Pressure Index (cached 1h in gscpi_client.py)
+        try:
+            gscpi = get_gscpi()
+            if gscpi:
+                _macro_cache = {**_macro_cache, "GSCPI": {
+                    "label": "Supply Chain", "value": gscpi["latest"], "rating": gscpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] gscpi_client error: {e}")
         # Velocity of M2 Money Stock -- monetary-circulation regime signal (cached 6h)
         try:
             m2v = get_m2_velocity()

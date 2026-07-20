@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from ci_loan_delinquency_client import get_ci_loan_delinquency
 from commercial_re_delinquency_client import get_commercial_re_delinquency
 from auto_loan_delinquency_client import get_auto_loan_delinquency
 from mortgage_delinquency_client import get_mortgage_delinquency
@@ -1939,6 +1940,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/ci-loan-delinquency")
+@login_required
+def api_ci_loan_delinquency():
+    """Commercial & Industrial (C&I) business loan delinquency rate (FSI L2)
+    -- cached 6h, see ci_loan_delinquency_client.py."""
+    return jsonify(get_ci_loan_delinquency() or {})
 @app.route("/api/commercial-re-delinquency")
 @login_required
 def api_commercial_re_delinquency():
@@ -2980,6 +2987,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # C&I business loan delinquency rate (cached 6h in ci_loan_delinquency_client.py)
+        try:
+            cild = get_ci_loan_delinquency()
+            if cild:
+                _macro_cache = {**_macro_cache, "CI_LOAN_DELINQUENCY": {
+                    "label": "C&I Delinquency", "value": cild["latest"], "rating": cild["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] ci_loan_delinquency error: {e}")
         # Commercial real estate loan delinquency rate -- business/corporate
         # credit-quality signal (cached 6h in commercial_re_delinquency_client.py)
         try:

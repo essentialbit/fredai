@@ -24,6 +24,10 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
+### FredAI v1.3.107
+- fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
+- docs: sync README changelog to v1.3.106 (#463)
+
 ### FredAI v1.3.106
 - feat: Durable Goods New Orders (FRED DGORDER) macro badge (#289)
 
@@ -35,9 +39,6 @@ See the full list at [github.com/essentialbit/fredai/releases](https://github.co
 
 ### FredAI v1.3.103
 - feat: Industrial Production Index (INDPRO) macro badge (closes #273) (#274)
-
-### FredAI v1.3.102
-- feat: Fed funds futures term structure market-implied rate-path badge (closes #248) (#267)
 
 <!-- CHANGELOG_END -->
 

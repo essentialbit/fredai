@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from m2_velocity_client import get_m2_velocity
 from business_loans_client import get_business_loan_growth
 from energy_extraction_production_client import get_energy_extraction_production
 from corporate_profits_client import get_corporate_profits
@@ -1921,6 +1922,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/m2-velocity")
+@login_required
+def api_m2_velocity():
+    """Velocity of M2 Money Stock (FRED M2V) -- monetary-circulation regime
+    signal (FSI L2) -- cached 6h, see m2_velocity_client.py."""
+    return jsonify(get_m2_velocity() or {})
 @app.route("/api/business-loans")
 @login_required
 def api_business_loans():
@@ -2836,6 +2843,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Velocity of M2 Money Stock -- monetary-circulation regime signal (cached 6h)
+        try:
+            m2v = get_m2_velocity()
+            if m2v:
+                _macro_cache = {**_macro_cache, "M2_VELOCITY": {
+                    "label": "M2 Velocity", "value": m2v["latest"], "rating": m2v["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] m2_velocity_client error: {e}")
         # C&I loan volume YoY growth -- realized credit-cycle signal (cached 1h)
         try:
             bl = get_business_loan_growth()

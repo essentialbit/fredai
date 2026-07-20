@@ -34,6 +34,7 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
 from commercial_paper_client import get_commercial_paper
@@ -1920,6 +1921,12 @@ def api_correlation():
     })
 
 
+@app.route("/api/supply-chain")
+@login_required
+def api_supply_chain():
+    """BDRY-vs-SPY relative-strength supply-chain-stress regime (FSI L5) --
+    cached 15min, see supply_chain_client.py."""
+    return jsonify(get_supply_chain_stress() or {})
 @app.route("/api/vix-term-structure")
 @login_required
 def api_vix_term_structure():
@@ -3003,6 +3010,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
 
+        # Supply-chain stress -- BDRY vs SPY relative strength (cached 15min in supply_chain_client.py)
+        try:
+            sc = get_supply_chain_stress()
+            if sc:
+                _macro_cache = {**_macro_cache, "SUPPLY_CHAIN": {
+                    "label": "Supply Chain", "value": sc["spread_20d"], "rating": sc["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] supply_chain error: {e}")
         # VIX term-structure regime (cached 1h in vix_term_structure.py)
         try:
             vts = get_vix_term_structure()

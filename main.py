@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from productivity_client import get_labor_productivity
 from wti_crude_oil_client import get_wti_crude_oil
 from on_rrp_liquidity_client import get_on_rrp_liquidity
 from core_capex_client import get_core_capex_orders
@@ -1926,6 +1927,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/labor-productivity")
+@login_required
+def api_labor_productivity():
+    """Nonfarm business sector labor productivity (FRED OPHNFB, FSI L2) --
+    quarterly real output per hour, cached 6h, see productivity_client.py."""
+    return jsonify(get_labor_productivity() or {})
 @app.route("/api/wti-crude-oil")
 @login_required
 def api_wti_crude_oil():
@@ -2873,6 +2880,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Labor productivity -- unit-labor-cost inflation pressure gauge (cached 6h in productivity_client.py)
+        try:
+            prod = get_labor_productivity()
+            if prod:
+                _macro_cache = {**_macro_cache, "PRODUCTIVITY": {
+                    "label": "Productivity", "value": prod["latest"], "rating": prod["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] productivity error: {e}")
         # WTI crude oil spot price -- headline energy-inflation input (cached 1h in wti_crude_oil_client.py)
         try:
             wti = get_wti_crude_oil()

@@ -24,23 +24,22 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.67
-- fix: insider cluster detection counted raw transactions, not distinct insiders
+### FredAI v1.3.108
+- feat: Median Sales Price of Houses Sold macro badge (closes #464) (#465)
+- docs: sync README changelog to v1.3.107 (#467)
 
-### FredAI v1.3.66
-- fix: same-day timestamp comparison bug in 7 memory_store query functions
-- docs: sync README changelog to v1.3.65 (#241)
+### FredAI v1.3.107
+- fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
+- docs: sync README changelog to v1.3.106 (#463)
 
-### FredAI v1.3.65
-- docs: sync README changelog to v1.3.63 (#196)
-- feat: sector rotation / relative-strength ranking (closes #159)
+### FredAI v1.3.106
+- feat: Durable Goods New Orders (FRED DGORDER) macro badge (#289)
 
-### FredAI v1.3.64
-- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
+### FredAI v1.3.105
+- feat: Moody's Baa/10Y credit spread (BAA10Y) macro badge (#286)
 
-### FredAI v1.3.63
-- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
-- feat: Copper/Gold ratio "Dr. Copper" cross-asset regime signal (closes #176)
+### FredAI v1.3.104
+- feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
 
 <!-- CHANGELOG_END -->
 

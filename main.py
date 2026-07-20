@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from trade_balance_client import get_trade_balance
 from continuing_claims_client import get_continuing_claims
 from jolts_openings_client import get_jolts_openings
 from retail_sales_client import get_retail_sales
@@ -1811,6 +1812,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/trade-balance")
+@login_required
+def api_trade_balance():
+    """U.S. Trade Balance (FRED BOPGSTB) -- goods & services net-export
+    macro badge (FSI L2) -- cached 1h, see trade_balance_client.py."""
+    return jsonify(get_trade_balance() or {})
 @app.route("/api/continuing-claims")
 @login_required
 def api_continuing_claims():
@@ -2590,6 +2597,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Trade Balance (FRED BOPGSTB) -- goods & services net-export
+        # regime signal (cached 1h in trade_balance_client.py)
+        try:
+            tb = get_trade_balance()
+            if tb:
+                _macro_cache = {**_macro_cache, "TRADE_BALANCE": {
+                    "label": "Trade Bal", "value": tb["latest"], "rating": tb["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] trade_balance_client error: {e}")
         # Continuing Jobless Claims -- unemployment-duration stock signal
         # (cached 1h in continuing_claims_client.py)
         try:

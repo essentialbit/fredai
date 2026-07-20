@@ -24,24 +24,22 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.61
-- feat: Landing Zone -- interactive globe, enriched ticker network, price alerts, live refresh (#180)
-- docs: sync README changelog to v1.3.60 (#177)
+### FredAI v1.3.108
+- feat: Median Sales Price of Houses Sold macro badge (closes #464) (#465)
+- docs: sync README changelog to v1.3.107 (#467)
 
-### FredAI v1.3.60
-- feat: Test Landing Zone -- adjustable best-of widget grid (#129)
-- docs: sync README changelog to v1.3.59 (#119)
+### FredAI v1.3.107
+- fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
+- docs: sync README changelog to v1.3.106 (#463)
 
-### FredAI v1.3.59
-- feat: backtest v2 -- per-source attribution + naive baseline (closes #108) (#118)
-- docs: sync README changelog to v1.3.58 (#117)
+### FredAI v1.3.106
+- feat: Durable Goods New Orders (FRED DGORDER) macro badge (#289)
 
-### FredAI v1.3.58
-- feat: portfolio risk metrics -- VaR, Sharpe/Sortino, max drawdown, beta (closes #107) (#115)
-- docs: sync README changelog to v1.3.57 (#116)
+### FredAI v1.3.105
+- feat: Moody's Baa/10Y credit spread (BAA10Y) macro badge (#286)
 
-### FredAI v1.3.57
-- fix: release README-sync PRs now open with a PAT so CI actually runs (#114)
+### FredAI v1.3.104
+- feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
 
 <!-- CHANGELOG_END -->
 

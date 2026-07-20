@@ -30,6 +30,7 @@ from config import (
     PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI,
 )
 from memory_store import get_signals, get_latest_summary, get_recent_alerts, get_trending_assets
+from backtesting_engine import get_accuracy_report
 
 
 # ── PROVIDER DETECTION ────────────────────────────────────────────────────────
@@ -713,12 +714,13 @@ current.
 # ── CONTEXT BLOCK ─────────────────────────────────────────────────────────────
 
 def build_context_block(quotes: dict = None, user_interests: list = None,
-                        portfolio: dict = None) -> str:
+                        portfolio: dict = None, tracked_entities: str = "") -> str:
     signals = get_signals(hours=4, limit=50)
     summary = get_latest_summary()
     alerts = get_recent_alerts(limit=8)
     trending = get_trending_assets(hours=4, limit=10)
     quotes = quotes or {}
+    track_record = _format_track_record()
 
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
@@ -727,6 +729,8 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     if user_interests:
         top = [f"{i['symbol']} (score:{i['interest_score']:.1f})" for i in user_interests[:5]]
         interest_block = f"\nUSER'S TOP INTERESTS: {', '.join(top)}"
+
+    entities_block = f"\n{tracked_entities}" if tracked_entities else ""
 
     # Portfolio context — strip exact values if privacy mode active
     port_block = ""
@@ -755,7 +759,7 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
 
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
 {_build_privacy_notice()}
-{interest_block}{port_block}
+{interest_block}{port_block}{entities_block}
 
 MARKET SNAPSHOT:{market_snapshot_warning}
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}
@@ -765,7 +769,7 @@ SIGNAL SUMMARY (last 4h):
 
 TRENDING ASSETS (by signal volume):
 {json.dumps([{"asset": t["asset"], "signals": t["signal_count"], "bullish_pct": round(t.get("bullish_pct",0),1)} for t in trending[:6]], indent=2)}
-
+{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
 TOP RECENT SIGNALS:
 {_format_signals(signals[:8])}
 
@@ -776,6 +780,23 @@ LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
 """
     return ctx
+
+
+def _format_track_record() -> str:
+    """One line per signal source with a large-enough 24h sample, so Fred can
+    lean into sources that are actually proving predictive value and hedge on
+    ones that aren't, instead of treating every source as equally credible."""
+    report = get_accuracy_report().get("24h", {})
+    lines = []
+    for source, stats in report.get("sources", {}).items():
+        if source == "aggregate" or stats.get("total", 0) < 10:
+            continue
+        delta = stats.get("baseline_delta_pct")
+        if delta is None:
+            continue
+        verdict = "proving value" if stats.get("proving_value") else "not proving value"
+        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})")
+    return " | ".join(lines)
 
 
 def _format_signals(signals: list) -> str:
@@ -811,6 +832,8 @@ def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None,
          tool_log: list | None = None) -> str:
     context = build_context_block(quotes, user_interests, portfolio)
+         tracked_entities: str = "") -> str:
+    context = build_context_block(quotes, user_interests, portfolio, tracked_entities)
     try:
         from vault_semantic_search import get_vault_context
         vault_context = get_vault_context(user_message)
@@ -851,6 +874,7 @@ def generate_summary(signals: list[dict], quotes: dict,
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
     top_assets = _top_mentioned_assets(signals)
+    track_record = _format_briefing_track_record()
 
     prompt = f"""You are FredAI. Generate a board-level financial intelligence briefing.
 
@@ -859,7 +883,7 @@ TOP ASSETS BY SIGNAL VOLUME: {json.dumps(top_assets)}
 
 MARKET DATA:
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:10]}, indent=2)}
-
+{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
 REPRESENTATIVE SIGNALS:
 {_format_signals(signals[:15])}
 
@@ -889,6 +913,23 @@ Direct. Specific. No filler."""
     if "not financial advice" not in result.lower():
         result += DISCLAIMER_FOOTER
     return result
+
+
+def _format_briefing_track_record() -> str:
+    """Per-source 24h accuracy-vs-baseline view, so the briefing can lean
+    into sources proving predictive value instead of treating every source
+    as equally credible."""
+    report = get_accuracy_report().get("24h", {})
+    lines = []
+    for source, stats in report.get("sources", {}).items():
+        if source == "aggregate" or stats.get("total", 0) < 10:
+            continue
+        delta = stats.get("baseline_delta_pct")
+        if delta is None:
+            continue
+        verdict = "proving value" if stats.get("proving_value") else "not proving value"
+        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})")
+    return " | ".join(lines)
 
 
 def _top_mentioned_assets(signals: list[dict]) -> dict:

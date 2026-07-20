@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from business_loans_client import get_business_loan_growth
 from energy_extraction_production_client import get_energy_extraction_production
 from corporate_profits_client import get_corporate_profits
 from tsi_freight_client import get_tsi_freight
@@ -1920,6 +1921,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/business-loans")
+@login_required
+def api_business_loans():
+    """C&I loan volume YoY growth (FRED BUSLOANS) -- realized bank
+    credit-creation signal, distinct from the survey-based lending-standards
+    badges (FSI L2). Cached 1h, see business_loans_client.py."""
+    return jsonify(get_business_loan_growth() or {})
 @app.route("/api/energy-extraction-production")
 @login_required
 def api_energy_extraction_production():
@@ -2828,6 +2836,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # C&I loan volume YoY growth -- realized credit-cycle signal (cached 1h)
+        try:
+            bl = get_business_loan_growth()
+            if bl:
+                _macro_cache = {**_macro_cache, "BUSINESS_LOANS": {
+                    "label": "C&I Loans", "value": bl["yoy_growth_pct"], "rating": bl["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] business_loans_client error: {e}")
         # Oil & Gas Extraction Industrial Production (cached 1h in energy_extraction_production_client.py)
         try:
             eep = get_energy_extraction_production()

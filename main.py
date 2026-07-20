@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from corporate_profits_client import get_corporate_profits
 from tsi_freight_client import get_tsi_freight
 from eci_client import get_eci
 from consumer_credit_standards_client import get_consumer_credit_standards
@@ -1849,6 +1850,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/corporate-profits")
+@login_required
+def api_corporate_profits():
+    """Corporate Profits After Tax (FRED CPATAX) quarterly corporate
+    profitability signal (FSI L2) -- cached 6h, see corporate_profits_client.py."""
+    return jsonify(get_corporate_profits() or {})
 @app.route("/api/tsi-freight")
 @login_required
 def api_tsi_freight():
@@ -2745,6 +2752,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Corporate Profits After Tax quarterly profitability signal (cached 6h in corporate_profits_client.py)
+        try:
+            cp = get_corporate_profits()
+            if cp:
+                _macro_cache = {**_macro_cache, "CORP_PROFITS": {
+                    "label": "Corp Profits YoY", "value": cp["latest_yoy_pct"], "rating": cp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] corporate_profits error: {e}")
         # BTS Transportation Services Index: Freight (cached 1h in tsi_freight_client.py)
         try:
             tsi = get_tsi_freight()

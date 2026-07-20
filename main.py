@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from household_debt_service_client import get_household_debt_service
 from federal_debt_gdp_client import get_federal_debt_gdp
 from federal_deficit_client import get_federal_deficit
 from credit_card_delinquency_client import get_credit_card_delinquency
@@ -1934,6 +1935,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/household-debt-service")
+@login_required
+def api_household_debt_service():
+    """Household Debt Service Ratio (FRED TDSP) -- debt payments as % of
+    disposable income, a forward-leading household leverage-burden signal
+    (FSI L2). Cached 6h, see household_debt_service_client.py."""
+    return jsonify(get_household_debt_service() or {})
 @app.route("/api/federal-debt-gdp")
 @login_required
 def api_federal_debt_gdp():
@@ -2935,6 +2943,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Household Debt Service Ratio (FRED TDSP, cached 6h in household_debt_service_client.py)
+        try:
+            hds = get_household_debt_service()
+            if hds:
+                _macro_cache = {**_macro_cache, "HOUSEHOLD_DEBT_SERVICE": {
+                    "label": "HH Debt Service", "value": hds["latest"], "rating": hds["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] household_debt_service error: {e}")
         # Federal Debt as % of GDP (fiscal debt-burden stock signal, cached 1h in federal_debt_gdp_client.py)
         try:
             fdg = get_federal_debt_gdp()

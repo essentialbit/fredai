@@ -4918,7 +4918,8 @@ function renderWatchlist(items,interests){
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
   if(asxItems.length){
-    html+=`<tr><td colspan="7" style="padding:6px 8px 3px;font-size:9px;letter-spacing:1.5px;color:#f5a623;text-transform:uppercase;border-top:1px solid #1a3020;background:rgba(245,166,35,0.04)">◈ ASX — Australia (AUD)</td></tr>`;
+    const delayedTag=isAsxDelayed(asxItems)?`<span title="ASX quotes haven't refreshed in a while — data may be delayed" style="color:var(--red);margin-left:6px;letter-spacing:0;text-transform:none">⚠ data may be delayed</span>`:'';
+    html+=`<tr><td colspan="7" style="padding:6px 8px 3px;font-size:9px;letter-spacing:1.5px;color:#f5a623;text-transform:uppercase;border-top:1px solid #1a3020;background:rgba(245,166,35,0.04)">◈ ASX — Australia (AUD)${delayedTag}</td></tr>`;
     html+=asxItems.map(rowHtml).join('');
   }
   tbody.innerHTML=html;
@@ -5685,6 +5686,23 @@ function pad(n){return String(n).padStart(2,'0')}
 function fmtD(n){if(n==null)return'$--';return'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}
 function fmtPrice(n,currency){if(n==null)return'--';const prefix=currency==='AUD'?'A$':'$';return prefix+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:3})}
 function isAsx(sym){return typeof sym==='string'&&sym.endsWith('.AX')}
+// ASX refresh job runs every 120s server-side; treat quotes older than 4x
+// that (allows for one skipped cycle plus network slack) as delayed. `q.updated`
+// is a naive UTC isoformat() string with no offset — append 'Z' so the browser
+// parses it as UTC instead of local time.
+function quoteAgeSeconds(q){
+  if(!q||!q.updated) return null;
+  const iso=/Z$|[+-]\d{2}:?\d{2}$/.test(q.updated)?q.updated:q.updated+'Z';
+  const t=Date.parse(iso);
+  return isNaN(t)?null:(Date.now()-t)/1000;
+}
+function isAsxDelayed(items){
+  return items.some(w=>{
+    const sym=w.symbol||w,q=quotesCache[sym];
+    const age=quoteAgeSeconds(q);
+    return age!=null&&age>480;
+  });
+}
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
 
 

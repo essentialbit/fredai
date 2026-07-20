@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from continuing_claims_client import get_continuing_claims
 from jolts_openings_client import get_jolts_openings
 from retail_sales_client import get_retail_sales
 from durable_goods_client import get_durable_goods_orders
@@ -1810,6 +1811,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/continuing-claims")
+@login_required
+def api_continuing_claims():
+    """Continuing Jobless Claims (FRED CCSA) -- unemployment-duration stock
+    signal (FSI L2) -- cached 1h, see continuing_claims_client.py."""
+    return jsonify(get_continuing_claims() or {})
 @app.route("/api/jolts-openings")
 @login_required
 def api_jolts_openings():
@@ -2583,6 +2590,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Continuing Jobless Claims -- unemployment-duration stock signal
+        # (cached 1h in continuing_claims_client.py)
+        try:
+            cc = get_continuing_claims()
+            if cc:
+                _macro_cache = {**_macro_cache, "CONTINUING_CLAIMS": {
+                    "label": "Continuing Claims", "value": cc["change_wow_pct"], "rating": cc["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] continuing_claims_client error: {e}")
         # JOLTS Job Openings -- forward-looking labor-demand signal
         # (cached 1h in jolts_openings_client.py)
         try:

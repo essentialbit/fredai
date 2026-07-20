@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from commercial_paper_client import get_commercial_paper
 from gasoline_price_client import get_gasoline_price
 from ci_loan_delinquency_client import get_ci_loan_delinquency
 from commercial_re_delinquency_client import get_commercial_re_delinquency
@@ -1941,6 +1942,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/commercial-paper")
+@login_required
+def api_commercial_paper():
+    """Commercial paper outstanding -- short-term corporate funding market
+    stress/health signal (FSI L2, FRED COMPOUT) -- cached 1h, see
+    commercial_paper_client.py."""
+    return jsonify(get_commercial_paper() or {})
 @app.route("/api/gasoline-price")
 @login_required
 def api_gasoline_price():
@@ -2994,6 +3002,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Commercial paper outstanding funding-stress signal (cached 1h in commercial_paper_client.py)
+        try:
+            cp = get_commercial_paper()
+            if cp:
+                _macro_cache = {**_macro_cache, "COMMERCIAL_PAPER": {
+                    "label": "Comm. Paper", "value": cp["outstanding_billions"], "rating": cp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] commercial_paper error: {e}")
         # Weekly retail gasoline price (cached 6h in gasoline_price_client.py)
         try:
             gp = get_gasoline_price()

@@ -38,6 +38,7 @@ from fear_greed_client import fetch_fear_greed
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
 from commercial_paper_client import get_commercial_paper
 from gasoline_price_client import get_gasoline_price
 from ci_loan_delinquency_client import get_ci_loan_delinquency
@@ -1969,6 +1970,17 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/job-listings/<ticker>")
+@login_required
+def api_job_listings(ticker):
+    """Open-role-count hiring-velocity trend for a curated set of
+    Greenhouse-listed tickers (FSI L5) -- cached 24h, see
+    job_listings_client.py."""
+    ticker = ticker.upper()
+    if ticker not in JOB_LISTINGS_TRACKED:
+        return jsonify({"error": "ticker not tracked", "tracked": sorted(JOB_LISTINGS_TRACKED)}), 404
+    snapshot = get_job_listings_snapshot(ticker)
+    return jsonify(snapshot or {"ticker": ticker, "status": "unavailable"})
 @app.route("/api/commercial-paper")
 @login_required
 def api_commercial_paper():

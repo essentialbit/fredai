@@ -8,8 +8,10 @@ import hashlib
 import requests
 from pathlib import Path
 
-# Paths
-BASE_DIR = Path("/Volumes/Iron 1TBSSD/Claude/FredAI")
+# Paths -- relative to this script's own location so it runs unmodified from
+# any checkout (primary, worktree, SSD mirror, or a CI runner), not just the
+# one machine/path it happened to be written on.
+BASE_DIR = Path(__file__).resolve().parents[1]
 REQUIREMENTS_FILE = BASE_DIR / "requirements.txt"
 
 print("=========================================================")
@@ -73,10 +75,11 @@ for fpath in source_files:
 print("\n[3/4] Running DAST Endpoints Scan...")
 session = requests.Session()
 host = "http://localhost:8080"
+server_reachable = True
 
 try:
     # Check HTTP Headers & Security Settings
-    res = session.get(f"{host}/")
+    res = session.get(f"{host}/", timeout=3)
     print(f"  Connected to server: {res.status_code}")
     
     headers = res.headers
@@ -100,11 +103,15 @@ try:
             print(f"      Secure: {cookie.secure}")
             print(f"      SameSite: {cookie.get_nonstandard_attr('SameSite')}")
 
+except requests.exceptions.ConnectionError:
+    server_reachable = False
+    print(f"  [Skipped] No live server at {host} -- DAST/UX sections need `python3 main.py` running "
+          f"in another terminal. SBOM + SAST (static, no server needed) still ran above.")
 except Exception as e:
     errors.append(f"Could not connect to FredAI server at {host}: {e}. Ensure it is running.")
 
 # 4. Simulated UX & Acceptance Testing
-if not errors:
+if server_reachable and not errors:
     print("\n[4/4] Running Simulated UX & Acceptance Tests...")
     try:
         # Step A: Status check when anonymous

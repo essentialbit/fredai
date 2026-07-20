@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from savings_rate_client import get_savings_rate
 from consumer_credit_client import get_consumer_credit
 from trade_balance_client import get_trade_balance
 from continuing_claims_client import get_continuing_claims
@@ -1813,6 +1814,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/savings-rate")
+@login_required
+def api_savings_rate():
+    """Personal Savings Rate (FRED PSAVERT) -- household balance-sheet macro
+    badge (FSI L2) -- cached 1h, see savings_rate_client.py."""
+    return jsonify(get_savings_rate() or {})
 @app.route("/api/consumer-credit")
 @login_required
 def api_consumer_credit():
@@ -2604,6 +2611,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Personal Savings Rate (FRED PSAVERT) -- household balance-sheet
+        # regime signal (cached 1h in savings_rate_client.py)
+        try:
+            sr = get_savings_rate()
+            if sr:
+                _macro_cache = {**_macro_cache, "SAVINGS_RATE": {
+                    "label": "Savings Rate", "value": sr["latest"], "rating": sr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] savings_rate_client error: {e}")
         # Total Consumer Credit Outstanding (cached 1h in consumer_credit_client.py)
         try:
             cc = get_consumer_credit()

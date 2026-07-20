@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from tsi_freight_client import get_tsi_freight
 from eci_client import get_eci
 from consumer_credit_standards_client import get_consumer_credit_standards
 from bank_lending_standards_client import get_bank_lending_standards
@@ -1848,6 +1849,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/tsi-freight")
+@login_required
+def api_tsi_freight():
+    """BTS Transportation Services Index: Freight (FRED TSIFRGHT) domestic
+    freight/logistics activity badge (FSI L2) -- cached 1h, see
+    tsi_freight_client.py."""
+    return jsonify(get_tsi_freight() or {})
 @app.route("/api/employment-cost-index")
 @login_required
 def api_employment_cost_index():
@@ -2737,6 +2745,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # BTS Transportation Services Index: Freight (cached 1h in tsi_freight_client.py)
+        try:
+            tsi = get_tsi_freight()
+            if tsi:
+                _macro_cache = {**_macro_cache, "TSI_FREIGHT": {
+                    "label": "Freight TSI", "value": tsi["latest"], "rating": tsi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] tsi_freight error: {e}")
         # Employment Cost Index quarterly wage-cost inflation signal (cached 6h in eci_client.py)
         try:
             eci = get_eci()

@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from federal_deficit_client import get_federal_deficit
 from credit_card_delinquency_client import get_credit_card_delinquency
 from t10y3m_spread_client import get_t10y3m_spread
 from labor_participation_client import get_labor_participation
@@ -1932,6 +1933,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/federal-deficit")
+@login_required
+def api_federal_deficit():
+    """U.S. federal fiscal balance (FRED MTSDS133FMS), trailing-12mo rolling
+    deficit run-rate (FSI L2) -- cached 6h, see federal_deficit_client.py."""
+    return jsonify(get_federal_deficit() or {})
 @app.route("/api/credit-card-delinquency")
 @login_required
 def api_credit_card_delinquency():
@@ -2920,6 +2927,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Federal Surplus/Deficit fiscal-balance signal (cached 6h in federal_deficit_client.py)
+        try:
+            fd = get_federal_deficit()
+            if fd:
+                _macro_cache = {**_macro_cache, "FEDERAL_DEFICIT": {
+                    "label": "Fed Deficit", "value": fd["rolling_12m_deficit"], "rating": fd["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] federal_deficit error: {e}")
         # Credit card delinquency rate -- household credit-quality signal
         # (cached 6h in credit_card_delinquency_client.py)
         try:

@@ -34,6 +34,7 @@ from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accura
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
 from ppi_client import get_ppi
+from retail_sales_client import get_retail_sales
 from durable_goods_client import get_durable_goods_orders
 from credit_spread_client import get_credit_spread
 from core_pce_client import get_core_pce
@@ -1815,6 +1816,12 @@ def api_ppi():
     downstream Core PCE consumer-inflation gauge -- cached 1h, see
     ppi_client.py."""
     return jsonify(get_ppi() or {})
+@app.route("/api/retail-sales")
+@login_required
+def api_retail_sales():
+    """Advance Retail Sales (FRED RSAFS) -- forward consumer-demand signal
+    (FSI L2) -- cached 1h, see retail_sales_client.py."""
+    return jsonify(get_retail_sales() or {})
 @app.route("/api/durable-goods")
 @login_required
 def api_durable_goods():
@@ -2565,6 +2572,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] ppi_client error: {e}")
+        # Advance Retail Sales -- forward consumer-demand signal
+        # (cached 1h in retail_sales_client.py)
+        try:
+            rs = get_retail_sales()
+            if rs:
+                _macro_cache = {**_macro_cache, "RETAIL_SALES": {
+                    "label": "Retail Sales", "value": rs["change_mom_pct"], "rating": rs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] retail_sales_client error: {e}")
         # Durable Goods New Orders -- forward-looking business capex signal
         # (cached 1h in durable_goods_client.py)
         try:

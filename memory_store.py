@@ -300,6 +300,15 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
 
+        CREATE TABLE IF NOT EXISTS job_listings_daily (
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open_roles INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_job_listings_ticker ON job_listings_daily(ticker, date);
+
         CREATE TABLE IF NOT EXISTS geopolitical_risk_daily (
             date TEXT PRIMARY KEY,
             score REAL NOT NULL,
@@ -310,6 +319,42 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_ticker_debates_ticker ON ticker_debates(ticker, created_at);
         CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
         CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
+
+        CREATE TABLE IF NOT EXISTS tracked_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            entity_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            thesis TEXT DEFAULT '',
+            confidence REAL DEFAULT 0.5,
+            status TEXT DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, entity_type, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            from_entity_id INTEGER NOT NULL,
+            to_entity_id INTEGER NOT NULL,
+            relationship TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(from_entity_id, to_entity_id, relationship)
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            source TEXT DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tracked_entities_user ON tracked_entities(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_entity_links_from ON entity_links(from_entity_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_links_to ON entity_links(to_entity_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_evidence_entity ON entity_evidence(entity_id, created_at);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -547,6 +592,12 @@ def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0,
 
 
 def get_signals(hours=4, asset=None, limit=200) -> list[dict]:
+    # Space-separated to match signals.timestamp's CURRENT_TIMESTAMP default --
+    # .isoformat() produces a 'T' separator, and since space (0x20) sorts below
+    # 'T' (0x54) lexicographically, a same-day T-separated cutoff always
+    # compares "greater than" a space-separated column value regardless of
+    # actual time, silently matching zero rows (same bug class as get_news's
+    # published_at fix -- see that docstring).
     since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         if asset:
@@ -1601,6 +1652,32 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     query += " ORDER BY transaction_date DESC"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def record_job_listings_daily(ticker: str, date: str, open_roles: int) -> bool:
+    """Idempotent per (ticker, date) -- returns False if today's row for
+    this ticker already exists (already recorded this cycle, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT date FROM job_listings_daily WHERE ticker=? AND date=?", (ticker, date)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO job_listings_daily (ticker, date, open_roles) VALUES (?,?,?)",
+            (ticker, date, open_roles)
+        )
+        return True
+
+
+def get_job_listings_history(ticker: str, days: int = 90) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM job_listings_daily WHERE ticker=? AND date >= ? ORDER BY date ASC",
+            (ticker, since)
+        ).fetchall()
         return [dict(r) for r in rows]
 
 

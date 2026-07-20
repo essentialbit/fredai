@@ -38,6 +38,7 @@ from fear_greed_client import fetch_fear_greed
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
 from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
 from commercial_paper_client import get_commercial_paper
@@ -1971,6 +1972,14 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/ppi")
+@login_required
+def api_ppi():
+    """Producer Price Index Final Demand (FRED PPIFIS) -- upstream
+    wholesale-inflation leading indicator (FSI L2), distinct from the
+    downstream Core PCE consumer-inflation gauge -- cached 1h, see
+    ppi_client.py."""
+    return jsonify(get_ppi() or {})
 @app.route("/api/jolts-quits-rate")
 @login_required
 def api_jolts_quits_rate():
@@ -3077,6 +3086,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Producer Price Index Final Demand -- upstream wholesale-inflation
+        # leading indicator (cached 1h in ppi_client.py)
+        try:
+            ppi = get_ppi()
+            if ppi:
+                _macro_cache = {**_macro_cache, "PPI": {
+                    "label": "PPI", "value": ppi["change_mom_pct"], "rating": ppi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] ppi_client error: {e}")
         # JOLTS Quits Rate worker-confidence labor-market signal (cached 1h in jolts_quits_client.py)
         try:
             jq = get_jolts_quits()

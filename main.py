@@ -128,7 +128,7 @@ from tracked_entities import (
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
-    get_calendar_events, upsert_calendar_events,
+    get_calendar_events, upsert_calendar_events, get_avg_earnings_reaction,
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
     insert_trend, get_trend_history,
@@ -1821,6 +1821,9 @@ def api_news():
 def api_calendar():
     days = min(max(int(request.args.get("days", 7)), 1), 90)
     events = get_calendar_events(days=days)
+    for ev in events:
+        if ev.get("event_type") == "earnings" and ev.get("symbol"):
+            ev["avg_reaction"] = get_avg_earnings_reaction(ev["symbol"])
     return jsonify({"events": events})
 
 

@@ -13,7 +13,10 @@ from datetime import datetime, date, timedelta
 
 import requests
 
-from memory_store import upsert_calendar_events
+from memory_store import (
+    upsert_calendar_events, get_unresolved_earnings_events, set_earnings_price_move,
+)
+import market_data
 
 _HEADERS = {
     "User-Agent": (
@@ -217,7 +220,46 @@ def fetch_earnings_calendar(symbols: list[str]) -> int:
     return upsert_calendar_events(events)
 
 
+def resolve_earnings_reactions() -> int:
+    """Back-fill the actual 1-day price move for past earnings events that
+    haven't been resolved yet, so future events for the same symbol can show
+    a historical-reaction baseline. Before-market reports compare the report
+    day's close to the prior close; after-market reports compare the next
+    trading day's close to the report day's close.
+    """
+    resolved = 0
+    for ev in get_unresolved_earnings_events(days_back=10):
+        symbol = ev["symbol"]
+        try:
+            bars = market_data.fetch_history(symbol, period="1mo", interval="1d")
+            if len(bars) < 2:
+                continue
+            dates = [b["time"][:10] for b in bars]
+            event_date = ev["event_date"]
+            if event_date not in dates:
+                continue
+            idx = dates.index(event_date)
+            before_market = (ev.get("event_time") or "") < "12:00"
+            if before_market:
+                if idx == 0:
+                    continue
+                base, react = bars[idx - 1]["close"], bars[idx]["close"]
+            else:
+                if idx + 1 >= len(bars):
+                    continue
+                base, react = bars[idx]["close"], bars[idx + 1]["close"]
+            if not base:
+                continue
+            move_pct = round((react - base) / base * 100, 2)
+            set_earnings_price_move(ev["event_key"], move_pct)
+            resolved += 1
+        except Exception as e:
+            print(f"[Calendar] Reaction resolve error for {symbol}: {e}")
+    return resolved
+
+
 def refresh_calendar(watchlist_symbols: list[str]) -> dict:
     macro_count = _seed_macro_events()
     earnings_count = fetch_earnings_calendar(watchlist_symbols)
-    return {"macro_events": macro_count, "earnings": earnings_count}
+    reactions_resolved = resolve_earnings_reactions()
+    return {"macro_events": macro_count, "earnings": earnings_count, "reactions_resolved": reactions_resolved}

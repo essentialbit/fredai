@@ -367,6 +367,7 @@ def init_db():
             "ALTER TABLE news_items ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
             "ALTER TABLE signal_outcomes ADD COLUMN source TEXT DEFAULT 'aggregate'",
             "ALTER TABLE signal_outcomes ADD COLUMN baseline_direction TEXT",
+            "ALTER TABLE calendar_events ADD COLUMN price_move_pct REAL",
         ):
             try:
                 conn.execute(ddl)
@@ -1358,6 +1359,46 @@ def get_calendar_events(days: int = 7) -> list[dict]:
             "SELECT * FROM calendar_events WHERE event_date BETWEEN ? AND ? ORDER BY event_date, event_time",
             (today, end)
         ).fetchall()]
+
+
+def get_unresolved_earnings_events(days_back: int = 10) -> list[dict]:
+    """Past earnings events (symbol known, date already elapsed) with no
+    recorded price reaction yet — candidates for a post-hoc move calc."""
+    from datetime import datetime, timedelta
+    today = datetime.utcnow().date().isoformat()
+    start = (datetime.utcnow().date() - timedelta(days=days_back)).isoformat()
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(
+            """SELECT * FROM calendar_events
+               WHERE event_type='earnings' AND symbol IS NOT NULL
+                 AND event_date >= ? AND event_date < ?
+                 AND price_move_pct IS NULL
+               ORDER BY event_date""",
+            (start, today)
+        ).fetchall()]
+
+
+def set_earnings_price_move(event_key: str, move_pct: float) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE calendar_events SET price_move_pct=? WHERE event_key=?",
+            (move_pct, event_key)
+        )
+
+
+def get_avg_earnings_reaction(symbol: str) -> dict | None:
+    """Average absolute post-earnings 1-day move for a symbol, from
+    previously-resolved calendar_events rows. None if no history yet."""
+    with get_conn() as conn:
+        row = conn.execute(
+            """SELECT AVG(ABS(price_move_pct)) AS avg_abs_move, COUNT(*) AS n
+               FROM calendar_events
+               WHERE event_type='earnings' AND symbol=? AND price_move_pct IS NOT NULL""",
+            (symbol,)
+        ).fetchone()
+    if not row or not row["n"]:
+        return None
+    return {"symbol": symbol, "avg_abs_move_pct": round(row["avg_abs_move"], 2), "sample_size": row["n"]}
 
 
 # ── TECHNICAL ALERTS ─────────────────────────────────────────────────────────

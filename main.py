@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from philly_fed_client import get_philly_fed
 from core_cpi_client import get_core_cpi
 from t5yifr_client import get_t5yifr
 from geopolitical_risk import get_geopolitical_risk
@@ -1842,6 +1843,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/philly-fed")
+@login_required
+def api_philly_fed():
+    """Philadelphia Fed Manufacturing Business Outlook Survey general
+    activity index (FSI L2) -- cached 1h, see philly_fed_client.py."""
+    return jsonify(get_philly_fed() or {})
 @app.route("/api/core-cpi")
 @login_required
 def api_core_cpi():
@@ -2692,6 +2699,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Philly Fed manufacturing survey (cached 1h in philly_fed_client.py)
+        try:
+            pf = get_philly_fed()
+            if pf:
+                _macro_cache = {**_macro_cache, "PHILLY_FED": {
+                    "label": "Philly Fed", "value": pf["latest"], "rating": pf["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] philly_fed error: {e}")
         # Core CPI YoY (ex food/energy) -- cached 1h in core_cpi_client.py
         try:
             core_cpi = get_core_cpi()

@@ -4342,7 +4342,7 @@ function renderPositions(positions, cid) {
     const siTag=(p.short_float_pct!=null)?`<span title="Short float / days-to-cover" style="font-size:7px;color:${p.short_float_pct>=10?'#ff3b5c':'var(--t3)'};margin-left:5px">SI ${p.short_float_pct.toFixed(1)}%${p.short_ratio!=null?` / ${p.short_ratio.toFixed(1)}d`:''}</span>`:'';
     const sv=p.short_volume;
     const svTag=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};margin-left:5px">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
-    return `<div class="pos-row"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
+    return `<div class="pos-row" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -4361,7 +4361,7 @@ function updateIdxBar(q) {
 }
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
-const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)'};
+const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','normal':'var(--green)','elevated':'var(--yellow)','high_stress':'var(--red)','crisis':'var(--red)','complacent_tight':'var(--green)','weak':'var(--red)','strong':'var(--green)','hold':'var(--t3)','cut 25bp':'var(--green)','cut >25bp':'var(--green)','hike 25bp':'var(--red)','hike >25bp':'var(--red)'};
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};
@@ -4837,7 +4837,21 @@ function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(t
 
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
 async function loadWatchlist(){const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[])}
-let darkPoolCache={},_wlLastItems=null,_wlLastInterests=null;
+// FSI L5 open-source engineering velocity (#208) -- only meaningful for a
+// small curated set of open-source-native tickers, lazily fetched per
+// symbol (24h server-side cache) and merged back in via a re-render rather
+// than blocking the initial watchlist paint.
+const OSS_TRACKED=['MDB','ESTC','GTLB','HCP','CFLT','NET'];
+let ossVelocityCache={},darkPoolCache={},_wlLastItems=null,_wlLastInterests=null;
+async function loadOssVelocity(sym){
+  if(ossVelocityCache[sym]!==undefined)return;
+  ossVelocityCache[sym]=null;
+  try{
+    const r=await fetch('/api/oss-velocity/'+sym);
+    const d=await r.json();
+    if(d&&d.trend_52wk){ossVelocityCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+  }catch(e){}
+}
 async function loadDarkPool(sym){
   if(darkPoolCache[sym]!==undefined)return;
   darkPoolCache[sym]=null;
@@ -4872,6 +4886,18 @@ function renderWatchlist(items,interests){
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
+    let ossBadge='';
+    if(OSS_TRACKED.includes(sym)){
+      const ov=ossVelocityCache[sym];
+      if(ov===undefined)loadOssVelocity(sym);
+      if(ov&&ov.trend_52wk){
+        const dir=ov.trend_52wk.direction,arrow=dir==='rising'?'↑':dir==='falling'?'↓':'→';
+        const dirColor=dir==='rising'?'var(--green)':dir==='falling'?'var(--red)':'var(--t3)';
+        const delta=ov.contributor_count_delta;
+        const tip=`${ov.owner_repo} — ${ov.weekly_commits_4wk_avg} commits/wk (4wk avg), z=${ov.trend_52wk.z_score}, ${ov.contributor_count||'?'} contributors${delta?(delta>0?' (+':' (')+delta+')':''}`;
+        ossBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(0,180,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">OSS ${arrow}</span>`;
+      }
+    }
     const cluster=w.insider_cluster;
     const clusterBadge=cluster?`<span title="${cluster.distinct_owners} distinct insiders ${cluster.direction==='buy'?'bought':'sold'} in the trailing window" style="font-size:7px;background:${cluster.direction==='buy'?'#0e3a1f':'#3a1414'};color:${cluster.direction==='buy'?'var(--green)':'var(--red)'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">${cluster.direction==='buy'?'▲':'▼'}INSIDER×${cluster.distinct_owners}</span>`:'';
     const sv=w.short_volume;
@@ -4887,7 +4913,7 @@ function renderWatchlist(items,interests){
         dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
       }
     }
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -4939,6 +4965,18 @@ async function loadPortfolioRisk(p){
       chip('Beta',d.beta_spy??'--',RISK_TIPS.beta)+
       `<div style="grid-column:1/-1;font-size:8px;color:var(--t3);text-align:right">${d.days}d daily history · rf=0 · vs ${d.benchmark}</div>`;
     strip.style.display='grid';
+    (d.positions||[]).forEach(kp=>{
+      const row=document.querySelector(`#port-positions-list .pos-row[data-sym="${kp.symbol}"]`);
+      if(!row) return;
+      row.querySelectorAll('.kelly-line').forEach(e=>e.remove());
+      const k=kp.kelly; if(!k) return;
+      const el=document.createElement('div');
+      el.className='kelly-line';
+      el.style.cssText='grid-column:1/-1;font-size:8px;color:var(--t3);padding:0 10px 4px;text-align:right';
+      el.title=`Kelly f* = win rate − (1−win rate)/ratio · win rate ${k.win_rate_pct}% · win/loss ratio ${k.win_loss_ratio}x · ${k.sample_size}d sample`;
+      el.textContent=`Kelly (half) ${k.half_kelly_pct}% · full ${k.full_kelly_pct}%`;
+      row.appendChild(el);
+    });
   }catch(e){strip.style.display='none'}
 }
 function renderPortfolioTab(p){

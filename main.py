@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from core_cpi_client import get_core_cpi
 from t5yifr_client import get_t5yifr
 from geopolitical_risk import get_geopolitical_risk
 from new_home_sales_client import get_new_home_sales
@@ -1841,6 +1842,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/core-cpi")
+@login_required
+def api_core_cpi():
+    """Core CPI YoY Inflation (FRED CPILFESL) -- ex food/energy, the Fed and
+    markets' primary underlying-inflation read (FSI L2) -- cached 1h, see
+    core_cpi_client.py."""
+    return jsonify(get_core_cpi() or {})
 @app.route("/api/t5yifr")
 @login_required
 def api_t5yifr():
@@ -2684,6 +2692,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Core CPI YoY (ex food/energy) -- cached 1h in core_cpi_client.py
+        try:
+            core_cpi = get_core_cpi()
+            if core_cpi:
+                _macro_cache = {**_macro_cache, "CORE_CPI": {
+                    "label": "Core CPI YoY", "value": core_cpi["yoy_pct"], "rating": core_cpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] core_cpi_client error: {e}")
         # 5Y5Y forward inflation expectations, FOMC's long-run anchor gauge (cached 1h in t5yifr_client.py)
         try:
             t5 = get_t5yifr()

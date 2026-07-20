@@ -249,17 +249,31 @@ jobs:
           # a direct push here was silently rejected every time (git push
           # ... || true swallowed the failure, so this step always reported
           # success even though the change never landed). Push to a
-          # short-lived branch and open+auto-merge a PR instead, reusing
-          # the same gh pr merge --auto pattern used throughout this
-          # project's own PR-based workflow -- respects protection, no
-          # bypass needed.
-          BRANCH="docs/readme-sync-${{ steps.version.outputs.version }}"
-          git checkout -b "$BRANCH"
+          # branch and open+auto-merge a PR instead, reusing the same
+          # gh pr merge --auto pattern used throughout this project's own
+          # PR-based workflow -- respects protection, no bypass needed.
+          #
+          # The branch name used to include the version (docs/readme-sync-vX.Y.Z),
+          # a fresh one per release. Releases fire faster than each sync PR
+          # can pass CI + auto-merge, so multiple sync branches ended up open
+          # at once, every one of them rewriting the same CHANGELOG block --
+          # only the first to land could ever merge cleanly and the rest sat
+          # permanently CONFLICTING forever (30+ stale PRs observed live).
+          # One persistent branch, force-pushed and reusing the same open PR
+          # each cycle, keeps at most one sync PR open and always current.
+          BRANCH="docs/readme-sync"
+          git checkout -B "$BRANCH"
           git commit -m "docs: sync README changelog to ${{ steps.version.outputs.version }}"
-          git push origin "$BRANCH"
-          gh pr create --title "docs: sync README changelog to ${{ steps.version.outputs.version }}" \
-            --body "Automated changelog sync from the GitHub Release job." \
-            --base main --head "$BRANCH"
+          git push origin "$BRANCH" --force
+          EXISTING_PR=$(gh pr list --repo "$GITHUB_REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create --title "docs: sync README changelog to ${{ steps.version.outputs.version }}" \
+              --body "Automated changelog sync from the GitHub Release job." \
+              --base main --head "$BRANCH"
+          else
+            gh pr edit "$EXISTING_PR" --title "docs: sync README changelog to ${{ steps.version.outputs.version }}"
+            echo "Reused existing sync PR #$EXISTING_PR"
+          fi
           gh pr merge "$BRANCH" --squash --delete-branch --auto
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

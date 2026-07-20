@@ -24,22 +24,22 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.76
-- fix: gitignore .claude/worktrees to prevent accidental gitlink commits (#373)
+### FredAI v1.3.108
+- feat: Median Sales Price of Houses Sold macro badge (closes #464) (#465)
+- docs: sync README changelog to v1.3.107 (#467)
 
-### FredAI v1.3.75
-- fix: branch off before committing in git_push() to stop stray commits landing on main (closes #265) (#266)
-- docs: sync README changelog to v1.3.74 (#412)
+### FredAI v1.3.107
+- fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
+- docs: sync README changelog to v1.3.106 (#463)
 
-### FredAI v1.3.74
-- fix: verify actual FredAI identity, not just port occupancy, in launcher scripts (#411)
-- docs: sync README changelog to v1.3.73 (#379)
+### FredAI v1.3.106
+- feat: Durable Goods New Orders (FRED DGORDER) macro badge (#289)
 
-### FredAI v1.3.73
-- feat: promote Landing Zone to prod, rename 'Home' (#371)
+### FredAI v1.3.105
+- feat: Moody's Baa/10Y credit spread (BAA10Y) macro badge (#286)
 
-### FredAI v1.3.72
-- feat: local semantic search over the FredAI vault journal (closes #363) (#364)
+### FredAI v1.3.104
+- feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
 
 <!-- CHANGELOG_END -->
 

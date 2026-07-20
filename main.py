@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from real_interest_rate_client import get_real_interest_rate
 from productivity_client import get_labor_productivity
 from wti_crude_oil_client import get_wti_crude_oil
 from on_rrp_liquidity_client import get_on_rrp_liquidity
@@ -1927,6 +1928,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/real-interest-rate")
+@login_required
+def api_real_interest_rate():
+    """10-Year TIPS real yield (FRED DFII10, FSI L2) -- market real interest
+    rate, cached 1h, see real_interest_rate_client.py."""
+    return jsonify(get_real_interest_rate() or {})
 @app.route("/api/labor-productivity")
 @login_required
 def api_labor_productivity():
@@ -2880,6 +2887,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Real interest rate -- 10Y TIPS yield (cached 1h in real_interest_rate_client.py)
+        try:
+            rir = get_real_interest_rate()
+            if rir:
+                _macro_cache = {**_macro_cache, "REAL_RATE": {
+                    "label": "Real Rate", "value": rir["latest"], "rating": rir["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] real_interest_rate error: {e}")
         # Labor productivity -- unit-labor-cost inflation pressure gauge (cached 6h in productivity_client.py)
         try:
             prod = get_labor_productivity()

@@ -108,6 +108,7 @@ from variance_risk_premium import get_variance_risk_premium
 from dollar_index_client import get_dollar_index
 from oss_velocity_client import get_velocity_snapshot, TRACKED_REPOS
 from crypto_fear_greed import get_crypto_fear_greed
+from crypto_conditions import get_crypto_conditions
 from market_breadth import get_market_breadth
 from epu_index import get_epu_index
 from fed_liquidity import get_liquidity_snapshot
@@ -2436,6 +2437,13 @@ def api_crypto_fear_greed():
     the equity CNN Fear & Greed badge and the BTC on-chain health metrics --
     cached 1h, see crypto_fear_greed.py."""
     return jsonify(get_crypto_fear_greed() or {})
+@app.route("/api/crypto-conditions")
+@login_required
+def api_crypto_conditions():
+    """Crypto Conditions Index (FSI L2) -- blends the Alternative.me
+    Fear & Greed value with BTC/ETH CoinGecko volume momentum into one
+    combined sentiment+volume read -- cached 1h, see crypto_conditions.py."""
+    return jsonify(get_crypto_conditions() or {})
 @app.route("/api/market-breadth")
 @login_required
 def api_market_breadth():
@@ -3707,6 +3715,15 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] crypto_fear_greed error: {e}")
+        # Crypto Conditions Index: sentiment + BTC/ETH volume momentum (cached 1h in crypto_conditions.py)
+        try:
+            cci = get_crypto_conditions()
+            if cci:
+                _macro_cache = {**_macro_cache, "CRYPTO_CONDITIONS": {
+                    "label": "Crypto CCI", "value": cci["cci"], "rating": cci["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] crypto_conditions error: {e}")
         # Market breadth: RSP/SPY equal-weight vs cap-weight (cached 15min in market_breadth.py)
         try:
             mb = get_market_breadth()

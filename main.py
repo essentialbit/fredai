@@ -125,6 +125,7 @@ from tracked_entities import (
     create_entity, link_entities, add_evidence, get_entity,
     get_user_entities, get_entity_graph, format_context_summary, VALID_ENTITY_TYPES,
 )
+from jobless_claims_client import get_jobless_claims
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -2538,6 +2539,12 @@ def api_optimized_params(ticker):
     """Best-scoring RSI / MA-cross parameter combo for this ticker, from
     the daily grid-search backtest (FSI L3) -- see param_optimizer.py."""
     return jsonify({"ticker": ticker.upper(), "params": get_optimized_params(ticker.upper())})
+@app.route("/api/jobless-claims")
+@login_required
+def api_jobless_claims():
+    """Weekly initial jobless claims (FRED ICSA) leading labor-market
+    indicator (FSI L2) -- cached daily, see jobless_claims_client.py."""
+    return jsonify(get_jobless_claims() or {})
 
 
 @app.route("/api/ticker-relationships")
@@ -3780,6 +3787,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] median_home_price_client error: {e}")
+        # Initial jobless claims -- weekly leading labor-market indicator
+        # (cached daily in jobless_claims_client.py, ICSA only updates Thursdays)
+        try:
+            jc = get_jobless_claims()
+            if jc:
+                _macro_cache = {**_macro_cache, "JOBLESS_CLAIMS": {
+                    "label": "Jobless Claims", "value": jc["latest"], "rating": jc["trend_8w"]["direction"],
+                }}
+        except Exception as e:
+            print(f"[Job] jobless_claims error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

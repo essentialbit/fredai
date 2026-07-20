@@ -583,6 +583,12 @@ def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0,
 
 
 def get_signals(hours=4, asset=None, limit=200) -> list[dict]:
+    # Space-separated to match signals.timestamp's CURRENT_TIMESTAMP default --
+    # .isoformat() produces a 'T' separator, and since space (0x20) sorts below
+    # 'T' (0x54) lexicographically, a same-day T-separated cutoff always
+    # compares "greater than" a space-separated column value regardless of
+    # actual time, silently matching zero rows (same bug class as get_news's
+    # published_at fix -- see that docstring).
     since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         if asset:

@@ -33,6 +33,19 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from corporate_profits_client import get_corporate_profits
+from tsi_freight_client import get_tsi_freight
+from eci_client import get_eci
+from consumer_credit_standards_client import get_consumer_credit_standards
+from bank_lending_standards_client import get_bank_lending_standards
+from inventory_sales_ratio_client import get_inventory_sales_ratio
+from dallas_fed_manufacturing_client import get_dallas_fed_manufacturing
+from philly_fed_client import get_philly_fed
+from core_cpi_client import get_core_cpi
+from t5yifr_client import get_t5yifr
+from geopolitical_risk import get_geopolitical_risk
+from new_home_sales_client import get_new_home_sales
+from mich_inflation_expectations_client import get_mich_expectations
 from existing_home_sales_client import get_existing_home_sales
 from personal_income_client import get_personal_income
 from capacity_utilization_client import get_capacity_utilization
@@ -1455,6 +1468,26 @@ def api_analyst_debate(ticker):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/sector-specialist/<ticker>")
+@login_required
+def api_sector_specialist(ticker):
+    """Sector Specialist Agents (FSI L5, closes #235) -- one persona's sector-framed
+    reasoning take on a ticker (Tech/Energy/Financials/Macro), reusing agent.py's
+    existing provider path + live context block. Falls back to the Macro persona
+    for any ticker not in the hand-curated sector map."""
+    ticker = ticker.upper().strip()
+    if not ticker:
+        return jsonify({"error": "Invalid ticker symbol."}), 400
+
+    from agent import build_context_block
+    from sector_specialist import get_sector_take
+    context = build_context_block(quotes=_quotes_cache or {})
+    try:
+        return jsonify(get_sector_take(ticker, context))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/analyst/report/<ticker>")
 @login_required
 def api_analyst_report(ticker):
@@ -1886,6 +1919,91 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/corporate-profits")
+@login_required
+def api_corporate_profits():
+    """Corporate Profits After Tax (FRED CPATAX) quarterly corporate
+    profitability signal (FSI L2) -- cached 6h, see corporate_profits_client.py."""
+    return jsonify(get_corporate_profits() or {})
+@app.route("/api/tsi-freight")
+@login_required
+def api_tsi_freight():
+    """BTS Transportation Services Index: Freight (FRED TSIFRGHT) domestic
+    freight/logistics activity badge (FSI L2) -- cached 1h, see
+    tsi_freight_client.py."""
+    return jsonify(get_tsi_freight() or {})
+@app.route("/api/employment-cost-index")
+@login_required
+def api_employment_cost_index():
+    """Employment Cost Index (FRED ECIALLCIV) quarterly wage-cost inflation
+    signal (FSI L2) -- cached 6h, see eci_client.py."""
+    return jsonify(get_eci() or {})
+@app.route("/api/consumer-credit-standards")
+@login_required
+def api_consumer_credit_standards():
+    """Senior Loan Officer Opinion Survey net pct of banks tightening
+    credit-card lending standards (FSI L2) -- cached 6h, see
+    consumer_credit_standards_client.py."""
+    return jsonify(get_consumer_credit_standards() or {})
+@app.route("/api/bank-lending-standards")
+@login_required
+def api_bank_lending_standards():
+    """Senior Loan Officer Opinion Survey net pct of banks tightening C&I
+    lending standards (FSI L2) -- cached 6h, see
+    bank_lending_standards_client.py."""
+    return jsonify(get_bank_lending_standards() or {})
+@app.route("/api/inventory-sales-ratio")
+@login_required
+def api_inventory_sales_ratio():
+    """Total Business Inventories-to-Sales Ratio (FRED ISRATIO) macro-strip
+    badge -- cached 1h, see inventory_sales_ratio_client.py."""
+    return jsonify(get_inventory_sales_ratio() or {})
+@app.route("/api/dallas-fed-manufacturing")
+@login_required
+def api_dallas_fed_manufacturing():
+    """Dallas Fed Texas Manufacturing Outlook Survey general business
+    activity diffusion index (FSI L2) -- cached 1h, see
+    dallas_fed_manufacturing_client.py."""
+    return jsonify(get_dallas_fed_manufacturing() or {})
+@app.route("/api/philly-fed")
+@login_required
+def api_philly_fed():
+    """Philadelphia Fed Manufacturing Business Outlook Survey general
+    activity index (FSI L2) -- cached 1h, see philly_fed_client.py."""
+    return jsonify(get_philly_fed() or {})
+@app.route("/api/core-cpi")
+@login_required
+def api_core_cpi():
+    """Core CPI YoY Inflation (FRED CPILFESL) -- ex food/energy, the Fed and
+    markets' primary underlying-inflation read (FSI L2) -- cached 1h, see
+    core_cpi_client.py."""
+    return jsonify(get_core_cpi() or {})
+@app.route("/api/t5yifr")
+@login_required
+def api_t5yifr():
+    """5Y5Y forward inflation expectation rate (FRED T5YIFR) -- the FOMC's
+    own long-run inflation-anchor gauge (FSI L2) -- cached 1h, see
+    t5yifr_client.py."""
+    return jsonify(get_t5yifr() or {})
+@app.route("/api/geopolitical-risk")
+@login_required
+def api_geopolitical_risk():
+    """Keyword-weighted conflict/sanctions severity score over FredAI's own
+    'geopolitical' news category (FSI L5) -- cached 15min, see
+    geopolitical_risk.py."""
+    return jsonify(get_geopolitical_risk() or {})
+@app.route("/api/new-home-sales")
+@login_required
+def api_new_home_sales():
+    """New single-family home sales (FRED HSN1F) -- new-construction
+    closings macro badge (FSI L2), cached 1h, see new_home_sales_client.py."""
+    return jsonify(get_new_home_sales() or {})
+@app.route("/api/mich-inflation-expectations")
+@login_required
+def api_mich_inflation_expectations():
+    """University of Michigan year-ahead inflation expectations, survey-based
+    (FSI L2) -- cached 1h, see mich_inflation_expectations_client.py."""
+    return jsonify(get_mich_expectations() or {})
 @app.route("/api/existing-home-sales")
 @login_required
 def api_existing_home_sales():
@@ -2703,6 +2821,125 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Corporate Profits After Tax quarterly profitability signal (cached 6h in corporate_profits_client.py)
+        try:
+            cp = get_corporate_profits()
+            if cp:
+                _macro_cache = {**_macro_cache, "CORP_PROFITS": {
+                    "label": "Corp Profits YoY", "value": cp["latest_yoy_pct"], "rating": cp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] corporate_profits error: {e}")
+        # BTS Transportation Services Index: Freight (cached 1h in tsi_freight_client.py)
+        try:
+            tsi = get_tsi_freight()
+            if tsi:
+                _macro_cache = {**_macro_cache, "TSI_FREIGHT": {
+                    "label": "Freight TSI", "value": tsi["latest"], "rating": tsi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] tsi_freight error: {e}")
+        # Employment Cost Index quarterly wage-cost inflation signal (cached 6h in eci_client.py)
+        try:
+            eci = get_eci()
+            if eci:
+                _macro_cache = {**_macro_cache, "ECI": {
+                    "label": "ECI YoY", "value": eci["latest_yoy_pct"], "rating": eci["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] eci error: {e}")
+        # Senior Loan Officer Opinion Survey consumer credit-card lending standards
+        # (cached 6h in consumer_credit_standards_client.py)
+        try:
+            ccs = get_consumer_credit_standards()
+            if ccs:
+                _macro_cache = {**_macro_cache, "CONSUMER_CREDIT_STANDARDS": {
+                    "label": "CC Lending Std", "value": ccs["latest"], "rating": ccs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] consumer_credit_standards error: {e}")
+        # Senior Loan Officer Opinion Survey bank lending standards (cached 6h in bank_lending_standards_client.py)
+        try:
+            bls = get_bank_lending_standards()
+            if bls:
+                _macro_cache = {**_macro_cache, "BANK_LENDING": {
+                    "label": "Lending Standards", "value": bls["latest"], "rating": bls["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] bank_lending_standards error: {e}")
+        # Business Inventories-to-Sales Ratio (cached 1h in inventory_sales_ratio_client.py)
+        try:
+            isr = get_inventory_sales_ratio()
+            if isr:
+                _macro_cache = {**_macro_cache, "INVENTORY_SALES_RATIO": {
+                    "label": "Inv/Sales", "value": isr["latest"], "rating": isr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] inventory_sales_ratio error: {e}")
+        # Dallas Fed Texas Manufacturing Outlook -- general business activity
+        # diffusion index (cached 1h in dallas_fed_manufacturing_client.py)
+        try:
+            dfm = get_dallas_fed_manufacturing()
+            if dfm:
+                _macro_cache = {**_macro_cache, "DALLAS_FED_MFG": {
+                    "label": "Dallas Fed Mfg", "value": dfm["latest"], "rating": dfm["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] dallas_fed_manufacturing error: {e}")
+        # Philly Fed manufacturing survey (cached 1h in philly_fed_client.py)
+        try:
+            pf = get_philly_fed()
+            if pf:
+                _macro_cache = {**_macro_cache, "PHILLY_FED": {
+                    "label": "Philly Fed", "value": pf["latest"], "rating": pf["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] philly_fed error: {e}")
+        # Core CPI YoY (ex food/energy) -- cached 1h in core_cpi_client.py
+        try:
+            core_cpi = get_core_cpi()
+            if core_cpi:
+                _macro_cache = {**_macro_cache, "CORE_CPI": {
+                    "label": "Core CPI YoY", "value": core_cpi["yoy_pct"], "rating": core_cpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] core_cpi_client error: {e}")
+        # 5Y5Y forward inflation expectations, FOMC's long-run anchor gauge (cached 1h in t5yifr_client.py)
+        try:
+            t5 = get_t5yifr()
+            if t5:
+                _macro_cache = {**_macro_cache, "T5YIFR": {
+                    "label": "5Y5Y Infl.", "value": t5["latest"], "rating": t5["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] t5yifr error: {e}")
+        # Geopolitical risk score (cached 15min in geopolitical_risk.py)
+        try:
+            gr = get_geopolitical_risk()
+            if gr:
+                _macro_cache = {**_macro_cache, "GEOPOLITICAL_RISK": {
+                    "label": "Geopolitical", "value": gr["score"], "rating": gr["band"],
+                }}
+        except Exception as e:
+            print(f"[Job] geopolitical_risk error: {e}")
+        # New Home Sales (FRED HSN1F, cached 1h) -- new-construction closings
+        try:
+            nhs = get_new_home_sales()
+            if nhs:
+                _macro_cache = {**_macro_cache, "NEW_HOME_SALES": {
+                    "label": "New Home Sales", "value": nhs["latest"], "rating": nhs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] new_home_sales error: {e}")
+        # University of Michigan year-ahead inflation expectations (cached 1h)
+        try:
+            mich = get_mich_expectations()
+            if mich:
+                _macro_cache = {**_macro_cache, "MICH": {
+                    "label": "Infl. Exp.", "value": mich["latest"], "rating": mich["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] mich_inflation_expectations error: {e}")
         # Existing Home Sales resale-volume badge (cached 1h in existing_home_sales_client.py)
         try:
             ehs = get_existing_home_sales()

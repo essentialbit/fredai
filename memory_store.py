@@ -299,6 +299,13 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+
+        CREATE TABLE IF NOT EXISTS geopolitical_risk_daily (
+            date TEXT PRIMARY KEY,
+            score REAL NOT NULL,
+            article_count INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
         CREATE INDEX IF NOT EXISTS idx_short_volume_symbol ON short_volume_history(symbol, trade_date);
         CREATE INDEX IF NOT EXISTS idx_ticker_debates_ticker ON ticker_debates(ticker, created_at);
         CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
@@ -1630,6 +1637,32 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     query += " ORDER BY transaction_date DESC"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+def record_geopolitical_risk_daily(date: str, score: float, article_count: int) -> bool:
+    """Idempotent per date -- returns False if today's row already exists
+    (already recorded this cycle, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT date FROM geopolitical_risk_daily WHERE date=?", (date,)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO geopolitical_risk_daily (date, score, article_count) VALUES (?,?,?)",
+            (date, score, article_count)
+        )
+        return True
+
+
+def get_geopolitical_risk_history(days: int = 90) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM geopolitical_risk_daily WHERE date >= ? ORDER BY date ASC",
+            (since,)
+        ).fetchall()
         return [dict(r) for r in rows]
 
 

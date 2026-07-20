@@ -13,12 +13,23 @@ never auto-merge regardless of consensus).
 import json
 import re
 
+from community import _gh_get, _gh_post, _gh_delete, GITHUB_REPO
+from dotenv import load_dotenv
+load_dotenv()  # Ensure .env is parsed into os.environ before community.py loads GITHUB_TOKEN
+
 from community import _gh_get, _gh_post, GITHUB_REPO
 from github_sync import get_open_proposal_issues, _ensure_label
 from memory_store import get_track_record
 
+
 _STANCE_MARKER = re.compile(r"<!--fredai:stance:(claude|gemini)-->")
 _IMPACT_RE = re.compile(r"Impact score:\*\*\s*([\d.]+)")
+_PROPOSED_BY_LABEL_RE = re.compile(r"^proposed-by:(claude|gemini)$")
+_CONSENSUS_LABEL_RE = re.compile(r"^consensus:([\d.]+)$")
+_STANCE_COMMENT_RE = re.compile(
+    r"\*\*Stance \((claude|gemini)\):\*\*\s*(agree|disagree|escalate)\s*\(confidence\s*([\d.]+)\)"
+)
+_STALE_CONSENSUS_THRESHOLD = 0.02
 
 _STANCE_PROMPT = """You are reviewing a proposal from your collaborating AI partner on FredAI's \
 self-improvement board. FredAI's mission is to become the world's first Financial \
@@ -206,7 +217,66 @@ def run_debate_cycle() -> dict:
 
         summary["stances_posted"] += 1
 
+    summary["consensus_rescored"] = rescore_stale_consensus()
     return summary
+
+
+def rescore_stale_consensus() -> int:
+    """Re-derive consensus for already-stanced open proposals against the
+    CURRENT agent_track_record, and refresh the consensus:X label when it
+    moved. compute_consensus() only ever runs once, at first-review time —
+    a label can sit stale below the 0.55 eligibility threshold indefinitely
+    even after track-record accuracy climbs (#230/#192 both did, 2026-07-12).
+    No new AI stance is generated; this only re-scores the stance already on
+    record."""
+    rescored = 0
+    for issue in get_open_proposal_issues():
+        labels = [l["name"] for l in issue.get("labels", [])]
+
+        proposed_by = next(
+            (m.group(1) for l in labels if (m := _PROPOSED_BY_LABEL_RE.match(l))), None
+        )
+        reviewer = _other_agent(proposed_by)
+        if not reviewer:
+            continue
+
+        existing_consensus_labels = [
+            (l, float(m.group(1))) for l in labels if (m := _CONSENSUS_LABEL_RE.match(l))
+        ]
+        if not existing_consensus_labels:
+            continue  # no stance reviewed yet — run_debate_cycle()'s normal loop handles it
+
+        comments = _gh_get(f"repos/{GITHUB_REPO}/issues/{issue['number']}/comments") or []
+        stance_match = next(
+            (
+                m for c in comments
+                if (m := _STANCE_COMMENT_RE.search(c.get("body", "")))
+                and m.group(1) == reviewer
+            ),
+            None,
+        )
+        if not stance_match:
+            continue
+
+        stance = {"stance": stance_match.group(2), "confidence": float(stance_match.group(3))}
+        body = issue.get("body", "") or ""
+        impact_match = _IMPACT_RE.search(body)
+        impact_score = float(impact_match.group(1)) if impact_match else 5.0
+
+        new_consensus = compute_consensus(proposed_by, reviewer, impact_score, stance)
+        old_consensus = max(v for _, v in existing_consensus_labels)
+        if abs(new_consensus - old_consensus) <= _STALE_CONSENSUS_THRESHOLD:
+            continue
+
+        for label_name, _ in existing_consensus_labels:
+            _gh_delete(f"repos/{GITHUB_REPO}/issues/{issue['number']}/labels/{label_name}")
+
+        new_label = f"consensus:{new_consensus}"
+        _ensure_label(new_label, "c5def5")
+        _gh_post(f"repos/{GITHUB_REPO}/issues/{issue['number']}/labels", {"labels": [new_label]})
+        rescored += 1
+
+    return rescored
 
 
 if __name__ == "__main__":

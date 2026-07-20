@@ -62,6 +62,7 @@ from epu_index import get_epu_index
 from fed_liquidity import get_liquidity_snapshot
 from breakeven_inflation import get_breakeven_inflation
 from skew_index import get_skew_index
+from median_home_price_client import get_median_home_price
 from dark_pool_client import get_dark_pool_signal
 from whale_activity import compute_whale_activity
 from ticker_debate import get_ticker_debate
@@ -1990,6 +1991,13 @@ def api_breakeven_inflation():
 def api_skew_index():
     """CBOE SKEW Index tail-risk gauge (FSI L2) -- cached 15min, see skew_index.py."""
     return jsonify(get_skew_index() or {})
+@app.route("/api/median-home-price")
+@login_required
+def api_median_home_price():
+    """Median Sales Price of Houses Sold (FRED MSPUS), absolute housing-price
+    level vs Case-Shiller's index-based appreciation rate (FSI L2) -- cached
+    6h, see median_home_price_client.py."""
+    return jsonify(get_median_home_price() or {})
 
 
 @app.route("/api/dark-pool/<ticker>")
@@ -2803,6 +2811,15 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] skew_index error: {e}")
+        # Median Sales Price of Houses Sold (cached 6h in median_home_price_client.py)
+        try:
+            mhp = get_median_home_price()
+            if mhp:
+                _macro_cache = {**_macro_cache, "MEDIAN_HOME_PRICE": {
+                    "label": "Median Home $", "value": mhp["latest"], "rating": mhp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] median_home_price_client error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,

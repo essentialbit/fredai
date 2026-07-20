@@ -33,6 +33,7 @@ from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
 from copper_gold_ratio import get_copper_gold_ratio
+from t10y3m_spread_client import get_t10y3m_spread
 from labor_participation_client import get_labor_participation
 from u6_unemployment_client import get_u6_unemployment
 from real_interest_rate_client import get_real_interest_rate
@@ -1930,6 +1931,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/t10y3m-spread")
+@login_required
+def api_t10y3m_spread():
+    """3-Month vs 10-Year Treasury yield spread -- the NY Fed's own
+    preferred recession-probability term-spread signal (FSI L3), distinct
+    from the 2s10s spread. Cached 1h, see t10y3m_spread_client.py."""
+    return jsonify(get_t10y3m_spread() or {})
 @app.route("/api/labor-participation")
 @login_required
 def api_labor_participation():
@@ -2903,6 +2911,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # 3M/10Y Treasury term spread -- NY Fed recession-probability signal
+        # (cached 1h in t10y3m_spread_client.py)
+        try:
+            t10y3m = get_t10y3m_spread()
+            if t10y3m:
+                _macro_cache = {**_macro_cache, "T10Y3M": {
+                    "label": "3M/10Y", "value": t10y3m["latest"], "rating": t10y3m["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] t10y3m_spread error: {e}")
         # Labor Force Participation Rate (cached 1h in labor_participation_client.py)
         try:
             lp = get_labor_participation()

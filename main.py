@@ -34,7 +34,30 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from commercial_paper_client import get_commercial_paper
+from gasoline_price_client import get_gasoline_price
+from ci_loan_delinquency_client import get_ci_loan_delinquency
+from commercial_re_delinquency_client import get_commercial_re_delinquency
+from auto_loan_delinquency_client import get_auto_loan_delinquency
+from mortgage_delinquency_client import get_mortgage_delinquency
+from natural_gas_client import get_natural_gas
+from household_debt_service_client import get_household_debt_service
+from federal_debt_gdp_client import get_federal_debt_gdp
+from federal_deficit_client import get_federal_deficit
+from credit_card_delinquency_client import get_credit_card_delinquency
+from t10y3m_spread_client import get_t10y3m_spread
+from labor_participation_client import get_labor_participation
+from u6_unemployment_client import get_u6_unemployment
+from real_interest_rate_client import get_real_interest_rate
+from productivity_client import get_labor_productivity
+from wti_crude_oil_client import get_wti_crude_oil
+from on_rrp_liquidity_client import get_on_rrp_liquidity
+from core_capex_client import get_core_capex_orders
+from gscpi_client import get_gscpi
+from m2_velocity_client import get_m2_velocity
+from business_loans_client import get_business_loan_growth
 from energy_extraction_production_client import get_energy_extraction_production
 from corporate_profits_client import get_corporate_profits
 from tsi_freight_client import get_tsi_freight
@@ -1897,6 +1920,14 @@ def api_correlation():
     })
 
 
+@app.route("/api/vix-term-structure")
+@login_required
+def api_vix_term_structure():
+    """VIX term-structure contango/backwardation regime (FSI L2) -- cached
+    hourly, see vix_term_structure.py."""
+    return jsonify(get_vix_term_structure() or {})
+
+
 @app.route("/api/sector-rotation")
 @login_required
 def api_sector_rotation():
@@ -1922,6 +1953,158 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/commercial-paper")
+@login_required
+def api_commercial_paper():
+    """Commercial paper outstanding -- short-term corporate funding market
+    stress/health signal (FSI L2, FRED COMPOUT) -- cached 1h, see
+    commercial_paper_client.py."""
+    return jsonify(get_commercial_paper() or {})
+@app.route("/api/gasoline-price")
+@login_required
+def api_gasoline_price():
+    """Weekly US retail gasoline price (FRED GASREGW), consumer energy-cost
+    pass-through signal (FSI L2) -- cached 6h, see gasoline_price_client.py."""
+    return jsonify(get_gasoline_price() or {})
+@app.route("/api/ci-loan-delinquency")
+@login_required
+def api_ci_loan_delinquency():
+    """Commercial & Industrial (C&I) business loan delinquency rate (FSI L2)
+    -- cached 6h, see ci_loan_delinquency_client.py."""
+    return jsonify(get_ci_loan_delinquency() or {})
+@app.route("/api/commercial-re-delinquency")
+@login_required
+def api_commercial_re_delinquency():
+    """Commercial real estate loan delinquency rate at all commercial banks
+    (FRED DRCRELEXFACBS) -- business/corporate credit-quality signal (FSI
+    L2), distinct from the household-debt delinquency badges and the
+    bond-market credit-spread badges. Cached 6h, see
+    commercial_re_delinquency_client.py."""
+    return jsonify(get_commercial_re_delinquency() or {})
+@app.route("/api/auto-loan-delinquency")
+@login_required
+def api_auto_loan_delinquency():
+    """Auto loan delinquency rate at all commercial banks (FRED DRALACBS)
+    -- secured-debt household credit-quality signal (FSI L2), distinct
+    from credit card delinquency and mortgage delinquency. Cached 6h, see
+    auto_loan_delinquency_client.py."""
+    return jsonify(get_auto_loan_delinquency() or {})
+@app.route("/api/mortgage-delinquency")
+@login_required
+def api_mortgage_delinquency():
+    """Single-family mortgage delinquency rate at all commercial banks
+    (FRED DRSFRMACBS) -- secured-debt household credit-quality signal
+    (FSI L2), distinct from credit card delinquency, consumer credit
+    volume, and the 30Y mortgage rate. Cached 6h, see
+    mortgage_delinquency_client.py."""
+    return jsonify(get_mortgage_delinquency() or {})
+@app.route("/api/natural-gas")
+@login_required
+def api_natural_gas():
+    """Henry Hub Natural Gas Spot Price (FRED DHHNGSP) -- energy-sector
+    input-cost signal (FSI L2), second leg alongside the WTI crude oil spot
+    badge. Cached 1h, see natural_gas_client.py."""
+    return jsonify(get_natural_gas() or {})
+@app.route("/api/household-debt-service")
+@login_required
+def api_household_debt_service():
+    """Household Debt Service Ratio (FRED TDSP) -- debt payments as % of
+    disposable income, a forward-leading household leverage-burden signal
+    (FSI L2). Cached 6h, see household_debt_service_client.py."""
+    return jsonify(get_household_debt_service() or {})
+@app.route("/api/federal-debt-gdp")
+@login_required
+def api_federal_debt_gdp():
+    """Federal Debt as % of GDP -- fiscal debt-burden stock signal (FSI L2),
+    distinct from the deficit run-rate flow badge. Cached 1h, see
+    federal_debt_gdp_client.py."""
+    return jsonify(get_federal_debt_gdp() or {})
+@app.route("/api/federal-deficit")
+@login_required
+def api_federal_deficit():
+    """U.S. federal fiscal balance (FRED MTSDS133FMS), trailing-12mo rolling
+    deficit run-rate (FSI L2) -- cached 6h, see federal_deficit_client.py."""
+    return jsonify(get_federal_deficit() or {})
+@app.route("/api/credit-card-delinquency")
+@login_required
+def api_credit_card_delinquency():
+    """Credit card delinquency rate at all commercial banks (FRED DRCCLACBS)
+    -- household credit-quality/stress signal (FSI L2), distinct from
+    consumer credit outstanding volume and personal savings rate. Cached 6h,
+    see credit_card_delinquency_client.py."""
+    return jsonify(get_credit_card_delinquency() or {})
+@app.route("/api/t10y3m-spread")
+@login_required
+def api_t10y3m_spread():
+    """3-Month vs 10-Year Treasury yield spread -- the NY Fed's own
+    preferred recession-probability term-spread signal (FSI L3), distinct
+    from the 2s10s spread. Cached 1h, see t10y3m_spread_client.py."""
+    return jsonify(get_t10y3m_spread() or {})
+@app.route("/api/labor-participation")
+@login_required
+def api_labor_participation():
+    """Labor Force Participation Rate (FRED CIVPART) -- workforce-engagement
+    macro badge (FSI L2), distinct from the U-3/U-6 unemployment-rate
+    badges. Cached 1h, see labor_participation_client.py."""
+    return jsonify(get_labor_participation() or {})
+@app.route("/api/u6-unemployment")
+@login_required
+def api_u6_unemployment():
+    """U-6 Broader Unemployment Rate (FRED U6RATE) -- underemployment
+    macro badge (FSI L2), distinct from the headline U-3 rate. Cached 1h,
+    see u6_unemployment_client.py."""
+    return jsonify(get_u6_unemployment() or {})
+@app.route("/api/real-interest-rate")
+@login_required
+def api_real_interest_rate():
+    """10-Year TIPS real yield (FRED DFII10, FSI L2) -- market real interest
+    rate, cached 1h, see real_interest_rate_client.py."""
+    return jsonify(get_real_interest_rate() or {})
+@app.route("/api/labor-productivity")
+@login_required
+def api_labor_productivity():
+    """Nonfarm business sector labor productivity (FRED OPHNFB, FSI L2) --
+    quarterly real output per hour, cached 6h, see productivity_client.py."""
+    return jsonify(get_labor_productivity() or {})
+@app.route("/api/wti-crude-oil")
+@login_required
+def api_wti_crude_oil():
+    """WTI crude oil spot price (FRED DCOILWTICO, FSI L2) -- headline
+    energy-inflation input, cached 1h, see wti_crude_oil_client.py."""
+    return jsonify(get_wti_crude_oil() or {})
+@app.route("/api/on-rrp-liquidity")
+@login_required
+def api_on_rrp_liquidity():
+    """Overnight Reverse Repo facility usage (FRED RRPONTSYD, FSI L2)
+    -- money-market liquidity/collateral-scarcity gauge, cached 1h, see
+    on_rrp_liquidity_client.py."""
+    return jsonify(get_on_rrp_liquidity() or {})
+@app.route("/api/core-capex-orders")
+@login_required
+def api_core_capex_orders():
+    """Core capital goods orders (FRED NEWORDER, nondefense ex-aircraft) --
+    business-investment leading indicator (FSI L2), cached 1h, see
+    core_capex_client.py."""
+    return jsonify(get_core_capex_orders() or {})
+@app.route("/api/gscpi")
+@login_required
+def api_gscpi():
+    """NY Fed Global Supply Chain Pressure Index -- composite supply-chain
+    stress signal (FSI L2/L5). Cached 1h, see gscpi_client.py."""
+    return jsonify(get_gscpi() or {})
+@app.route("/api/m2-velocity")
+@login_required
+def api_m2_velocity():
+    """Velocity of M2 Money Stock (FRED M2V) -- monetary-circulation regime
+    signal (FSI L2) -- cached 6h, see m2_velocity_client.py."""
+    return jsonify(get_m2_velocity() or {})
+@app.route("/api/business-loans")
+@login_required
+def api_business_loans():
+    """C&I loan volume YoY growth (FRED BUSLOANS) -- realized bank
+    credit-creation signal, distinct from the survey-based lending-standards
+    badges (FSI L2). Cached 1h, see business_loans_client.py."""
+    return jsonify(get_business_loan_growth() or {})
 @app.route("/api/energy-extraction-production")
 @login_required
 def api_energy_extraction_production():
@@ -2820,6 +3003,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
 
+        # VIX term-structure regime (cached 1h in vix_term_structure.py)
+        try:
+            vts = get_vix_term_structure()
+            if vts:
+                _macro_cache = {**_macro_cache, "VIX_TERM": {
+                    "label": "VIX Term", "value": vts["front_back_spread_pct"], "rating": vts["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] vix_term_structure error: {e}")
+
         # Copper/Gold "Dr. Copper" regime signal (cached 15min in copper_gold_ratio.py)
         try:
             cg = get_copper_gold_ratio()
@@ -2830,6 +3023,209 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Commercial paper outstanding funding-stress signal (cached 1h in commercial_paper_client.py)
+        try:
+            cp = get_commercial_paper()
+            if cp:
+                _macro_cache = {**_macro_cache, "COMMERCIAL_PAPER": {
+                    "label": "Comm. Paper", "value": cp["outstanding_billions"], "rating": cp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] commercial_paper error: {e}")
+        # Weekly retail gasoline price (cached 6h in gasoline_price_client.py)
+        try:
+            gp = get_gasoline_price()
+            if gp:
+                _macro_cache = {**_macro_cache, "GASOLINE": {
+                    "label": "Gas $/gal", "value": gp["latest"], "rating": gp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] gasoline_price error: {e}")
+        # C&I business loan delinquency rate (cached 6h in ci_loan_delinquency_client.py)
+        try:
+            cild = get_ci_loan_delinquency()
+            if cild:
+                _macro_cache = {**_macro_cache, "CI_LOAN_DELINQUENCY": {
+                    "label": "C&I Delinquency", "value": cild["latest"], "rating": cild["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] ci_loan_delinquency error: {e}")
+        # Commercial real estate loan delinquency rate -- business/corporate
+        # credit-quality signal (cached 6h in commercial_re_delinquency_client.py)
+        try:
+            cred = get_commercial_re_delinquency()
+            if cred:
+                _macro_cache = {**_macro_cache, "CRE_DELINQ": {
+                    "label": "CRE Delinq", "value": cred["latest"], "rating": cred["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] commercial_re_delinquency error: {e}")
+        # Auto loan delinquency rate -- secured-debt household
+        # credit-quality signal (cached 6h in auto_loan_delinquency_client.py)
+        try:
+            ald = get_auto_loan_delinquency()
+            if ald:
+                _macro_cache = {**_macro_cache, "AUTO_LOAN_DELINQ": {
+                    "label": "Auto Delinq", "value": ald["latest"], "rating": ald["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] auto_loan_delinquency error: {e}")
+        # Mortgage delinquency rate -- secured-debt household credit-quality
+        # signal (cached 6h in mortgage_delinquency_client.py)
+        try:
+            md = get_mortgage_delinquency()
+            if md:
+                _macro_cache = {**_macro_cache, "MORTGAGE_DELINQ": {
+                    "label": "Mtg Delinq", "value": md["latest"], "rating": md["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] mortgage_delinquency error: {e}")
+        # Henry Hub Natural Gas Spot Price (cached 1h in natural_gas_client.py)
+        try:
+            ng = get_natural_gas()
+            if ng:
+                _macro_cache = {**_macro_cache, "NATURAL_GAS": {
+                    "label": "Nat Gas", "value": ng["latest"], "rating": ng["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] natural_gas_client error: {e}")
+        # Household Debt Service Ratio (FRED TDSP, cached 6h in household_debt_service_client.py)
+        try:
+            hds = get_household_debt_service()
+            if hds:
+                _macro_cache = {**_macro_cache, "HOUSEHOLD_DEBT_SERVICE": {
+                    "label": "HH Debt Service", "value": hds["latest"], "rating": hds["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] household_debt_service error: {e}")
+        # Federal Debt as % of GDP (fiscal debt-burden stock signal, cached 1h in federal_debt_gdp_client.py)
+        try:
+            fdg = get_federal_debt_gdp()
+            if fdg:
+                _macro_cache = {**_macro_cache, "FEDERAL_DEBT_GDP": {
+                    "label": "Debt/GDP", "value": fdg["latest"], "rating": fdg["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] federal_debt_gdp error: {e}")
+        # Federal Surplus/Deficit fiscal-balance signal (cached 6h in federal_deficit_client.py)
+        try:
+            fd = get_federal_deficit()
+            if fd:
+                _macro_cache = {**_macro_cache, "FEDERAL_DEFICIT": {
+                    "label": "Fed Deficit", "value": fd["rolling_12m_deficit"], "rating": fd["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] federal_deficit error: {e}")
+        # Credit card delinquency rate -- household credit-quality signal
+        # (cached 6h in credit_card_delinquency_client.py)
+        try:
+            ccd = get_credit_card_delinquency()
+            if ccd:
+                _macro_cache = {**_macro_cache, "CC_DELINQ": {
+                    "label": "CC Delinq", "value": ccd["latest"], "rating": ccd["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_card_delinquency error: {e}")
+        # 3M/10Y Treasury term spread -- NY Fed recession-probability signal
+        # (cached 1h in t10y3m_spread_client.py)
+        try:
+            t10y3m = get_t10y3m_spread()
+            if t10y3m:
+                _macro_cache = {**_macro_cache, "T10Y3M": {
+                    "label": "3M/10Y", "value": t10y3m["latest"], "rating": t10y3m["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] t10y3m_spread error: {e}")
+        # Labor Force Participation Rate (cached 1h in labor_participation_client.py)
+        try:
+            lp = get_labor_participation()
+            if lp:
+                _macro_cache = {**_macro_cache, "LABOR_PARTICIPATION": {
+                    "label": "Labor Participation", "value": lp["latest_pct"], "rating": lp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] labor_participation error: {e}")
+        # U-6 Broader Unemployment Rate (cached 1h in u6_unemployment_client.py)
+        try:
+            u6 = get_u6_unemployment()
+            if u6:
+                _macro_cache = {**_macro_cache, "U6_UNEMPLOYMENT": {
+                    "label": "U-6 Unemployment", "value": u6["latest_pct"], "rating": u6["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] u6_unemployment error: {e}")
+        # Real interest rate -- 10Y TIPS yield (cached 1h in real_interest_rate_client.py)
+        try:
+            rir = get_real_interest_rate()
+            if rir:
+                _macro_cache = {**_macro_cache, "REAL_RATE": {
+                    "label": "Real Rate", "value": rir["latest"], "rating": rir["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] real_interest_rate error: {e}")
+        # Labor productivity -- unit-labor-cost inflation pressure gauge (cached 6h in productivity_client.py)
+        try:
+            prod = get_labor_productivity()
+            if prod:
+                _macro_cache = {**_macro_cache, "PRODUCTIVITY": {
+                    "label": "Productivity", "value": prod["latest"], "rating": prod["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] productivity error: {e}")
+        # WTI crude oil spot price -- headline energy-inflation input (cached 1h in wti_crude_oil_client.py)
+        try:
+            wti = get_wti_crude_oil()
+            if wti:
+                _macro_cache = {**_macro_cache, "WTI_OIL": {
+                    "label": "WTI Crude", "value": wti["latest"], "rating": wti["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] wti_crude_oil error: {e}")
+        # ON RRP facility usage -- money-market liquidity gauge (cached 1h in on_rrp_liquidity_client.py)
+        try:
+            rrp = get_on_rrp_liquidity()
+            if rrp:
+                _macro_cache = {**_macro_cache, "ON_RRP": {
+                    "label": "ON RRP", "value": rrp["latest"], "rating": rrp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] on_rrp_liquidity error: {e}")
+        # Core capital goods orders (FRED NEWORDER, cached 1h in core_capex_client.py)
+        try:
+            cx = get_core_capex_orders()
+            if cx:
+                _macro_cache = {**_macro_cache, "CORE_CAPEX": {
+                    "label": "Core Capex", "value": cx["latest"], "rating": cx["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] core_capex_client error: {e}")
+        # NY Fed Global Supply Chain Pressure Index (cached 1h in gscpi_client.py)
+        try:
+            gscpi = get_gscpi()
+            if gscpi:
+                _macro_cache = {**_macro_cache, "GSCPI": {
+                    "label": "Supply Chain", "value": gscpi["latest"], "rating": gscpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] gscpi_client error: {e}")
+        # Velocity of M2 Money Stock -- monetary-circulation regime signal (cached 6h)
+        try:
+            m2v = get_m2_velocity()
+            if m2v:
+                _macro_cache = {**_macro_cache, "M2_VELOCITY": {
+                    "label": "M2 Velocity", "value": m2v["latest"], "rating": m2v["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] m2_velocity_client error: {e}")
+        # C&I loan volume YoY growth -- realized credit-cycle signal (cached 1h)
+        try:
+            bl = get_business_loan_growth()
+            if bl:
+                _macro_cache = {**_macro_cache, "BUSINESS_LOANS": {
+                    "label": "C&I Loans", "value": bl["yoy_growth_pct"], "rating": bl["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] business_loans_client error: {e}")
         # Oil & Gas Extraction Industrial Production (cached 1h in energy_extraction_production_client.py)
         try:
             eep = get_energy_extraction_production()

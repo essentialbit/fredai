@@ -41,6 +41,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from stablecoin_flow import get_stablecoin_flow
 from empire_state_manufacturing_client import get_empire_state
 from payrolls import get_payrolls
 from ppi_client import get_ppi
@@ -2035,6 +2036,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/stablecoin-flow")
+@login_required
+def api_stablecoin_flow():
+    """USDT+USDC combined market-cap velocity -- crypto systemic liquidity
+    leading indicator (FSI L5). Cached 30min, see stablecoin_flow.py."""
+    return jsonify(get_stablecoin_flow() or {})
 @app.route("/api/empire-state-manufacturing")
 @login_required
 def api_empire_state_manufacturing():
@@ -3217,6 +3224,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Stablecoin net issuance flow (cached 30min in stablecoin_flow.py)
+        try:
+            sf = get_stablecoin_flow()
+            if sf:
+                _macro_cache = {**_macro_cache, "STABLECOIN_FLOW": {
+                    "label": "Stable Flow", "value": sf["combined_cap_usd"], "rating": sf["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] stablecoin_flow error: {e}")
         # Empire State Manufacturing Survey diffusion index (cached 1h in
         # empire_state_manufacturing_client.py)
         try:

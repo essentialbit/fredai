@@ -137,11 +137,13 @@ from memory_store import (
     get_latest_short_interest,
     get_recent_insider_transactions,
     get_layout_prefs, save_layout_prefs,
+    get_latest_central_bank_delta,
     insert_alert,
     get_optimized_params,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
+from central_bank_client import refresh_central_bank_deltas
 from technical_alerts import run_technical_alerts, get_technicals
 from graph_engine import generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves, get_ticker_network
@@ -2607,6 +2609,14 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/central-bank/latest-delta")
+@login_required
+def api_central_bank_latest_delta():
+    """Paragraph/word-level diff of the most recent FOMC statement against
+    the one before it, plus a sentiment shift on just the changed text
+    (FSI L4). Cache-only -- job_central_bank_refresh keeps this warm."""
+    bank = request.args.get("bank", "Fed")
+    return jsonify(get_latest_central_bank_delta(bank))
 @app.route("/api/earnings-lean/<ticker>")
 @login_required
 def api_earnings_lean(ticker):
@@ -4137,6 +4147,17 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_central_bank_refresh():
+        """Check for a new FOMC statement daily (FSI L4). Idempotent --
+        refresh_central_bank_deltas() only fetches meeting dates that have
+        already happened and aren't stored yet, so a daily cadence is just
+        a cheap no-op on the ~358 days/year without a fresh statement."""
+        try:
+            results = refresh_central_bank_deltas("Fed")
+            if results:
+                print(f"[CentralBank] Fetched {len(results)} new FOMC statement delta(s)")
+        except Exception as e:
+            print(f"[CentralBank] Refresh error: {e}")
     def job_earnings_history_refresh():
         """Refresh EPS beat/miss history weekly, scoped to portfolio + watchlist
         symbols with an earnings print due in the next 30 days (reuses the
@@ -4286,6 +4307,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_central_bank_refresh, "cron", hour=19, minute=30, id="central_bank")
     scheduler.add_job(job_earnings_history_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="earnings_history")
     scheduler.add_job(job_param_optimizer, "cron", hour=7, minute=45, id="param_optimizer")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")

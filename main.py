@@ -141,6 +141,7 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    insert_institutional_holdings, get_institutional_holdings_for_symbol,
     insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
     insert_alert,
@@ -162,6 +163,7 @@ from finviz_client import refresh_short_interest
 from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from sec_13f_client import fetch_13f_holdings, MANAGERS as INSTITUTIONAL_MANAGERS
 from analyst_data import refresh_analyst_ratings, get_analyst_summary
 from sec_8k_client import fetch_current_8k_filings
 from earnings_predictor import refresh_earnings_history, predict_next_earnings_lean
@@ -2679,6 +2681,13 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/institutional/<ticker>")
+@login_required
+def api_institutional_holdings(ticker):
+    """Which curated institutional managers (Berkshire, Renaissance, etc.)
+    currently hold this ticker per their latest SEC 13F-HR filing (FSI L4)."""
+    holdings = get_institutional_holdings_for_symbol(ticker.upper())
+    return jsonify({"ticker": ticker.upper(), "holdings": holdings})
 @app.route("/api/analyst-ratings/<ticker>")
 @login_required
 def api_analyst_ratings(ticker):
@@ -4276,6 +4285,18 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_institutional_holdings_refresh():
+        """Refresh curated managers' latest SEC 13F-HR holdings weekly --
+        13F is quarterly so daily/hourly cadence would just re-fetch the same
+        filing (FSI L4)."""
+        try:
+            total_new = 0
+            for manager, cik in INSTITUTIONAL_MANAGERS.items():
+                holdings = fetch_13f_holdings(manager, cik, limit_holdings=25)
+                total_new += insert_institutional_holdings(holdings)
+            print(f"[SEC13F] Institutional holdings refreshed — {total_new} new rows")
+        except Exception as e:
+            print(f"[SEC13F] Institutional holdings refresh error: {e}")
     def job_analyst_ratings_refresh():
         """Refresh yfinance upgrade/downgrade history daily for portfolio +
         watchlist symbols (FSI L2)."""
@@ -4493,6 +4514,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_institutional_holdings_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="institutional_holdings")
     scheduler.add_job(job_trends_refresh, "cron", hour=8, minute=0, id="trends_interest")
     scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=7, minute=45, id="analyst_ratings")
     scheduler.add_job(job_sec_8k_refresh, "interval", minutes=10, id="sec_8k", jitter=60)

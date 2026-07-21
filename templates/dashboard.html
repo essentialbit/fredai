@@ -2325,9 +2325,11 @@ html[data-tier="micro"] #ov-globe-stage {
         <span>Autogenerating equity analyst report via Fred AI research stack...</span>
       </div>
       <div id="analyst-report-content" style="display:none"></div>
+      <div id="analyst-debate-content" style="display:none"></div>
     </div>
     <div class="analyst-footer">
       <button class="login-btn" id="btn-email-report" onclick="emailAnalystReport()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0 6px 0 0;display:none">Email Report</button>
+      <button class="login-btn" id="btn-toggle-debate" onclick="toggleMarketDebate()" style="background:#a78bfa;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Bull/Bear Debate</button>
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
     </div>
@@ -4361,7 +4363,7 @@ function updateIdxBar(q) {
 }
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
-const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','normal':'var(--green)','elevated':'var(--yellow)','high_stress':'var(--red)','crisis':'var(--red)','complacent_tight':'var(--green)','weak':'var(--red)','strong':'var(--green)','hold':'var(--t3)','cut 25bp':'var(--green)','cut >25bp':'var(--green)','hike 25bp':'var(--red)','hike >25bp':'var(--red)','backwardation':'var(--red)','contango':'var(--green)','flat':'var(--t3)','stress':'var(--red)','spike':'var(--yellow)','inverted':'var(--red)','improving':'var(--green)','deteriorating':'var(--red)','stable':'var(--t3)','tightening':'var(--green)','loosening':'var(--red)'};
+const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','normal':'var(--green)','elevated':'var(--yellow)','high_stress':'var(--red)','crisis':'var(--red)','complacent_tight':'var(--green)','weak':'var(--red)','strong':'var(--green)','hold':'var(--t3)','cut 25bp':'var(--green)','cut >25bp':'var(--green)','hike 25bp':'var(--red)','hike >25bp':'var(--red)','backwardation':'var(--red)','contango':'var(--green)','flat':'var(--t3)','widening':'var(--red)','narrowing':'var(--green)','stress':'var(--red)','spike':'var(--yellow)','inverted':'var(--red)','improving':'var(--green)','deteriorating':'var(--red)','stable':'var(--t3)','tightening':'var(--green)','loosening':'var(--red)'};
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};
@@ -4906,6 +4908,10 @@ function renderWatchlist(items,interests){
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
     const anomaly=volumeAnomalyCache[sym];
     const anomalyBadge=anomaly?`<span title="${esc(anomaly.count+' signal+news mentions today, z-score '+anomaly.z_score+' vs 30d baseline')}" style="font-size:7px;background:${anomaly.level==='anomalous'?'#3c1a1a':'#3c2f1a'};color:${anomaly.level==='anomalous'?'var(--red)':'#f5a623'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">▲VOL</span>`:'';
+    const onchain=w.onchain;
+    const onchainDir=onchain&&onchain.hash_rate?onchain.hash_rate.direction:null;
+    const onchainClr=onchainDir==='rising'?'#00ff88':onchainDir==='falling'?'#ff3b5c':'#3d5a73';
+    const onchainBadge=onchain?`<span title="${esc('Hash rate: '+onchainDir+' | Active addresses: '+(onchain.active_addresses?onchain.active_addresses.direction:'--'))}" style="font-size:7px;background:#1a2a1c;color:${onchainClr};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">⛓${onchainDir||'--'}</span>`:'';
     let jobBadge='';
     if(JOB_LISTINGS_TRACKED.includes(sym)){
       const jl=jobListingsCache[sym];
@@ -4944,7 +4950,7 @@ function renderWatchlist(items,interests){
         dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
       }
     }
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -6045,10 +6051,16 @@ async function openAnalystReport(ticker) {
   const title = g('analyst-modal-title');
   const loading = g('analyst-loading');
   const content = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
 
   title.textContent = `EQUITY RESEARCH: ${ticker}`;
   loading.style.display = 'flex';
   content.style.display = 'none';
+  debateContent.style.display = 'none';
+  debateContent.innerHTML = '';
+  window._marketDebateLoaded = false;
+  const btnDebate = g('btn-toggle-debate');
+  if (btnDebate) btnDebate.textContent = 'Bull/Bear Debate';
   modal.classList.add('open');
 
   try {
@@ -6079,6 +6091,58 @@ function closeAnalystModal() {
   const btnEmail = g('btn-email-report');
   if (btnEmail) btnEmail.style.display = 'none';
   g('analyst-modal').classList.remove('open');
+}
+
+async function toggleMarketDebate() {
+  const ticker = window._activeAnalystTicker;
+  if (!ticker) return;
+
+  const reportContent = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
+  const btnDebate = g('btn-toggle-debate');
+  const loading = g('analyst-loading');
+
+  const showingDebate = debateContent.style.display !== 'none';
+  if (showingDebate) {
+    debateContent.style.display = 'none';
+    reportContent.style.display = 'block';
+    btnDebate.textContent = 'Bull/Bear Debate';
+    return;
+  }
+
+  reportContent.style.display = 'none';
+  debateContent.style.display = 'block';
+  btnDebate.textContent = 'Back to Report';
+
+  if (window._marketDebateLoaded) return;
+
+  loading.style.display = 'flex';
+  debateContent.innerHTML = '';
+  try {
+    const r = await fetch(`/api/market-debate/${ticker}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+
+    if (r.ok && d.verdict) {
+      window._marketDebateLoaded = true;
+      const conf = Math.round((d.confidence || 0) * 100);
+      const html = `
+        <h3>🐂 Bull Case</h3>
+        <div>${window.marked && window.marked.parse ? window.marked.parse(d.bull_case || '') : esc(d.bull_case || '')}</div>
+        <h3>🐻 Bear Case</h3>
+        <div>${window.marked && window.marked.parse ? window.marked.parse(d.bear_case || '') : esc(d.bear_case || '')}</div>
+        <h3>⚖️ Arbiter Verdict <span style="font-size:11px;color:var(--t3);font-weight:normal">(confidence ${conf}%${d.cached ? ', cached ' + esc(d.date) : ''})</span></h3>
+        <div>${window.marked && window.marked.parse ? window.marked.parse(d.verdict) : esc(d.verdict)}</div>
+        <p style="font-size:11px;color:var(--t3);margin-top:16px">Not financial advice — synthesized from Fred's own tracked signals (sentiment, insider filings, technicals, short interest, backtest accuracy).</p>
+      `;
+      debateContent.innerHTML = html;
+    } else {
+      debateContent.innerHTML = `<div class="warn">Error: ${esc(d.error || 'Failed to generate debate.')}</div>`;
+    }
+  } catch (e) {
+    loading.style.display = 'none';
+    debateContent.innerHTML = `<div class="warn">Network error requesting Fred AI debate.</div>`;
+  }
 }
 
 function printAnalystReport() {

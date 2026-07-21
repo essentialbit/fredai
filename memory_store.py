@@ -236,6 +236,14 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS google_trends_interest (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            keyword TEXT NOT NULL,
+            interest_score REAL NOT NULL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS ticker_debates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -283,6 +291,78 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS hypotheses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            thesis TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            horizon_days INTEGER NOT NULL,
+            price_at_creation REAL,
+            benchmark_at_creation REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            resolves_at DATETIME NOT NULL,
+            resolved_at DATETIME,
+            price_at_resolution REAL,
+            benchmark_at_resolution REAL,
+            actual_return REAL,
+            benchmark_return REAL,
+            outcome TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS analyst_ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            firm TEXT,
+            action TEXT,
+            from_grade TEXT,
+            to_grade TEXT,
+            price_target REAL,
+            prior_price_target REAL,
+            graded_at TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, firm, graded_at, action)
+        );
+
+        CREATE TABLE IF NOT EXISTS filing_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT,
+            company TEXT,
+            cik TEXT,
+            accession_number TEXT NOT NULL,
+            filed_date TEXT,
+            item_codes TEXT,
+            item_summary TEXT,
+            signal_type TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(accession_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS central_bank_statements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bank TEXT NOT NULL,
+            meeting_date TEXT NOT NULL,
+            prior_meeting_date TEXT,
+            raw_text TEXT,
+            added_paragraphs TEXT,
+            removed_paragraphs TEXT,
+            changed_paragraphs TEXT,
+            sentiment_delta REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(bank, meeting_date)
+        );
+
+        CREATE TABLE IF NOT EXISTS earnings_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            earnings_date TEXT NOT NULL,
+            eps_estimate REAL,
+            reported_eps REAL,
+            surprise_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, earnings_date)
+        );
+
         CREATE TABLE IF NOT EXISTS short_volume_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             symbol TEXT NOT NULL,
@@ -310,6 +390,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
         CREATE INDEX IF NOT EXISTS idx_options_symbol ON options_data(symbol, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_hypotheses_ticker ON hypotheses(ticker);
+        CREATE INDEX IF NOT EXISTS idx_hypotheses_resolves_at ON hypotheses(resolves_at);
+        CREATE INDEX IF NOT EXISTS idx_trends_interest_ticker ON google_trends_interest(ticker, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_analyst_ratings_ticker ON analyst_ratings(ticker, graded_at);
+        CREATE INDEX IF NOT EXISTS idx_central_bank_meeting ON central_bank_statements(bank, meeting_date);
+        CREATE INDEX IF NOT EXISTS idx_earnings_history_ticker ON earnings_history(ticker, earnings_date);
 
         CREATE TABLE IF NOT EXISTS job_listings_daily (
             ticker TEXT NOT NULL,
@@ -1519,6 +1605,25 @@ def get_latest_options_data(symbol: str) -> dict | None:
         return dict(row) if row else None
 
 
+# ── GOOGLE TRENDS SEARCH INTEREST ─────────────────────────────────────────────
+
+def insert_trends_interest(ticker: str, keyword: str, interest_score: float):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO google_trends_interest (ticker, keyword, interest_score) VALUES (?, ?, ?)",
+            (ticker, keyword, interest_score)
+        )
+
+
+def get_latest_search_interest(ticker: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM google_trends_interest WHERE ticker=? ORDER BY fetched_at DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 # ── FINRA REG SHO SHORT VOLUME ────────────────────────────────────────────────
 
 def insert_short_volume(symbol: str, trade_date: str, short_volume: float, total_volume: float, short_volume_pct: float):
@@ -1568,6 +1673,32 @@ def get_options_data_prior_pair(symbol: str) -> tuple[dict, dict] | None:
     if len(rows) < 2:
         return None
     return dict(rows[0]), dict(rows[1])
+
+
+def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
+    """Latest daily search-interest reading vs the trailing average of up to
+    `lookback` prior readings, expressed as a % velocity. Requires at least
+    two stored readings (no fabricated baseline off a single point)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT interest_score FROM google_trends_interest WHERE ticker=? "
+            "ORDER BY fetched_at DESC LIMIT ?",
+            (ticker, lookback + 1)
+        ).fetchall()
+    if len(rows) < 2:
+        return None
+    latest = rows[0]["interest_score"]
+    prior = [r["interest_score"] for r in rows[1:]]
+    avg_prior = sum(prior) / len(prior)
+    if avg_prior <= 0:
+        return None
+    velocity_pct = (latest - avg_prior) / avg_prior * 100
+    return {
+        "ticker": ticker,
+        "latest": latest,
+        "avg_prior": round(avg_prior, 1),
+        "velocity_pct": round(velocity_pct, 1),
+    }
 
 
 def insert_ticker_debate(ticker: str, bull: dict, bear: dict, verdict: dict):
@@ -1700,6 +1831,269 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── HYPOTHESIS TESTING LOOP (FSI L4) ────────────────────────────────────────
+def insert_hypothesis(ticker: str, thesis: str, direction: str, confidence: float,
+                       horizon_days: int, price_at_creation: float | None,
+                       benchmark_at_creation: float | None) -> int:
+    resolves_at = datetime.utcnow() + timedelta(days=horizon_days)
+    with get_conn() as conn:
+        cur = conn.execute(
+            """INSERT INTO hypotheses
+               (ticker, thesis, direction, confidence, horizon_days,
+                price_at_creation, benchmark_at_creation, resolves_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (ticker, thesis, direction, confidence, horizon_days,
+             price_at_creation, benchmark_at_creation, resolves_at.isoformat()),
+        )
+        return cur.lastrowid
+
+
+def count_hypotheses_since(since: datetime) -> int:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM hypotheses WHERE created_at>=?", (since.isoformat(),)
+        ).fetchone()
+    return row[0]
+
+
+def get_open_hypothesis_tickers() -> set[str]:
+    """Tickers with an unresolved hypothesis -- used to avoid stacking a new
+    thesis on top of one that hasn't played out yet."""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT DISTINCT ticker FROM hypotheses WHERE resolved_at IS NULL").fetchall()
+    return {r[0] for r in rows}
+
+
+def get_due_hypotheses() -> list[dict]:
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM hypotheses WHERE resolved_at IS NULL AND resolves_at<=?",
+            (now,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def resolve_hypothesis(hypothesis_id: int, price_at_resolution: float,
+                        benchmark_at_resolution: float | None, outcome: str,
+                        actual_return: float | None, benchmark_return: float | None):
+    with get_conn() as conn:
+        conn.execute(
+            """UPDATE hypotheses SET resolved_at=?, price_at_resolution=?,
+               benchmark_at_resolution=?, outcome=?, actual_return=?, benchmark_return=?
+               WHERE id=?""",
+            (datetime.utcnow().isoformat(), price_at_resolution, benchmark_at_resolution,
+             outcome, actual_return, benchmark_return, hypothesis_id),
+        )
+
+
+def get_hypotheses(status: str = "all", limit: int = 100) -> list[dict]:
+    query = "SELECT * FROM hypotheses"
+    if status == "open":
+        query += " WHERE resolved_at IS NULL"
+    elif status == "resolved":
+        query += " WHERE resolved_at IS NOT NULL"
+    query += " ORDER BY created_at DESC LIMIT ?"
+    with get_conn() as conn:
+        rows = conn.execute(query, (limit,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_hypothesis_calibration() -> dict:
+    """Rolling accuracy by confidence bucket: is Fred's stated 0.8 confidence
+    actually right ~80% of the time? Distinct from backtest's raw per-signal
+    accuracy -- this grades Fred's own calibration, not a signal source."""
+    buckets = [(0.0, 0.5), (0.5, 0.65), (0.65, 0.8), (0.8, 0.95), (0.95, 1.01)]
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT confidence, outcome FROM hypotheses WHERE resolved_at IS NOT NULL"
+        ).fetchall()
+    rows = [dict(r) for r in rows]
+    result = []
+    for lo, hi in buckets:
+        in_bucket = [r for r in rows if lo <= r["confidence"] < hi]
+        if not in_bucket:
+            continue
+        correct = sum(1 for r in in_bucket if r["outcome"] == "correct")
+        result.append({
+            "confidence_range": f"{lo:.2f}-{hi:.2f}",
+            "total": len(in_bucket),
+            "correct": correct,
+            "actual_accuracy_pct": round(correct / len(in_bucket) * 100, 1),
+        })
+    return {
+        "total_resolved": len(rows),
+        "overall_accuracy_pct": (
+            round(sum(1 for r in rows if r["outcome"] == "correct") / len(rows) * 100, 1)
+            if rows else None
+        ),
+        "buckets": result,
+    }
+
+
+# ── ANALYST RATINGS ───────────────────────────────────────────────────────────
+
+def insert_analyst_ratings(ratings: list[dict]) -> int:
+    """Idempotent on (ticker, firm, graded_at, action) -- safe to call
+    repeatedly with overlapping upgrade/downgrade history."""
+    if not ratings:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO analyst_ratings
+                (ticker, firm, action, from_grade, to_grade, price_target, prior_price_target, graded_at)
+            VALUES (:ticker, :firm, :action, :from_grade, :to_grade, :price_target, :prior_price_target, :graded_at)
+        """, ratings)
+        return conn.total_changes - before
+
+
+def get_recent_analyst_ratings(ticker: str, days: int = 90, limit: int = 10) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM analyst_ratings WHERE ticker=? AND graded_at >= ? ORDER BY graded_at DESC LIMIT ?",
+            (ticker, since, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── FILING EVENTS (SEC 8-K real-time monitor) ─────────────────────────────────
+
+def insert_filing_events(filings: list[dict]) -> int:
+    """Idempotent on accession_number — safe to call repeatedly against the
+    same rolling feed window. Returns rows actually inserted."""
+    if not filings:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO filing_events
+                (ticker, company, cik, accession_number, filed_date,
+                 item_codes, item_summary, signal_type)
+            VALUES (:ticker, :company, :cik, :accession_number, :filed_date,
+                    :item_codes, :item_summary, :signal_type)
+        """, filings)
+        return conn.total_changes - before
+
+
+def get_recent_filing_events(ticker: str, days: int = 30, material_only: bool = False) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    query = "SELECT * FROM filing_events WHERE ticker=? AND filed_date >= ?"
+    params = [ticker, since]
+    if material_only:
+        query += " AND signal_type='material'"
+    query += " ORDER BY filed_date DESC"
+    with get_conn() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── CENTRAL BANK STATEMENT DELTAS ────────────────────────────────────────────
+
+def save_central_bank_statement(bank: str, meeting_date: str, prior_meeting_date: str | None,
+                                 raw_text: str, delta: dict) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO central_bank_statements
+                (bank, meeting_date, prior_meeting_date, raw_text, added_paragraphs,
+                 removed_paragraphs, changed_paragraphs, sentiment_delta, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(bank, meeting_date) DO UPDATE SET
+                prior_meeting_date=excluded.prior_meeting_date,
+                raw_text=excluded.raw_text,
+                added_paragraphs=excluded.added_paragraphs,
+                removed_paragraphs=excluded.removed_paragraphs,
+                changed_paragraphs=excluded.changed_paragraphs,
+                sentiment_delta=excluded.sentiment_delta,
+                fetched_at=CURRENT_TIMESTAMP
+        """, (
+            bank, meeting_date, prior_meeting_date, raw_text,
+            json.dumps(delta.get("added", [])),
+            json.dumps(delta.get("removed", [])),
+            json.dumps(delta.get("changed", [])),
+            delta.get("sentiment_delta"),
+        ))
+
+
+def _hydrate_central_bank_row(row) -> dict:
+    d = dict(row)
+    d["added_paragraphs"] = json.loads(d["added_paragraphs"] or "[]")
+    d["removed_paragraphs"] = json.loads(d["removed_paragraphs"] or "[]")
+    d["changed_paragraphs"] = json.loads(d["changed_paragraphs"] or "[]")
+    return d
+
+
+def get_central_bank_statement(bank: str, meeting_date: str | None) -> dict | None:
+    if not meeting_date:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? AND meeting_date=?",
+            (bank, meeting_date),
+        ).fetchone()
+    return _hydrate_central_bank_row(row) if row else None
+
+
+def get_latest_central_bank_delta(bank: str = "Fed") -> dict:
+    """Cache-only -- the weekly-ish scheduled job keeps this warm, this
+    never triggers a live fetch."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? ORDER BY meeting_date DESC LIMIT 1",
+            (bank,),
+        ).fetchone()
+    if not row:
+        return {"bank": bank, "status": "no_data"}
+    return _hydrate_central_bank_row(row)
+
+
+# ── EARNINGS HISTORY (beat/miss tracking) ──────────────────────────────────────
+
+def insert_earnings_history(rows: list[dict]) -> int:
+    """Idempotent on (ticker, earnings_date) -- safe to call repeatedly with
+    overlapping quarter history. Returns rows actually inserted."""
+    if not rows:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO earnings_history
+                (ticker, earnings_date, eps_estimate, reported_eps, surprise_pct)
+            VALUES (:ticker, :earnings_date, :eps_estimate, :reported_eps, :surprise_pct)
+        """, rows)
+        return conn.total_changes - before
+
+
+def get_earnings_history(ticker: str, limit: int = 12) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM earnings_history WHERE ticker=? ORDER BY earnings_date DESC LIMIT ?",
+            (ticker, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_earnings_beat_rate(ticker: str, limit: int = 12) -> dict | None:
+    """Beat-rate base rate over the last `limit` reported quarters, e.g.
+    'beat in 9 of last 12 quarters, average surprise +4.2%'. Returns None
+    (no fabricated 0%) when there's no stored history for this ticker."""
+    history = get_earnings_history(ticker, limit=limit)
+    if not history:
+        return None
+    beats = sum(1 for h in history if (h["surprise_pct"] or 0) > 0)
+    misses = sum(1 for h in history if (h["surprise_pct"] or 0) < 0)
+    surprises = [h["surprise_pct"] for h in history if h["surprise_pct"] is not None]
+    return {
+        "quarters": len(history),
+        "beats": beats,
+        "misses": misses,
+        "inline": len(history) - beats - misses,
+        "beat_rate_pct": round(beats * 100.0 / len(history), 1),
+        "avg_surprise_pct": round(sum(surprises) / len(surprises), 2) if surprises else None,
+    }
 
 
 def record_job_listings_daily(ticker: str, date: str, open_roles: int) -> bool:

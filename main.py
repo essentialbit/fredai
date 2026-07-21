@@ -93,7 +93,7 @@ from continuing_claims_client import get_continuing_claims
 from jolts_openings_client import get_jolts_openings
 from retail_sales_client import get_retail_sales
 from durable_goods_client import get_durable_goods_orders
-from credit_spread_client import get_credit_spread
+from credit_spread_client import get_credit_spread as get_baa10y_credit_spread
 from core_pce_client import get_core_pce
 from industrial_production_client import get_industrial_production
 from fed_funds_futures_client import get_fed_funds_expectations
@@ -2385,12 +2385,12 @@ def api_durable_goods():
     """Durable Goods New Orders (FRED DGORDER) -- forward-looking business
     capex signal (FSI L2) -- cached 1h, see durable_goods_client.py."""
     return jsonify(get_durable_goods_orders() or {})
-@app.route("/api/credit-spread")
+@app.route("/api/credit-spread-baa10y")
 @login_required
-def api_credit_spread():
+def api_credit_spread_baa10y():
     """Moody's Baa Corporate Yield Spread (BAA10Y) -- investment-grade
     credit stress gauge (FSI L3) -- cached 1h, see credit_spread_client.py."""
-    return jsonify(get_credit_spread() or {})
+    return jsonify(get_baa10y_credit_spread() or {})
 @app.route("/api/core-pce")
 @login_required
 def api_core_pce():
@@ -3701,13 +3701,13 @@ def job_market_refresh():
             print(f"[Job] durable_goods_client error: {e}")
         # Moody's Baa/10Y credit spread -- investment-grade credit stress (cached 1h in credit_spread_client.py)
         try:
-            cs = get_credit_spread()
+            cs = get_baa10y_credit_spread()
             if cs:
-                _macro_cache = {**_macro_cache, "CREDIT_SPREAD": {
+                _macro_cache = {**_macro_cache, "BAA10Y_SPREAD": {
                     "label": "Baa-10Y", "value": cs["latest"], "rating": cs["regime"],
                 }}
         except Exception as e:
-            print(f"[Job] credit_spread error: {e}")
+            print(f"[Job] credit_spread_client error: {e}")
         # Core PCE Price Index -- Fed's actual inflation-target gauge (cached 1h in core_pce_client.py)
         try:
             pce = get_core_pce()

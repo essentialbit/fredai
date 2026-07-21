@@ -1915,7 +1915,7 @@ def api_ai_universe():
 @login_required
 def api_correlation():
     """Latest 30-day/90-day rolling cross-asset correlation matrix (FSI L2)."""
-    window = request.args.get("window", "30", type=int)
+    window = request.args.get("window", 30, type=int)
     if window not in (30, 90):
         return jsonify({"error": "window must be 30 or 90"}), 400
     pairs = get_latest_correlation_matrix(window)
@@ -2601,7 +2601,7 @@ def api_save_layout():
 @login_required
 def api_insider_transactions(ticker):
     """Recent SEC Form 4 open-market insider buy/sell transactions (FSI L2)."""
-    days = request.args.get("days", "90", type=int)
+    days = request.args.get("days", 90, type=int)
     txns = get_recent_insider_transactions(ticker.upper(), days=days, signal_only=True)
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 

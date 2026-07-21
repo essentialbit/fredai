@@ -39,6 +39,7 @@ from fear_greed_client import fetch_fear_greed
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from payrolls import get_payrolls
 from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
 from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
@@ -2002,6 +2003,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/payrolls")
+@login_required
+def api_payrolls():
+    """Nonfarm Payrolls (FRED PAYEMS) headline labor-market print/trend
+    signal (FSI L2) -- cached 1h, see payrolls.py."""
+    return jsonify(get_payrolls() or {})
 @app.route("/api/ppi")
 @login_required
 def api_ppi():
@@ -3155,6 +3162,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Nonfarm Payrolls headline print/trend (cached 1h in payrolls.py)
+        try:
+            pr = get_payrolls()
+            if pr:
+                _macro_cache = {**_macro_cache, "PAYROLLS": {
+                    "label": "NFP", "value": pr["change_k"], "rating": pr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] payrolls error: {e}")
         # Producer Price Index Final Demand -- upstream wholesale-inflation
         # leading indicator (cached 1h in ppi_client.py)
         try:

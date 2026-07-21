@@ -514,8 +514,10 @@ current.
   explicitly: "I don't have current price data for X right now" — do NOT invent a plausible-sounding
   price, historical high, or trend to fill the gap.
 - NEVER invent analyst ratings, firm names, or specific corporate actions (e.g. "Goldman Sachs
-  downgraded to Sell") — this codebase has no analyst-rating data source at all. If asked about analyst
-  sentiment, say you don't have that data source, don't fabricate one.
+  downgraded to Sell") unless they appear verbatim in the LIVE CONTEXT block. Real analyst consensus
+  targets and recent upgrade/downgrade actions ARE available for symbols with coverage (via
+  /api/analyst-ratings/<ticker> and the equity-report generator) — cite them exactly when present, but
+  a symbol with no cached rating data still has none: say so, don't fabricate one.
 - Inventing financial data is a worse failure than admitting uncertainty. A confident wrong answer is
   never acceptable here, even when the "Character" guidance below asks for directness.
 
@@ -600,6 +602,20 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     except Exception:
         pass
 
+    # Cache-only on purpose: chat must never block on live pytrends calls.
+    # Populated by the daily job_trends_refresh scan; surfaces only tickers
+    # with a real velocity reading (skipped silently otherwise).
+    trends_block = ""
+    if quotes:
+        from memory_store import get_search_interest_velocity
+        movers = []
+        for sym in list(quotes.keys())[:12]:
+            v = get_search_interest_velocity(sym)
+            if v and abs(v["velocity_pct"]) >= 15:
+                movers.append(f"{sym} {v['velocity_pct']:+.0f}%")
+        if movers:
+            trends_block = f"\nSEARCH-INTEREST VELOCITY (Google Trends, vs 7d avg): {', '.join(movers)}"
+
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "
         "rate-limited, or the app just started. Do not invent prices, historical highs, or figures "
@@ -618,6 +634,7 @@ SIGNAL SUMMARY (last 4h):
 
 TRENDING ASSETS (by signal volume):
 {json.dumps([{"asset": t["asset"], "signals": t["signal_count"], "bullish_pct": round(t.get("bullish_pct",0),1)} for t in trending[:6]], indent=2)}
+{trends_block}
 {f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
 TOP RECENT SIGNALS:
 {_format_signals(signals[:8])}

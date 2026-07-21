@@ -35,6 +35,7 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from yield_curve import compute_yield_curve_spread
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
+from hypothesis_engine import run_hypothesis_generation, run_hypothesis_resolution
 from fear_greed_client import fetch_fear_greed
 from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
@@ -1064,6 +1065,16 @@ def api_backtest_source_health():
     automatic removal, a human reviews this list."""
     from backtesting_engine import get_underperforming_sources
     return jsonify(get_underperforming_sources())
+
+
+@app.route("/api/hypotheses")
+@login_required
+def api_hypotheses():
+    """Fred's hypothesis testing loop (FSI L4): open + resolved theses, plus
+    a confidence-calibration report (is Fred's stated confidence actually
+    right that often?) -- distinct from backtest's per-signal accuracy."""
+    from hypothesis_engine import get_hypotheses_report
+    return jsonify(get_hypotheses_report())
 
 
 @app.route("/api/rnd/propose", methods=["POST"])
@@ -4432,6 +4443,32 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Backtest] Error: {e}")
 
+    def job_hypothesis_generation():
+        """Propose up to MAX_PER_DAY new falsifiable theses on tickers with
+        a live signal (FSI L4 hypothesis testing loop)."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio").fetchall()]
+            trending = [r["asset"] for r in get_trending_assets(hours=24, limit=10)]
+            candidates = list(dict.fromkeys(trending + port_rows + wl_rows + WATCHLIST))
+            result = run_hypothesis_generation(candidates)
+            if result.get("proposed"):
+                print(f"[Hypothesis] Proposed {result['proposed']} new hypothesis/es")
+        except Exception as e:
+            print(f"[Hypothesis] Generation error: {e}")
+
+    def job_hypothesis_resolution():
+        """Resolve any hypothesis past its horizon against actual price
+        (and SPY, for outperform-benchmark theses)."""
+        try:
+            result = run_hypothesis_resolution()
+            if result["resolved"]:
+                print(f"[Hypothesis] Resolved {result['resolved']}, {result['errors']} error(s)")
+        except Exception as e:
+            print(f"[Hypothesis] Resolution error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx",
@@ -4461,6 +4498,8 @@ if __name__ == "__main__":
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)
+    scheduler.add_job(job_hypothesis_generation, "cron", hour=8, minute=15, id="hypothesis_generation")
+    scheduler.add_job(job_hypothesis_resolution, "interval", hours=6, id="hypothesis_resolution", jitter=600)
     scheduler.add_job(job_vault_reindex, "interval", hours=6, id="vault_reindex", jitter=600)
     scheduler.start()
 

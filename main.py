@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from real_gdp_client import get_real_gdp
 from unemployment_rate_client import get_unemployment_rate
 from case_shiller_client import get_case_shiller
 from wage_growth import get_wage_growth
@@ -2081,6 +2082,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/real-gdp")
+@login_required
+def api_real_gdp():
+    """Real GDP QoQ annualized growth (FRED GDPC1) -- headline economic-
+    output macro badge (FSI L2). Cached 6h, see real_gdp_client.py."""
+    return jsonify(get_real_gdp() or {})
 @app.route("/api/unemployment-rate")
 @login_required
 def api_unemployment_rate():
@@ -3323,6 +3330,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Real GDP QoQ annualized growth (cached 6h in real_gdp_client.py)
+        try:
+            gdp = get_real_gdp()
+            if gdp:
+                _macro_cache = {**_macro_cache, "REAL_GDP": {
+                    "label": "GDP Growth", "value": gdp["latest_growth_pct"], "rating": gdp["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] real_gdp error: {e}")
         # Civilian Unemployment Rate (cached 1h in unemployment_rate_client.py)
         try:
             ur = get_unemployment_rate()

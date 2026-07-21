@@ -12,6 +12,7 @@ RAM_GB = _psutil.virtual_memory().total / 1e9
 LITE_MODE = RAM_GB < 1.0  # Raspberry Pi Zero / wearable companion
 
 from config import SECRET_KEY, PORT, SCAN_INTERVAL_HOURS, MARKET_REFRESH_SECONDS, WATCHLIST, DISPLAY_SYMBOLS, FREDAI_DEPLOY_SECRET
+from port_utils import find_free_port, write_runtime_port, current_port
 from memory_store import (
     init_db, get_signals, get_latest_summary, get_summaries,
     get_sentiment_timeline, get_recent_alerts, insert_summary,
@@ -34,11 +35,15 @@ from obsidian_bridge import write_summary_to_vault, write_signal_digest, vault_a
 from nasdaq_client import get_macro_snapshot
 from yield_curve import compute_yield_curve_spread
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
+from hypothesis_engine import run_hypothesis_generation, run_hypothesis_resolution
 from fear_greed_client import fetch_fear_greed
+from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
 from real_gdp_client import get_real_gdp
+from empire_state_manufacturing_client import get_empire_state
+from payrolls import get_payrolls
 from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
 from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
@@ -137,6 +142,7 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    insert_institutional_holdings, get_institutional_holdings_for_symbol,
     insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
     insert_alert,
@@ -155,8 +161,10 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
+from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from sec_13f_client import fetch_13f_holdings, MANAGERS as INSTITUTIONAL_MANAGERS
 from analyst_data import refresh_analyst_ratings, get_analyst_summary
 from sec_8k_client import fetch_current_8k_filings
 from earnings_predictor import refresh_earnings_history, predict_next_earnings_lean
@@ -1062,6 +1070,26 @@ def api_backtest_source_health():
     return jsonify(get_underperforming_sources())
 
 
+@app.route("/api/market-debate/<ticker>")
+@login_required
+def api_market_debate(ticker):
+    """Bull/Bear/Arbiter thesis synthesis (FSI L4) over a single asset's
+    already-computed signals -- cached per ticker/day. ?refresh=1 forces
+    a fresh debate instead of serving today's cached one."""
+    from market_debate import get_market_debate_for
+    force_refresh = request.args.get("refresh") == "1"
+    result = get_market_debate_for(ticker.upper(), force_refresh=force_refresh)
+    return jsonify(result)
+@app.route("/api/hypotheses")
+@login_required
+def api_hypotheses():
+    """Fred's hypothesis testing loop (FSI L4): open + resolved theses, plus
+    a confidence-calibration report (is Fred's stated confidence actually
+    right that often?) -- distinct from backtest's per-signal accuracy."""
+    from hypothesis_engine import get_hypotheses_report
+    return jsonify(get_hypotheses_report())
+
+
 @app.route("/api/rnd/propose", methods=["POST"])
 @login_required
 def api_rnd_propose():
@@ -1122,7 +1150,7 @@ def api_device():
 @login_required
 def api_install():
     """Autonomously install FredAI shortcuts on the host device."""
-    port = int(request.json.get("port", PORT)) if request.json else PORT
+    port = int(request.json.get("port")) if request.json and request.json.get("port") else current_port(PORT)
     try:
         result = _installer.install(port)
         return jsonify(result)
@@ -1955,6 +1983,12 @@ def api_correlation():
     })
 
 
+@app.route("/api/credit-spread")
+@login_required
+def api_credit_spread():
+    """HYG-vs-LQD relative-strength credit-stress regime (FSI L2) -- cached
+    15min, see credit_spread.py."""
+    return jsonify(get_credit_spread() or {})
 @app.route("/api/yield-curve")
 @login_required
 def api_yield_curve():
@@ -2008,6 +2042,19 @@ def api_real_gdp():
     """Real GDP QoQ annualized growth (FRED GDPC1) -- headline economic-
     output macro badge (FSI L2). Cached 6h, see real_gdp_client.py."""
     return jsonify(get_real_gdp() or {})
+@app.route("/api/empire-state-manufacturing")
+@login_required
+def api_empire_state_manufacturing():
+    """NY Fed Empire State Manufacturing Survey general business conditions
+    diffusion index (FSI L2) -- cached 1h, see
+    empire_state_manufacturing_client.py."""
+    return jsonify(get_empire_state() or {})
+@app.route("/api/payrolls")
+@login_required
+def api_payrolls():
+    """Nonfarm Payrolls (FRED PAYEMS) headline labor-market print/trend
+    signal (FSI L2) -- cached 1h, see payrolls.py."""
+    return jsonify(get_payrolls() or {})
 @app.route("/api/ppi")
 @login_required
 def api_ppi():
@@ -2641,6 +2688,13 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/institutional/<ticker>")
+@login_required
+def api_institutional_holdings(ticker):
+    """Which curated institutional managers (Berkshire, Renaissance, etc.)
+    currently hold this ticker per their latest SEC 13F-HR filing (FSI L4)."""
+    holdings = get_institutional_holdings_for_symbol(ticker.upper())
+    return jsonify({"ticker": ticker.upper(), "holdings": holdings})
 @app.route("/api/analyst-ratings/<ticker>")
 @login_required
 def api_analyst_ratings(ticker):
@@ -3122,6 +3176,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
 
+        # Credit spread regime -- HYG vs LQD relative strength (cached 15min in credit_spread.py)
+        try:
+            cs = get_credit_spread()
+            if cs:
+                _macro_cache = {**_macro_cache, "CREDIT_SPREAD": {
+                    "label": "Credit Spread", "value": cs["spread_20d"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_spread error: {e}")
         # 2s10s yield curve spread (pure arithmetic on the macro snapshot above)
         try:
             yc = compute_yield_curve_spread(_macro_cache)
@@ -3170,6 +3233,25 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] real_gdp error: {e}")
+        # Empire State Manufacturing Survey diffusion index (cached 1h in
+        # empire_state_manufacturing_client.py)
+        try:
+            es = get_empire_state()
+            if es:
+                _macro_cache = {**_macro_cache, "EMPIRE_STATE": {
+                    "label": "Empire St. Mfg", "value": es["latest"], "rating": es["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] empire_state_manufacturing error: {e}")
+        # Nonfarm Payrolls headline print/trend (cached 1h in payrolls.py)
+        try:
+            pr = get_payrolls()
+            if pr:
+                _macro_cache = {**_macro_cache, "PAYROLLS": {
+                    "label": "NFP", "value": pr["change_k"], "rating": pr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] payrolls error: {e}")
         # Producer Price Index Final Demand -- upstream wholesale-inflation
         # leading indicator (cached 1h in ppi_client.py)
         try:
@@ -4026,6 +4108,12 @@ def on_view_symbol(data):
 
 if __name__ == "__main__":
     print("=== SENTINEL FI — Financial Intelligence Dashboard ===")
+
+    RESOLVED_PORT = find_free_port(PORT)
+    if RESOLVED_PORT != PORT:
+        print(f"[Init] Port {PORT} unavailable — reassigned to {RESOLVED_PORT}")
+    write_runtime_port(RESOLVED_PORT)
+
     init_db()
 
     # Claude's and Gemini's RnD cycles both write files and run `git add -A`
@@ -4132,6 +4220,10 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
 
+    def job_trends_refresh():
+        """Refresh Google Trends search-interest velocity daily for portfolio + watchlist
+        symbols (L3). One conservative keyword per symbol -- pytrends is unofficial and
+        best-effort, never a hard dependency."""
     def job_short_volume_refresh():
         """Refresh FINRA Reg SHO daily short-volume ratios for portfolio +
         watchlist symbols, populate the watchlist-badge cache, and check for
@@ -4145,6 +4237,10 @@ if __name__ == "__main__":
             symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
             if not symbols:
                 return
+            stored = refresh_trends_interest(symbols)
+            print(f"[GoogleTrends] Search interest refreshed — {stored}/{len(symbols)} symbols")
+        except Exception as e:
+            print(f"[GoogleTrends] Search interest refresh error: {e}")
             stored = refresh_short_volume(symbols)
             cache = {}
             for sym in symbols:
@@ -4205,6 +4301,18 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_institutional_holdings_refresh():
+        """Refresh curated managers' latest SEC 13F-HR holdings weekly --
+        13F is quarterly so daily/hourly cadence would just re-fetch the same
+        filing (FSI L4)."""
+        try:
+            total_new = 0
+            for manager, cik in INSTITUTIONAL_MANAGERS.items():
+                holdings = fetch_13f_holdings(manager, cik, limit_holdings=25)
+                total_new += insert_institutional_holdings(holdings)
+            print(f"[SEC13F] Institutional holdings refreshed — {total_new} new rows")
+        except Exception as e:
+            print(f"[SEC13F] Institutional holdings refresh error: {e}")
     def job_analyst_ratings_refresh():
         """Refresh yfinance upgrade/downgrade history daily for portfolio +
         watchlist symbols (FSI L2)."""
@@ -4382,6 +4490,32 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Backtest] Error: {e}")
 
+    def job_hypothesis_generation():
+        """Propose up to MAX_PER_DAY new falsifiable theses on tickers with
+        a live signal (FSI L4 hypothesis testing loop)."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio").fetchall()]
+            trending = [r["asset"] for r in get_trending_assets(hours=24, limit=10)]
+            candidates = list(dict.fromkeys(trending + port_rows + wl_rows + WATCHLIST))
+            result = run_hypothesis_generation(candidates)
+            if result.get("proposed"):
+                print(f"[Hypothesis] Proposed {result['proposed']} new hypothesis/es")
+        except Exception as e:
+            print(f"[Hypothesis] Generation error: {e}")
+
+    def job_hypothesis_resolution():
+        """Resolve any hypothesis past its horizon against actual price
+        (and SPY, for outperform-benchmark theses)."""
+        try:
+            result = run_hypothesis_resolution()
+            if result["resolved"]:
+                print(f"[Hypothesis] Resolved {result['resolved']}, {result['errors']} error(s)")
+        except Exception as e:
+            print(f"[Hypothesis] Resolution error: {e}")
+
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.add_job(job_market_refresh, "interval", seconds=MARKET_REFRESH_SECONDS, id="market")
     scheduler.add_job(job_asx_refresh, "interval", seconds=120, id="asx",
@@ -4396,6 +4530,8 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_institutional_holdings_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="institutional_holdings")
+    scheduler.add_job(job_trends_refresh, "cron", hour=8, minute=0, id="trends_interest")
     scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=7, minute=45, id="analyst_ratings")
     scheduler.add_job(job_sec_8k_refresh, "interval", minutes=10, id="sec_8k", jitter=60)
     scheduler.add_job(job_central_bank_refresh, "cron", hour=19, minute=30, id="central_bank")
@@ -4410,13 +4546,15 @@ if __name__ == "__main__":
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)
+    scheduler.add_job(job_hypothesis_generation, "cron", hour=8, minute=15, id="hypothesis_generation")
+    scheduler.add_job(job_hypothesis_resolution, "interval", hours=6, id="hypothesis_resolution", jitter=600)
     scheduler.add_job(job_vault_reindex, "interval", hours=6, id="vault_reindex", jitter=600)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)
     def _auto_install():
         try:
-            result = _installer.install(PORT)
+            result = _installer.install(RESOLVED_PORT)
             if result["success"] and result["actions"]:
                 print(f"[Install] Shortcuts created: {', '.join(result['actions'])}")
             elif result.get("warnings"):
@@ -4456,5 +4594,5 @@ if __name__ == "__main__":
 
     threading.Thread(target=_startup, daemon=True).start()
 
-    print(f"[Init] Dashboard → http://localhost:{PORT}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
+    print(f"[Init] Dashboard → http://localhost:{RESOLVED_PORT}")
+    socketio.run(app, host="0.0.0.0", port=RESOLVED_PORT, debug=False, allow_unsafe_werkzeug=True)

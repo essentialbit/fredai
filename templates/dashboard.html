@@ -4838,7 +4838,11 @@ function buildSentData(tl){
 function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(tl);sentChart.update('none')}
 
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
-async function loadWatchlist(){const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[])}
+let volumeAnomalyCache={};
+async function loadWatchlist(){
+  const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[]);
+  fetch('/api/volume-anomalies').then(r=>r.json()).then(a=>{volumeAnomalyCache=a||{};renderWatchlist(d,[])}).catch(()=>{});
+}
 // FSI L5 job-listing hiring velocity (#228) -- only meaningful for a small
 // curated set of Greenhouse-listed tickers, lazily fetched per symbol (24h
 // server-side cache) and merged back in via a re-render rather than
@@ -4902,6 +4906,8 @@ function renderWatchlist(items,interests){
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
+    const anomaly=volumeAnomalyCache[sym];
+    const anomalyBadge=anomaly?`<span title="${esc(anomaly.count+' signal+news mentions today, z-score '+anomaly.z_score+' vs 30d baseline')}" style="font-size:7px;background:${anomaly.level==='anomalous'?'#3c1a1a':'#3c2f1a'};color:${anomaly.level==='anomalous'?'var(--red)':'#f5a623'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">▲VOL</span>`:'';
     const onchain=w.onchain;
     const onchainDir=onchain&&onchain.hash_rate?onchain.hash_rate.direction:null;
     const onchainClr=onchainDir==='rising'?'#00ff88':onchainDir==='falling'?'#ff3b5c':'#3d5a73';
@@ -4944,7 +4950,7 @@ function renderWatchlist(items,interests){
         dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
       }
     }
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}

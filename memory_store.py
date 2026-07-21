@@ -291,6 +291,18 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS volume_anomalies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            count INTEGER NOT NULL,
+            z_score REAL NOT NULL,
+            level TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, date)
+        );
+
+
         CREATE TABLE IF NOT EXISTS onchain_metrics (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             metric TEXT NOT NULL,
@@ -1886,6 +1898,34 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def insert_volume_anomaly(ticker: str, date: str, count: int, z_score: float, level: str) -> bool:
+    """Idempotent per (ticker, date) -- returns False if today's row for
+    this ticker already exists (already recorded/alerted, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM volume_anomalies WHERE ticker=? AND date=?", (ticker, date)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO volume_anomalies (ticker, date, count, z_score, level) VALUES (?,?,?,?,?)",
+            (ticker, date, count, z_score, level)
+        )
+        return True
+
+
+def get_recent_volume_anomalies(days: int = 7) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM volume_anomalies WHERE date >= ? AND level != 'normal' ORDER BY date DESC",
+            (since,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
 
 
 # ── BITCOIN ON-CHAIN METRICS ────────────────────────────────────────────────────

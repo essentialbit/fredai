@@ -168,6 +168,7 @@ from finviz_client import refresh_short_interest
 from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from volume_anomaly import get_volume_anomaly_cached
 from bitcoin_onchain_client import fetch_onchain_snapshot
 from seasonality_engine import compute_seasonal_bias
 from options_data_client import refresh_options_data
@@ -937,6 +938,29 @@ def api_watchlist():
     return jsonify(result)
 
 
+@app.route("/api/volume-anomaly/<ticker>")
+@login_required
+def api_volume_anomaly(ticker):
+    ticker = ticker.upper().strip()
+    if not _valid_symbol(ticker):
+        return jsonify({"error": "invalid symbol"}), 400
+    return jsonify(get_volume_anomaly_cached(ticker))
+
+
+@app.route("/api/volume-anomalies")
+@login_required
+def api_volume_anomalies():
+    """Batch per-ticker signal/news volume anomaly check across the caller's
+    own watchlist -- {"AAPL": {"status": "ok", "level": "elevated", ...}, ...},
+    tickers still building up history are simply omitted (nothing to flag yet)."""
+    uid = session["user_id"]
+    tickers = [w["symbol"] for w in get_watchlist(uid)]
+    result = {}
+    for sym in tickers:
+        data = get_volume_anomaly_cached(sym)
+        if data.get("status") == "ok" and data.get("level") != "normal":
+            result[sym] = data
+    return jsonify(result)
 # ── TRACKED ENTITIES ROUTES ───────────────────────────────────────────────────
 
 @app.route("/api/entities", methods=["GET", "POST"])

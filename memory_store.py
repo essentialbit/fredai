@@ -291,6 +291,17 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS onchain_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            metric TEXT NOT NULL,
+            latest_value REAL,
+            baseline_mean REAL,
+            z_score REAL,
+            direction TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+
         CREATE TABLE IF NOT EXISTS seasonality_cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -430,6 +441,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_onchain_metric ON onchain_metrics(metric, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_seasonality_ticker ON seasonality_cache(ticker, period_type);
         CREATE INDEX IF NOT EXISTS idx_options_symbol ON options_data(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_institutional_ticker ON institutional_holdings(ticker, filing_period);
@@ -1874,6 +1886,31 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+# ── BITCOIN ON-CHAIN METRICS ────────────────────────────────────────────────────
+
+def insert_onchain_metric(metric: str, trend: dict) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO onchain_metrics (metric, latest_value, baseline_mean, z_score, direction) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (metric, trend.get("latest"), trend.get("mean"), trend.get("z_score"), trend.get("direction"))
+        )
+
+
+def get_latest_onchain_metrics() -> dict:
+    """{"hash_rate": {...}, "active_addresses": {...}} -- most recent row per
+    metric, or {} if the daily refresh job hasn't populated anything yet."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT m.* FROM onchain_metrics m
+            INNER JOIN (
+                SELECT metric, MAX(fetched_at) AS max_fetched
+                FROM onchain_metrics GROUP BY metric
+            ) latest ON m.metric = latest.metric AND m.fetched_at = latest.max_fetched
+        """).fetchall()
+        return {r["metric"]: dict(r) for r in rows}
 
 
 # ── SEASONALITY ────────────────────────────────────────────────────────────────

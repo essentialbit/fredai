@@ -147,6 +147,7 @@ from memory_store import (
     insert_institutional_holdings, get_institutional_holdings_for_symbol,
     insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
+    insert_onchain_metric, get_latest_onchain_metrics,
     save_seasonal_bias, get_current_seasonality,
     insert_alert,
     get_latest_central_bank_delta,
@@ -167,6 +168,7 @@ from finviz_client import refresh_short_interest
 from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from bitcoin_onchain_client import fetch_onchain_snapshot
 from seasonality_engine import compute_seasonal_bias
 from options_data_client import refresh_options_data
 from sec_13f_client import fetch_13f_holdings, MANAGERS as INSTITUTIONAL_MANAGERS
@@ -921,6 +923,10 @@ def api_watchlist():
         spread = _crypto_spread_cache.get(w["symbol"])
         if spread:
             entry["cross_exchange_spread"] = spread
+        if w["symbol"] == "BTC-USD":
+            onchain = get_latest_onchain_metrics()
+            if onchain:
+                entry["onchain"] = onchain
         cluster = _insider_cluster_cache.get(w["symbol"])
         if cluster:
             entry["insider_cluster"] = cluster
@@ -2693,6 +2699,12 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/onchain/btc")
+@login_required
+def api_onchain_btc():
+    """Bitcoin network-health metrics -- hash rate, active addresses, tx volume
+    (FSI L2). Cache-only, refreshed by the daily onchain_metrics job."""
+    return jsonify(get_latest_onchain_metrics())
 @app.route("/api/seasonality/<ticker>")
 @login_required
 def api_seasonality(ticker):
@@ -4323,6 +4335,23 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_onchain_refresh():
+        """Refresh Bitcoin network-health metrics daily -- these series move
+        slowly and don't need the 1-min market-refresh cadence (FSI L2)."""
+        try:
+            snapshot = fetch_onchain_snapshot()
+            if not snapshot:
+                return
+            stored = 0
+            for metric, trend in snapshot.items():
+                if metric == "tx_count_24h":
+                    insert_onchain_metric(metric, {"latest": trend})
+                else:
+                    insert_onchain_metric(metric, trend)
+                stored += 1
+            print(f"[BitcoinOnchain] Refreshed {stored} metric(s)")
+        except Exception as e:
+            print(f"[BitcoinOnchain] Refresh error: {e}")
     def job_seasonality_refresh():
         """Weekly calendar-seasonality refresh for portfolio + watchlist symbols
         (FSI L3). Weekly, not daily -- month/day-of-week historical bias by
@@ -4577,6 +4606,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_onchain_refresh, "cron", hour=8, minute=15, id="onchain_metrics")
     scheduler.add_job(job_seasonality_refresh, "cron", day_of_week="sun", hour=8, minute=0, id="seasonality")
     scheduler.add_job(job_options_refresh, "cron", hour=8, minute=0, id="options_data")
     scheduler.add_job(job_institutional_holdings_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="institutional_holdings")

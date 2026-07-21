@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from wage_growth import get_wage_growth
 from stablecoin_flow import get_stablecoin_flow
 from empire_state_manufacturing_client import get_empire_state
 from payrolls import get_payrolls
@@ -2078,6 +2079,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/wage-growth")
+@login_required
+def api_wage_growth():
+    """Average Hourly Earnings (FRED CES0500000003) labor-cost inflation
+    signal (FSI L2) -- cached 1h, see wage_growth.py."""
+    return jsonify(get_wage_growth() or {})
 @app.route("/api/stablecoin-flow")
 @login_required
 def api_stablecoin_flow():
@@ -3301,6 +3308,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Average Hourly Earnings wage growth (cached 1h in wage_growth.py)
+        try:
+            wg = get_wage_growth()
+            if wg:
+                _macro_cache = {**_macro_cache, "WAGE_GROWTH": {
+                    "label": "Wage YoY", "value": wg["yoy_pct"], "rating": wg["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] wage_growth error: {e}")
         # Stablecoin net issuance flow (cached 30min in stablecoin_flow.py)
         try:
             sf = get_stablecoin_flow()

@@ -26,6 +26,7 @@ from memory_store import (
 )
 from market_data import fetch_quotes, fetch_history, get_sector_snapshot, calculate_portfolio_value
 from twitter_client import fetch_signals
+from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters, detect_options_shifts
 from reddit_client import fetch_reddit_signals
 from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters
 from trend_detector import compute_sentiment_stats, detect_trends, get_risk_level, detect_insider_clusters, detect_short_volume_pressure
@@ -142,6 +143,7 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    get_latest_options_data,
     insert_institutional_holdings, get_institutional_holdings_for_symbol,
     insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
@@ -164,6 +166,7 @@ from finviz_client import refresh_short_interest
 from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from options_data_client import refresh_options_data
 from sec_13f_client import fetch_13f_holdings, MANAGERS as INSTITUTIONAL_MANAGERS
 from analyst_data import refresh_analyst_ratings, get_analyst_summary
 from sec_8k_client import fetch_current_8k_filings
@@ -2688,6 +2691,16 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/options/<ticker>")
+@login_required
+def api_options_data(ticker):
+    """Latest put/call ratio + ~30-day ATM implied volatility snapshot (FSI L2).
+    Cache-only -- refreshed on a schedule, not on-demand (options chains are a
+    heavier fetch than a quote and don't move meaningfully within a day)."""
+    data = get_latest_options_data(ticker.upper())
+    if not data:
+        return jsonify({"ticker": ticker.upper(), "available": False})
+    return jsonify({"ticker": ticker.upper(), "available": True, **data})
 @app.route("/api/institutional/<ticker>")
 @login_required
 def api_institutional_holdings(ticker):
@@ -4301,6 +4314,10 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_options_refresh():
+        """Refresh put/call ratio + ATM IV daily for portfolio + watchlist
+        symbols with listed options (US equities/ETFs only -- crypto and most
+        ASX tickers have no options chain), then check for positioning shifts."""
     def job_institutional_holdings_refresh():
         """Refresh curated managers' latest SEC 13F-HR holdings weekly --
         13F is quarterly so daily/hourly cadence would just re-fetch the same
@@ -4342,6 +4359,11 @@ if __name__ == "__main__":
             symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
             if not symbols:
                 return
+            stored = refresh_options_data(symbols, quotes=_quotes_cache)
+            alerts_fired = detect_options_shifts(symbols)
+            print(f"[Options] Refreshed {stored}/{len(symbols)} symbols, {len(alerts_fired)} shift alert(s)")
+        except Exception as e:
+            print(f"[Options] Refresh error: {e}")
             total_new = 0
             for sym in symbols:
                 total_new += refresh_analyst_ratings(sym)
@@ -4530,6 +4552,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_options_refresh, "cron", hour=8, minute=0, id="options_data")
     scheduler.add_job(job_institutional_holdings_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="institutional_holdings")
     scheduler.add_job(job_trends_refresh, "cron", hour=8, minute=0, id="trends_interest")
     scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=7, minute=45, id="analyst_ratings")

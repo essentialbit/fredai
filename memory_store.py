@@ -226,6 +226,14 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS google_trends_interest (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            keyword TEXT NOT NULL,
+            interest_score REAL NOT NULL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS ticker_debates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -286,6 +294,59 @@ def init_db():
             UNIQUE(ticker, period_type, period_value)
         );
 
+        CREATE TABLE IF NOT EXISTS analyst_ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            firm TEXT,
+            action TEXT,
+            from_grade TEXT,
+            to_grade TEXT,
+            price_target REAL,
+            prior_price_target REAL,
+            graded_at TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, firm, graded_at, action)
+        );
+
+        CREATE TABLE IF NOT EXISTS filing_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT,
+            company TEXT,
+            cik TEXT,
+            accession_number TEXT NOT NULL,
+            filed_date TEXT,
+            item_codes TEXT,
+            item_summary TEXT,
+            signal_type TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(accession_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS central_bank_statements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bank TEXT NOT NULL,
+            meeting_date TEXT NOT NULL,
+            prior_meeting_date TEXT,
+            raw_text TEXT,
+            added_paragraphs TEXT,
+            removed_paragraphs TEXT,
+            changed_paragraphs TEXT,
+            sentiment_delta REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(bank, meeting_date)
+        );
+
+        CREATE TABLE IF NOT EXISTS earnings_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            earnings_date TEXT NOT NULL,
+            eps_estimate REAL,
+            reported_eps REAL,
+            surprise_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, earnings_date)
+        );
+
         CREATE TABLE IF NOT EXISTS short_volume_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             symbol TEXT NOT NULL,
@@ -313,6 +374,10 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
         CREATE INDEX IF NOT EXISTS idx_seasonality_ticker ON seasonality_cache(ticker, period_type);
+        CREATE INDEX IF NOT EXISTS idx_trends_interest_ticker ON google_trends_interest(ticker, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_analyst_ratings_ticker ON analyst_ratings(ticker, graded_at);
+        CREATE INDEX IF NOT EXISTS idx_central_bank_meeting ON central_bank_statements(bank, meeting_date);
+        CREATE INDEX IF NOT EXISTS idx_earnings_history_ticker ON earnings_history(ticker, earnings_date);
 
         CREATE TABLE IF NOT EXISTS job_listings_daily (
             ticker TEXT NOT NULL,
@@ -1500,6 +1565,25 @@ def get_short_interest_direction(symbol: str) -> str | None:
     return None
 
 
+# ── GOOGLE TRENDS SEARCH INTEREST ─────────────────────────────────────────────
+
+def insert_trends_interest(ticker: str, keyword: str, interest_score: float):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO google_trends_interest (ticker, keyword, interest_score) VALUES (?, ?, ?)",
+            (ticker, keyword, interest_score)
+        )
+
+
+def get_latest_search_interest(ticker: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM google_trends_interest WHERE ticker=? ORDER BY fetched_at DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 # ── FINRA REG SHO SHORT VOLUME ────────────────────────────────────────────────
 
 def insert_short_volume(symbol: str, trade_date: str, short_volume: float, total_volume: float, short_volume_pct: float):
@@ -1535,6 +1619,32 @@ def get_latest_short_volume(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
+    """Latest daily search-interest reading vs the trailing average of up to
+    `lookback` prior readings, expressed as a % velocity. Requires at least
+    two stored readings (no fabricated baseline off a single point)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT interest_score FROM google_trends_interest WHERE ticker=? "
+            "ORDER BY fetched_at DESC LIMIT ?",
+            (ticker, lookback + 1)
+        ).fetchall()
+    if len(rows) < 2:
+        return None
+    latest = rows[0]["interest_score"]
+    prior = [r["interest_score"] for r in rows[1:]]
+    avg_prior = sum(prior) / len(prior)
+    if avg_prior <= 0:
+        return None
+    velocity_pct = (latest - avg_prior) / avg_prior * 100
+    return {
+        "ticker": ticker,
+        "latest": latest,
+        "avg_prior": round(avg_prior, 1),
+        "velocity_pct": round(velocity_pct, 1),
+    }
 
 
 def insert_ticker_debate(ticker: str, bull: dict, bear: dict, verdict: dict):
@@ -1712,6 +1822,169 @@ def get_current_seasonality(ticker: str) -> dict:
         "ticker": ticker,
         "month": dict(month_row) if month_row else None,
         "day_of_week": dict(dow_row) if dow_row else None,
+    }
+
+
+# ── ANALYST RATINGS ───────────────────────────────────────────────────────────
+
+def insert_analyst_ratings(ratings: list[dict]) -> int:
+    """Idempotent on (ticker, firm, graded_at, action) -- safe to call
+    repeatedly with overlapping upgrade/downgrade history."""
+    if not ratings:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO analyst_ratings
+                (ticker, firm, action, from_grade, to_grade, price_target, prior_price_target, graded_at)
+            VALUES (:ticker, :firm, :action, :from_grade, :to_grade, :price_target, :prior_price_target, :graded_at)
+        """, ratings)
+        return conn.total_changes - before
+
+
+def get_recent_analyst_ratings(ticker: str, days: int = 90, limit: int = 10) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM analyst_ratings WHERE ticker=? AND graded_at >= ? ORDER BY graded_at DESC LIMIT ?",
+            (ticker, since, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── FILING EVENTS (SEC 8-K real-time monitor) ─────────────────────────────────
+
+def insert_filing_events(filings: list[dict]) -> int:
+    """Idempotent on accession_number — safe to call repeatedly against the
+    same rolling feed window. Returns rows actually inserted."""
+    if not filings:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO filing_events
+                (ticker, company, cik, accession_number, filed_date,
+                 item_codes, item_summary, signal_type)
+            VALUES (:ticker, :company, :cik, :accession_number, :filed_date,
+                    :item_codes, :item_summary, :signal_type)
+        """, filings)
+        return conn.total_changes - before
+
+
+def get_recent_filing_events(ticker: str, days: int = 30, material_only: bool = False) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    query = "SELECT * FROM filing_events WHERE ticker=? AND filed_date >= ?"
+    params = [ticker, since]
+    if material_only:
+        query += " AND signal_type='material'"
+    query += " ORDER BY filed_date DESC"
+    with get_conn() as conn:
+        rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── CENTRAL BANK STATEMENT DELTAS ────────────────────────────────────────────
+
+def save_central_bank_statement(bank: str, meeting_date: str, prior_meeting_date: str | None,
+                                 raw_text: str, delta: dict) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO central_bank_statements
+                (bank, meeting_date, prior_meeting_date, raw_text, added_paragraphs,
+                 removed_paragraphs, changed_paragraphs, sentiment_delta, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(bank, meeting_date) DO UPDATE SET
+                prior_meeting_date=excluded.prior_meeting_date,
+                raw_text=excluded.raw_text,
+                added_paragraphs=excluded.added_paragraphs,
+                removed_paragraphs=excluded.removed_paragraphs,
+                changed_paragraphs=excluded.changed_paragraphs,
+                sentiment_delta=excluded.sentiment_delta,
+                fetched_at=CURRENT_TIMESTAMP
+        """, (
+            bank, meeting_date, prior_meeting_date, raw_text,
+            json.dumps(delta.get("added", [])),
+            json.dumps(delta.get("removed", [])),
+            json.dumps(delta.get("changed", [])),
+            delta.get("sentiment_delta"),
+        ))
+
+
+def _hydrate_central_bank_row(row) -> dict:
+    d = dict(row)
+    d["added_paragraphs"] = json.loads(d["added_paragraphs"] or "[]")
+    d["removed_paragraphs"] = json.loads(d["removed_paragraphs"] or "[]")
+    d["changed_paragraphs"] = json.loads(d["changed_paragraphs"] or "[]")
+    return d
+
+
+def get_central_bank_statement(bank: str, meeting_date: str | None) -> dict | None:
+    if not meeting_date:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? AND meeting_date=?",
+            (bank, meeting_date),
+        ).fetchone()
+    return _hydrate_central_bank_row(row) if row else None
+
+
+def get_latest_central_bank_delta(bank: str = "Fed") -> dict:
+    """Cache-only -- the weekly-ish scheduled job keeps this warm, this
+    never triggers a live fetch."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? ORDER BY meeting_date DESC LIMIT 1",
+            (bank,),
+        ).fetchone()
+    if not row:
+        return {"bank": bank, "status": "no_data"}
+    return _hydrate_central_bank_row(row)
+
+
+# ── EARNINGS HISTORY (beat/miss tracking) ──────────────────────────────────────
+
+def insert_earnings_history(rows: list[dict]) -> int:
+    """Idempotent on (ticker, earnings_date) -- safe to call repeatedly with
+    overlapping quarter history. Returns rows actually inserted."""
+    if not rows:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO earnings_history
+                (ticker, earnings_date, eps_estimate, reported_eps, surprise_pct)
+            VALUES (:ticker, :earnings_date, :eps_estimate, :reported_eps, :surprise_pct)
+        """, rows)
+        return conn.total_changes - before
+
+
+def get_earnings_history(ticker: str, limit: int = 12) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM earnings_history WHERE ticker=? ORDER BY earnings_date DESC LIMIT ?",
+            (ticker, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_earnings_beat_rate(ticker: str, limit: int = 12) -> dict | None:
+    """Beat-rate base rate over the last `limit` reported quarters, e.g.
+    'beat in 9 of last 12 quarters, average surprise +4.2%'. Returns None
+    (no fabricated 0%) when there's no stored history for this ticker."""
+    history = get_earnings_history(ticker, limit=limit)
+    if not history:
+        return None
+    beats = sum(1 for h in history if (h["surprise_pct"] or 0) > 0)
+    misses = sum(1 for h in history if (h["surprise_pct"] or 0) < 0)
+    surprises = [h["surprise_pct"] for h in history if h["surprise_pct"] is not None]
+    return {
+        "quarters": len(history),
+        "beats": beats,
+        "misses": misses,
+        "inline": len(history) - beats - misses,
+        "beat_rate_pct": round(beats * 100.0 / len(history), 1),
+        "avg_surprise_pct": round(sum(surprises) / len(surprises), 2) if surprises else None,
     }
 
 

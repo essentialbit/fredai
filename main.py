@@ -12,6 +12,7 @@ RAM_GB = _psutil.virtual_memory().total / 1e9
 LITE_MODE = RAM_GB < 1.0  # Raspberry Pi Zero / wearable companion
 
 from config import SECRET_KEY, PORT, SCAN_INTERVAL_HOURS, MARKET_REFRESH_SECONDS, WATCHLIST, DISPLAY_SYMBOLS, FREDAI_DEPLOY_SECRET
+from port_utils import find_free_port, write_runtime_port, current_port
 from memory_store import (
     init_db, get_signals, get_latest_summary, get_summaries,
     get_sentiment_timeline, get_recent_alerts, insert_summary,
@@ -35,9 +36,12 @@ from nasdaq_client import get_macro_snapshot
 from yield_curve import compute_yield_curve_spread
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from empire_state_manufacturing_client import get_empire_state
+from payrolls import get_payrolls
 from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
 from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
@@ -136,13 +140,17 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
     save_seasonal_bias, get_current_seasonality,
+    insert_alert,
+    get_latest_central_bank_delta,
     insert_alert,
     get_optimized_params,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
+from central_bank_client import refresh_central_bank_deltas
 from technical_alerts import run_technical_alerts, get_technicals
 from graph_engine import generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves, get_ticker_network
@@ -151,9 +159,13 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
+from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
 from seasonality_engine import compute_seasonal_bias
+from analyst_data import refresh_analyst_ratings, get_analyst_summary
+from sec_8k_client import fetch_current_8k_filings
+from earnings_predictor import refresh_earnings_history, predict_next_earnings_lean
 from confluence_engine import compute_confluence, refresh_confluence, get_cached_confluence
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
@@ -1116,7 +1128,7 @@ def api_device():
 @login_required
 def api_install():
     """Autonomously install FredAI shortcuts on the host device."""
-    port = int(request.json.get("port", PORT)) if request.json else PORT
+    port = int(request.json.get("port")) if request.json and request.json.get("port") else current_port(PORT)
     try:
         result = _installer.install(port)
         return jsonify(result)
@@ -1582,7 +1594,28 @@ def api_analyst_report(ticker):
             user_prompt += f"- [{s.get('signal_type', 'signal')}] {s.get('content')[:150]} (Sentiment Score: {s.get('sentiment_score', 0.0)})\n"
     else:
         user_prompt += "No recent technical signal entries available for this symbol.\n"
-        
+
+    analyst_summary = get_analyst_summary(ticker)
+    if analyst_summary:
+        consensus = analyst_summary.get("consensus")
+        if consensus:
+            user_prompt += (
+                f"Real Wall Street Analyst Price-Target Consensus: mean ${consensus.get('mean')}, "
+                f"median ${consensus.get('median')}, range ${consensus.get('low')}-${consensus.get('high')} "
+                f"(implied upside vs current: {consensus.get('upside_pct')}%). "
+                "You MUST cite these exact real figures in your Recommendation section -- never invent a rating.\n"
+            )
+        recent_actions = analyst_summary.get("recent_actions")
+        if recent_actions:
+            user_prompt += "Recent Real Analyst Actions (cite firm names and dates exactly as given):\n"
+            for a in recent_actions[:5]:
+                user_prompt += f"- [{a.get('graded_at')}] {a.get('firm')}: {a.get('action')} ({a.get('from_grade')} -> {a.get('to_grade')}, target ${a.get('price_target')})\n"
+    else:
+        user_prompt += (
+            "No analyst-rating data available for this symbol -- explicitly state that analyst "
+            "coverage data is unavailable rather than inventing a rating or firm name.\n"
+        )
+
     try:
         report_markdown = _provider.complete([{"role": "user", "content": user_prompt}], system_prompt, tier="chat", max_tokens=1500)
     except Exception as e:
@@ -1928,6 +1961,12 @@ def api_correlation():
     })
 
 
+@app.route("/api/credit-spread")
+@login_required
+def api_credit_spread():
+    """HYG-vs-LQD relative-strength credit-stress regime (FSI L2) -- cached
+    15min, see credit_spread.py."""
+    return jsonify(get_credit_spread() or {})
 @app.route("/api/yield-curve")
 @login_required
 def api_yield_curve():
@@ -1975,6 +2014,19 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/empire-state-manufacturing")
+@login_required
+def api_empire_state_manufacturing():
+    """NY Fed Empire State Manufacturing Survey general business conditions
+    diffusion index (FSI L2) -- cached 1h, see
+    empire_state_manufacturing_client.py."""
+    return jsonify(get_empire_state() or {})
+@app.route("/api/payrolls")
+@login_required
+def api_payrolls():
+    """Nonfarm Payrolls (FRED PAYEMS) headline labor-market print/trend
+    signal (FSI L2) -- cached 1h, see payrolls.py."""
+    return jsonify(get_payrolls() or {})
 @app.route("/api/ppi")
 @login_required
 def api_ppi():
@@ -2615,6 +2667,39 @@ def api_seasonality(ticker):
     Cache-only -- weekly job_seasonality_refresh keeps portfolio/watchlist symbols
     warm; never fetches live so this route never blocks on Yahoo history calls."""
     return jsonify(get_current_seasonality(ticker.upper()))
+@app.route("/api/analyst-ratings/<ticker>")
+@login_required
+def api_analyst_ratings(ticker):
+    """Real Wall Street analyst consensus target + recent upgrade/downgrade
+    actions (FSI L2) -- distinct from /api/analyst/report, which is Fred's
+    own LLM-generated narrative."""
+    summary = get_analyst_summary(ticker.upper().strip())
+    if not summary:
+        return jsonify({"ticker": ticker.upper(), "status": "no_data"})
+    return jsonify({"ticker": ticker.upper(), "status": "ok", **summary})
+@app.route("/api/filings/<ticker>")
+@login_required
+def api_filing_events(ticker):
+    """Recent SEC 8-K material-event filings (FSI L2)."""
+    days = request.args.get("days", 30, type=int)
+    filings = get_recent_filing_events(ticker.upper(), days=days)
+    return jsonify({"ticker": ticker.upper(), "days": days, "filings": filings})
+@app.route("/api/central-bank/latest-delta")
+@login_required
+def api_central_bank_latest_delta():
+    """Paragraph/word-level diff of the most recent FOMC statement against
+    the one before it, plus a sentiment shift on just the changed text
+    (FSI L4). Cache-only -- job_central_bank_refresh keeps this warm."""
+    bank = request.args.get("bank", "Fed")
+    return jsonify(get_latest_central_bank_delta(bank))
+@app.route("/api/earnings-lean/<ticker>")
+@login_required
+def api_earnings_lean(ticker):
+    """Historical EPS beat rate + current pre-print signal trend (FSI L3).
+    Explicitly not a guaranteed prediction -- an interpretable, rules-based
+    lean with every contributing input shown."""
+    lean = predict_next_earnings_lean(ticker.upper())
+    return jsonify(lean)
 @app.route("/api/confluence/<symbol>")
 @login_required
 def api_confluence(symbol):
@@ -3063,6 +3148,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
 
+        # Credit spread regime -- HYG vs LQD relative strength (cached 15min in credit_spread.py)
+        try:
+            cs = get_credit_spread()
+            if cs:
+                _macro_cache = {**_macro_cache, "CREDIT_SPREAD": {
+                    "label": "Credit Spread", "value": cs["spread_20d"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_spread error: {e}")
         # 2s10s yield curve spread (pure arithmetic on the macro snapshot above)
         try:
             yc = compute_yield_curve_spread(_macro_cache)
@@ -3102,6 +3196,25 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Empire State Manufacturing Survey diffusion index (cached 1h in
+        # empire_state_manufacturing_client.py)
+        try:
+            es = get_empire_state()
+            if es:
+                _macro_cache = {**_macro_cache, "EMPIRE_STATE": {
+                    "label": "Empire St. Mfg", "value": es["latest"], "rating": es["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] empire_state_manufacturing error: {e}")
+        # Nonfarm Payrolls headline print/trend (cached 1h in payrolls.py)
+        try:
+            pr = get_payrolls()
+            if pr:
+                _macro_cache = {**_macro_cache, "PAYROLLS": {
+                    "label": "NFP", "value": pr["change_k"], "rating": pr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] payrolls error: {e}")
         # Producer Price Index Final Demand -- upstream wholesale-inflation
         # leading indicator (cached 1h in ppi_client.py)
         try:
@@ -3958,6 +4071,12 @@ def on_view_symbol(data):
 
 if __name__ == "__main__":
     print("=== SENTINEL FI — Financial Intelligence Dashboard ===")
+
+    RESOLVED_PORT = find_free_port(PORT)
+    if RESOLVED_PORT != PORT:
+        print(f"[Init] Port {PORT} unavailable — reassigned to {RESOLVED_PORT}")
+    write_runtime_port(RESOLVED_PORT)
+
     init_db()
 
     # Claude's and Gemini's RnD cycles both write files and run `git add -A`
@@ -4064,6 +4183,10 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
 
+    def job_trends_refresh():
+        """Refresh Google Trends search-interest velocity daily for portfolio + watchlist
+        symbols (L3). One conservative keyword per symbol -- pytrends is unofficial and
+        best-effort, never a hard dependency."""
     def job_short_volume_refresh():
         """Refresh FINRA Reg SHO daily short-volume ratios for portfolio +
         watchlist symbols, populate the watchlist-badge cache, and check for
@@ -4077,6 +4200,10 @@ if __name__ == "__main__":
             symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
             if not symbols:
                 return
+            stored = refresh_trends_interest(symbols)
+            print(f"[GoogleTrends] Search interest refreshed — {stored}/{len(symbols)} symbols")
+        except Exception as e:
+            print(f"[GoogleTrends] Search interest refresh error: {e}")
             stored = refresh_short_volume(symbols)
             cache = {}
             for sym in symbols:
@@ -4141,6 +4268,27 @@ if __name__ == "__main__":
         """Weekly calendar-seasonality refresh for portfolio + watchlist symbols
         (FSI L3). Weekly, not daily -- month/day-of-week historical bias by
         definition doesn't shift within a week, unlike the daily SEC/Finviz jobs."""
+    def job_analyst_ratings_refresh():
+        """Refresh yfinance upgrade/downgrade history daily for portfolio +
+        watchlist symbols (FSI L2)."""
+    def job_sec_8k_refresh():
+        """Poll SEC EDGAR's current-filings feed for 8-Ks on portfolio/watchlist
+        tickers, then fire an alert for high-signal Item codes (FSI L2)."""
+    def job_central_bank_refresh():
+        """Check for a new FOMC statement daily (FSI L4). Idempotent --
+        refresh_central_bank_deltas() only fetches meeting dates that have
+        already happened and aren't stored yet, so a daily cadence is just
+        a cheap no-op on the ~358 days/year without a fresh statement."""
+        try:
+            results = refresh_central_bank_deltas("Fed")
+            if results:
+                print(f"[CentralBank] Fetched {len(results)} new FOMC statement delta(s)")
+        except Exception as e:
+            print(f"[CentralBank] Refresh error: {e}")
+    def job_earnings_history_refresh():
+        """Refresh EPS beat/miss history weekly, scoped to portfolio + watchlist
+        symbols with an earnings print due in the next 30 days (reuses the
+        existing calendar_client data instead of a full-universe refetch)."""
         try:
             from memory_store import get_conn as _gc
             with _gc() as c:
@@ -4158,6 +4306,44 @@ if __name__ == "__main__":
             print(f"[Seasonality] Refreshed {refreshed}/{len(symbols)} symbols")
         except Exception as e:
             print(f"[Seasonality] Refresh error: {e}")
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            total_new = 0
+            for sym in symbols:
+                total_new += refresh_analyst_ratings(sym)
+            print(f"[AnalystData] Ratings refreshed — {total_new} new actions across {len(symbols)} symbols")
+        except Exception as e:
+            print(f"[AnalystData] Ratings refresh error: {e}")
+            symbols = {s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s}
+            if not symbols:
+                return
+            filings = fetch_current_8k_filings(tickers=symbols)
+            new_count = insert_filing_events(filings)
+            if new_count:
+                print(f"[SEC-8K] {new_count} new filing(s) stored")
+            for f in filings:
+                if f["signal_type"] != "material":
+                    continue
+                msg = f"{f['company']} ({f['ticker']}) filed 8-K: {f['item_summary']}"
+                socketio.emit("alert", {"title": f"${f['ticker']} Material 8-K Filing",
+                                        "message": msg, "level": "info"})
+                insert_alert("info", f"${f['ticker']} Material 8-K Filing", msg, f["ticker"])
+        except Exception as e:
+            print(f"[SEC-8K] Refresh error: {e}")
+            tracked = {s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s}
+            if not tracked:
+                return
+            upcoming = {e["symbol"] for e in get_calendar_events(days=30)
+                        if e["event_type"] == "earnings" and e["symbol"] in tracked}
+            if not upcoming:
+                return
+            total_new = 0
+            for sym in upcoming:
+                total_new += refresh_earnings_history(sym)
+            print(f"[Earnings] History refreshed for {len(upcoming)} symbol(s) with upcoming prints — {total_new} new quarters")
+        except Exception as e:
+            print(f"[Earnings] History refresh error: {e}")
 
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
@@ -4286,6 +4472,11 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
     scheduler.add_job(job_seasonality_refresh, "cron", day_of_week="sun", hour=8, minute=0, id="seasonality")
+    scheduler.add_job(job_trends_refresh, "cron", hour=8, minute=0, id="trends_interest")
+    scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=7, minute=45, id="analyst_ratings")
+    scheduler.add_job(job_sec_8k_refresh, "interval", minutes=10, id="sec_8k", jitter=60)
+    scheduler.add_job(job_central_bank_refresh, "cron", hour=19, minute=30, id="central_bank")
+    scheduler.add_job(job_earnings_history_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="earnings_history")
     scheduler.add_job(job_param_optimizer, "cron", hour=7, minute=45, id="param_optimizer")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")
@@ -4302,7 +4493,7 @@ if __name__ == "__main__":
     # Auto-install shortcuts on first run (or if missing)
     def _auto_install():
         try:
-            result = _installer.install(PORT)
+            result = _installer.install(RESOLVED_PORT)
             if result["success"] and result["actions"]:
                 print(f"[Install] Shortcuts created: {', '.join(result['actions'])}")
             elif result.get("warnings"):
@@ -4342,5 +4533,5 @@ if __name__ == "__main__":
 
     threading.Thread(target=_startup, daemon=True).start()
 
-    print(f"[Init] Dashboard → http://localhost:{PORT}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
+    print(f"[Init] Dashboard → http://localhost:{RESOLVED_PORT}")
+    socketio.run(app, host="0.0.0.0", port=RESOLVED_PORT, debug=False, allow_unsafe_werkzeug=True)

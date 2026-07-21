@@ -39,6 +39,7 @@ from fear_greed_client import fetch_fear_greed
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from empire_state_manufacturing_client import get_empire_state
 from payrolls import get_payrolls
 from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
@@ -2003,6 +2004,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/empire-state-manufacturing")
+@login_required
+def api_empire_state_manufacturing():
+    """NY Fed Empire State Manufacturing Survey general business conditions
+    diffusion index (FSI L2) -- cached 1h, see
+    empire_state_manufacturing_client.py."""
+    return jsonify(get_empire_state() or {})
 @app.route("/api/payrolls")
 @login_required
 def api_payrolls():
@@ -3162,6 +3170,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Empire State Manufacturing Survey diffusion index (cached 1h in
+        # empire_state_manufacturing_client.py)
+        try:
+            es = get_empire_state()
+            if es:
+                _macro_cache = {**_macro_cache, "EMPIRE_STATE": {
+                    "label": "Empire St. Mfg", "value": es["latest"], "rating": es["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] empire_state_manufacturing error: {e}")
         # Nonfarm Payrolls headline print/trend (cached 1h in payrolls.py)
         try:
             pr = get_payrolls()

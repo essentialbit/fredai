@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from case_shiller_client import get_case_shiller
 from wage_growth import get_wage_growth
 from stablecoin_flow import get_stablecoin_flow
 from empire_state_manufacturing_client import get_empire_state
@@ -2079,6 +2080,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/case-shiller")
+@login_required
+def api_case_shiller():
+    """S&P/Case-Shiller U.S. National Home Price Index (FRED CSUSHPINSA)
+    appreciating/depreciating/stable regime signal (FSI L2) -- cached 1h,
+    see case_shiller_client.py."""
+    return jsonify(get_case_shiller() or {})
 @app.route("/api/wage-growth")
 @login_required
 def api_wage_growth():
@@ -3308,6 +3316,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # S&P/Case-Shiller home price index regime signal (cached 1h in case_shiller_client.py)
+        try:
+            cs = get_case_shiller()
+            if cs:
+                _macro_cache = {**_macro_cache, "CASE_SHILLER": {
+                    "label": "Home Prices", "value": cs["change_yoy_pct"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] case_shiller error: {e}")
         # Average Hourly Earnings wage growth (cached 1h in wage_growth.py)
         try:
             wg = get_wage_growth()

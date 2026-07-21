@@ -234,6 +234,37 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS ticker_debates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            bull_json TEXT NOT NULL,
+            bear_json TEXT NOT NULL,
+            verdict_json TEXT NOT NULL,
+            consensus TEXT NOT NULL,
+            confidence REAL NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS vault_embeddings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            path TEXT NOT NULL,
+            chunk_text TEXT NOT NULL,
+            embedding_json TEXT NOT NULL,
+            mtime REAL NOT NULL,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS optimized_params (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            indicator TEXT NOT NULL,
+            params_json TEXT NOT NULL,
+            score REAL NOT NULL,
+            sample_size INTEGER NOT NULL,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, indicator)
+        );
+
         CREATE TABLE IF NOT EXISTS insider_transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -248,6 +279,42 @@ def init_db():
             acquired_disposed TEXT,
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
+        );
+
+        CREATE TABLE IF NOT EXISTS central_bank_statements (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bank TEXT NOT NULL,
+            meeting_date TEXT NOT NULL,
+            prior_meeting_date TEXT,
+            raw_text TEXT,
+            added_paragraphs TEXT,
+            removed_paragraphs TEXT,
+            changed_paragraphs TEXT,
+            sentiment_delta REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(bank, meeting_date)
+        );
+
+        CREATE TABLE IF NOT EXISTS earnings_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            earnings_date TEXT NOT NULL,
+            eps_estimate REAL,
+            reported_eps REAL,
+            surprise_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, earnings_date)
+        );
+
+        CREATE TABLE IF NOT EXISTS short_volume_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            trade_date TEXT NOT NULL,
+            short_volume REAL,
+            total_volume REAL,
+            short_volume_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(symbol, trade_date)
         );
 
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
@@ -266,6 +333,64 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
         CREATE INDEX IF NOT EXISTS idx_trends_interest_ticker ON google_trends_interest(ticker, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_central_bank_meeting ON central_bank_statements(bank, meeting_date);
+        CREATE INDEX IF NOT EXISTS idx_earnings_history_ticker ON earnings_history(ticker, earnings_date);
+
+        CREATE TABLE IF NOT EXISTS job_listings_daily (
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            open_roles INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, date)
+        );
+        CREATE INDEX IF NOT EXISTS idx_job_listings_ticker ON job_listings_daily(ticker, date);
+
+        CREATE TABLE IF NOT EXISTS geopolitical_risk_daily (
+            date TEXT PRIMARY KEY,
+            score REAL NOT NULL,
+            article_count INTEGER NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_short_volume_symbol ON short_volume_history(symbol, trade_date);
+        CREATE INDEX IF NOT EXISTS idx_ticker_debates_ticker ON ticker_debates(ticker, created_at);
+        CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
+        CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
+
+        CREATE TABLE IF NOT EXISTS tracked_entities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            entity_type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            thesis TEXT DEFAULT '',
+            confidence REAL DEFAULT 0.5,
+            status TEXT DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, entity_type, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_links (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            from_entity_id INTEGER NOT NULL,
+            to_entity_id INTEGER NOT NULL,
+            relationship TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(from_entity_id, to_entity_id, relationship)
+        );
+
+        CREATE TABLE IF NOT EXISTS entity_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            entity_id INTEGER NOT NULL,
+            note TEXT NOT NULL,
+            source TEXT DEFAULT '',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_tracked_entities_user ON tracked_entities(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_entity_links_from ON entity_links(from_entity_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_links_to ON entity_links(to_entity_id);
+        CREATE INDEX IF NOT EXISTS idx_entity_evidence_entity ON entity_evidence(entity_id, created_at);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -503,24 +628,30 @@ def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0,
 
 
 def get_signals(hours=4, asset=None, limit=200) -> list[dict]:
-    since = datetime.utcnow() - timedelta(hours=hours)
+    # Space-separated to match signals.timestamp's CURRENT_TIMESTAMP default --
+    # .isoformat() produces a 'T' separator, and since space (0x20) sorts below
+    # 'T' (0x54) lexicographically, a same-day T-separated cutoff always
+    # compares "greater than" a space-separated column value regardless of
+    # actual time, silently matching zero rows (same bug class as get_news's
+    # published_at fix -- see that docstring).
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         if asset:
             rows = conn.execute(
                 "SELECT * FROM signals WHERE timestamp > ? AND asset = ? ORDER BY timestamp DESC LIMIT ?",
-                (since.isoformat(), asset, limit)
+                (since, asset, limit)
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT * FROM signals WHERE timestamp > ? ORDER BY timestamp DESC LIMIT ?",
-                (since.isoformat(), limit)
+                (since, limit)
             ).fetchall()
     return [dict(r) for r in rows]
 
 
 def get_trending_assets(hours: int = 4, limit: int = 20) -> list[dict]:
     """Return assets ranked by signal volume and sentiment shift in last N hours."""
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT asset,
@@ -533,7 +664,7 @@ def get_trending_assets(hours: int = 4, limit: int = 20) -> list[dict]:
                GROUP BY asset
                ORDER BY signal_count DESC
                LIMIT ?""",
-            (since.isoformat(), limit)
+            (since, limit)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -654,7 +785,7 @@ def get_sentiment_snapshot(symbols: list[str], hours: int = 24, min_real: int = 
 
 
 def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             """SELECT
@@ -667,7 +798,7 @@ def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
             FROM signals
             WHERE timestamp > ? AND source = 'twitter'
             GROUP BY bucket ORDER BY bucket ASC""",
-            (bucket_minutes, bucket_minutes, since.isoformat())
+            (bucket_minutes, bucket_minutes, since)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -703,11 +834,11 @@ def insert_trend(asset, metric, value, trend_direction):
 
 
 def get_trend_history(asset, metric, hours=24) -> list[dict]:
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM trends WHERE asset=? AND metric=? AND timestamp>? ORDER BY timestamp ASC",
-            (asset, metric, since.isoformat())
+            (asset, metric, since)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -736,11 +867,11 @@ def get_pending_outcomes(checkpoint: str, min_hours: float) -> list[dict]:
     if checkpoint not in _OUTCOME_CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
     col = f"price_at_{checkpoint}"
-    cutoff = datetime.utcnow() - timedelta(hours=min_hours)
+    cutoff = (datetime.utcnow() - timedelta(hours=min_hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             f"SELECT * FROM signal_outcomes WHERE {col} IS NULL AND price_at_t0 IS NOT NULL AND predicted_at<=?",
-            (cutoff.isoformat(),)
+            (cutoff,)
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -779,11 +910,11 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
     if checkpoint not in _OUTCOME_CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
     col = f"price_at_{checkpoint}"
-    since = datetime.utcnow() - timedelta(hours=hours)
+    since = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         rows = conn.execute(
             f"SELECT * FROM signal_outcomes WHERE {col} IS NOT NULL AND predicted_at>?",
-            (since.isoformat(),)
+            (since,)
         ).fetchall()
     rows = [dict(r) for r in rows]
 
@@ -1083,7 +1214,7 @@ def prune_old_data(retention_days: int = 90):
     Personal data (users, portfolio, watchlist) is never auto-pruned.
     """
     from datetime import timedelta
-    cutoff = (datetime.utcnow() - timedelta(days=retention_days)).isoformat()
+    cutoff = (datetime.utcnow() - timedelta(days=retention_days)).strftime("%Y-%m-%d %H:%M:%S")
     with get_conn() as conn:
         deleted_signals = conn.execute(
             "DELETE FROM signals WHERE timestamp < ?", (cutoff,)
@@ -1410,6 +1541,43 @@ def get_latest_search_interest(ticker: str) -> dict | None:
         return dict(row) if row else None
 
 
+# ── FINRA REG SHO SHORT VOLUME ────────────────────────────────────────────────
+
+def insert_short_volume(symbol: str, trade_date: str, short_volume: float, total_volume: float, short_volume_pct: float):
+    """One row per (symbol, trade_date) -- INSERT OR IGNORE keeps a same-day
+    re-run of the refresh job idempotent instead of duplicating rows."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO short_volume_history
+               (symbol, trade_date, short_volume, total_volume, short_volume_pct)
+               VALUES (?, ?, ?, ?, ?)""",
+            (symbol, trade_date, short_volume, total_volume, short_volume_pct)
+        )
+
+
+def get_short_volume_series(symbol: str, limit: int = 30) -> list[dict]:
+    """Ascending by trade_date (oldest first) -- ready to feed straight into
+    a rolling z-score/trend helper."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT * FROM (
+                   SELECT * FROM short_volume_history WHERE symbol=?
+                   ORDER BY trade_date DESC LIMIT ?
+               ) ORDER BY trade_date ASC""",
+            (symbol, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_latest_short_volume(symbol: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM short_volume_history WHERE symbol=? ORDER BY trade_date DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
     """Latest daily search-interest reading vs the trailing average of up to
     `lookback` prior readings, expressed as a % velocity. Requires at least
@@ -1434,6 +1602,107 @@ def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
         "avg_prior": round(avg_prior, 1),
         "velocity_pct": round(velocity_pct, 1),
     }
+
+
+def insert_ticker_debate(ticker: str, bull: dict, bear: dict, verdict: dict):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO ticker_debates
+               (ticker, bull_json, bear_json, verdict_json, consensus, confidence)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (ticker, json.dumps(bull), json.dumps(bear), json.dumps(verdict),
+             verdict.get("consensus"), verdict.get("confidence"))
+        )
+
+
+def get_latest_ticker_debate(ticker: str, max_age_s: float | None = None) -> dict | None:
+    """Latest persisted debate for ticker, or None if there isn't one yet
+    or (when max_age_s is given) the latest one is older than that. Age is
+    computed in Python against SQLite's own CURRENT_TIMESTAMP format
+    ("%Y-%m-%d %H:%M:%S", space-separated, UTC) rather than a SQL WHERE
+    clause -- avoids the isoformat()-vs-CURRENT_TIMESTAMP string-sort bug
+    class already hit elsewhere in this file."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM ticker_debates WHERE ticker=? ORDER BY created_at DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+    if not row:
+        return None
+    d = dict(row)
+    if max_age_s is not None:
+        created = datetime.strptime(d["created_at"], "%Y-%m-%d %H:%M:%S")
+        if (datetime.utcnow() - created).total_seconds() > max_age_s:
+            return None
+    return {
+        "ticker": d["ticker"],
+        "bull": json.loads(d["bull_json"]),
+        "bear": json.loads(d["bear_json"]),
+        "verdict": json.loads(d["verdict_json"]),
+        "created_at": d["created_at"],
+    }
+
+
+def upsert_vault_chunk(path: str, chunk_text: str, embedding: list[float], mtime: float):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO vault_embeddings (path, chunk_text, embedding_json, mtime) VALUES (?, ?, ?, ?)",
+            (path, chunk_text, json.dumps(embedding), mtime)
+        )
+
+
+def get_all_vault_chunks() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT path, chunk_text, embedding_json FROM vault_embeddings").fetchall()
+    return [
+        {"path": r["path"], "chunk_text": r["chunk_text"], "embedding": json.loads(r["embedding_json"])}
+        for r in rows
+    ]
+
+
+def get_vault_chunk_mtimes() -> dict:
+    """Latest indexed mtime per source file, for incremental reindexing."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT path, MAX(mtime) as mtime FROM vault_embeddings GROUP BY path"
+        ).fetchall()
+    return {r["path"]: r["mtime"] for r in rows}
+
+
+def delete_vault_chunks_for_path(path: str):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM vault_embeddings WHERE path=?", (path,))
+
+
+def upsert_optimized_params(ticker: str, indicator: str, params: dict, score: float, sample_size: int):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO optimized_params (ticker, indicator, params_json, score, sample_size, computed_at)
+               VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(ticker, indicator) DO UPDATE SET
+                   params_json=excluded.params_json, score=excluded.score,
+                   sample_size=excluded.sample_size, computed_at=excluded.computed_at""",
+            (ticker, indicator, json.dumps(params), score, sample_size)
+        )
+
+
+def get_optimized_params(ticker: str, indicator: str | None = None) -> list[dict]:
+    with get_conn() as conn:
+        if indicator:
+            rows = conn.execute(
+                "SELECT * FROM optimized_params WHERE ticker=? AND indicator=?",
+                (ticker, indicator)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM optimized_params WHERE ticker=?", (ticker,)
+            ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["params"] = json.loads(d.pop("params_json"))
+        out.append(d)
+    return out
 
 
 # ── INSIDER TRANSACTIONS (SEC Form 4) ─────────────────────────────────────────
@@ -1464,6 +1733,163 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     query += " ORDER BY transaction_date DESC"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── CENTRAL BANK STATEMENT DELTAS ────────────────────────────────────────────
+
+def save_central_bank_statement(bank: str, meeting_date: str, prior_meeting_date: str | None,
+                                 raw_text: str, delta: dict) -> None:
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO central_bank_statements
+                (bank, meeting_date, prior_meeting_date, raw_text, added_paragraphs,
+                 removed_paragraphs, changed_paragraphs, sentiment_delta, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(bank, meeting_date) DO UPDATE SET
+                prior_meeting_date=excluded.prior_meeting_date,
+                raw_text=excluded.raw_text,
+                added_paragraphs=excluded.added_paragraphs,
+                removed_paragraphs=excluded.removed_paragraphs,
+                changed_paragraphs=excluded.changed_paragraphs,
+                sentiment_delta=excluded.sentiment_delta,
+                fetched_at=CURRENT_TIMESTAMP
+        """, (
+            bank, meeting_date, prior_meeting_date, raw_text,
+            json.dumps(delta.get("added", [])),
+            json.dumps(delta.get("removed", [])),
+            json.dumps(delta.get("changed", [])),
+            delta.get("sentiment_delta"),
+        ))
+
+
+def _hydrate_central_bank_row(row) -> dict:
+    d = dict(row)
+    d["added_paragraphs"] = json.loads(d["added_paragraphs"] or "[]")
+    d["removed_paragraphs"] = json.loads(d["removed_paragraphs"] or "[]")
+    d["changed_paragraphs"] = json.loads(d["changed_paragraphs"] or "[]")
+    return d
+
+
+def get_central_bank_statement(bank: str, meeting_date: str | None) -> dict | None:
+    if not meeting_date:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? AND meeting_date=?",
+            (bank, meeting_date),
+        ).fetchone()
+    return _hydrate_central_bank_row(row) if row else None
+
+
+def get_latest_central_bank_delta(bank: str = "Fed") -> dict:
+    """Cache-only -- the weekly-ish scheduled job keeps this warm, this
+    never triggers a live fetch."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM central_bank_statements WHERE bank=? ORDER BY meeting_date DESC LIMIT 1",
+            (bank,),
+        ).fetchone()
+    if not row:
+        return {"bank": bank, "status": "no_data"}
+    return _hydrate_central_bank_row(row)
+
+
+# ── EARNINGS HISTORY (beat/miss tracking) ──────────────────────────────────────
+
+def insert_earnings_history(rows: list[dict]) -> int:
+    """Idempotent on (ticker, earnings_date) -- safe to call repeatedly with
+    overlapping quarter history. Returns rows actually inserted."""
+    if not rows:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO earnings_history
+                (ticker, earnings_date, eps_estimate, reported_eps, surprise_pct)
+            VALUES (:ticker, :earnings_date, :eps_estimate, :reported_eps, :surprise_pct)
+        """, rows)
+        return conn.total_changes - before
+
+
+def get_earnings_history(ticker: str, limit: int = 12) -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM earnings_history WHERE ticker=? ORDER BY earnings_date DESC LIMIT ?",
+            (ticker, limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def get_earnings_beat_rate(ticker: str, limit: int = 12) -> dict | None:
+    """Beat-rate base rate over the last `limit` reported quarters, e.g.
+    'beat in 9 of last 12 quarters, average surprise +4.2%'. Returns None
+    (no fabricated 0%) when there's no stored history for this ticker."""
+    history = get_earnings_history(ticker, limit=limit)
+    if not history:
+        return None
+    beats = sum(1 for h in history if (h["surprise_pct"] or 0) > 0)
+    misses = sum(1 for h in history if (h["surprise_pct"] or 0) < 0)
+    surprises = [h["surprise_pct"] for h in history if h["surprise_pct"] is not None]
+    return {
+        "quarters": len(history),
+        "beats": beats,
+        "misses": misses,
+        "inline": len(history) - beats - misses,
+        "beat_rate_pct": round(beats * 100.0 / len(history), 1),
+        "avg_surprise_pct": round(sum(surprises) / len(surprises), 2) if surprises else None,
+    }
+
+
+def record_job_listings_daily(ticker: str, date: str, open_roles: int) -> bool:
+    """Idempotent per (ticker, date) -- returns False if today's row for
+    this ticker already exists (already recorded this cycle, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT date FROM job_listings_daily WHERE ticker=? AND date=?", (ticker, date)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO job_listings_daily (ticker, date, open_roles) VALUES (?,?,?)",
+            (ticker, date, open_roles)
+        )
+        return True
+
+
+def get_job_listings_history(ticker: str, days: int = 90) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM job_listings_daily WHERE ticker=? AND date >= ? ORDER BY date ASC",
+            (ticker, since)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def record_geopolitical_risk_daily(date: str, score: float, article_count: int) -> bool:
+    """Idempotent per date -- returns False if today's row already exists
+    (already recorded this cycle, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT date FROM geopolitical_risk_daily WHERE date=?", (date,)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO geopolitical_risk_daily (date, score, article_count) VALUES (?,?,?)",
+            (date, score, article_count)
+        )
+        return True
+
+
+def get_geopolitical_risk_history(days: int = 90) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM geopolitical_risk_daily WHERE date >= ? ORDER BY date ASC",
+            (since,)
+        ).fetchall()
         return [dict(r) for r in rows]
 
 

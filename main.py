@@ -147,6 +147,7 @@ from memory_store import (
     insert_institutional_holdings, get_institutional_holdings_for_symbol,
     insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
+    save_seasonal_bias, get_current_seasonality,
     insert_alert,
     get_latest_central_bank_delta,
     insert_alert,
@@ -166,6 +167,7 @@ from finviz_client import refresh_short_interest
 from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from seasonality_engine import compute_seasonal_bias
 from options_data_client import refresh_options_data
 from sec_13f_client import fetch_13f_holdings, MANAGERS as INSTITUTIONAL_MANAGERS
 from analyst_data import refresh_analyst_ratings, get_analyst_summary
@@ -2691,6 +2693,13 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/seasonality/<ticker>")
+@login_required
+def api_seasonality(ticker):
+    """This calendar month's + today's weekday's historical return bias (FSI L3).
+    Cache-only -- weekly job_seasonality_refresh keeps portfolio/watchlist symbols
+    warm; never fetches live so this route never blocks on Yahoo history calls."""
+    return jsonify(get_current_seasonality(ticker.upper()))
 @app.route("/api/options/<ticker>")
 @login_required
 def api_options_data(ticker):
@@ -4314,6 +4323,10 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_seasonality_refresh():
+        """Weekly calendar-seasonality refresh for portfolio + watchlist symbols
+        (FSI L3). Weekly, not daily -- month/day-of-week historical bias by
+        definition doesn't shift within a week, unlike the daily SEC/Finviz jobs."""
     def job_options_refresh():
         """Refresh put/call ratio + ATM IV daily for portfolio + watchlist
         symbols with listed options (US equities/ETFs only -- crypto and most
@@ -4356,6 +4369,18 @@ if __name__ == "__main__":
             with _gc() as c:
                 port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
                 wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = set(port_rows + wl_rows)
+            if not symbols:
+                return
+            refreshed = 0
+            for sym in symbols:
+                bias = compute_seasonal_bias(sym)
+                if bias.get("status") == "ok":
+                    save_seasonal_bias(sym, bias)
+                    refreshed += 1
+            print(f"[Seasonality] Refreshed {refreshed}/{len(symbols)} symbols")
+        except Exception as e:
+            print(f"[Seasonality] Refresh error: {e}")
             symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
             if not symbols:
                 return
@@ -4552,6 +4577,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_seasonality_refresh, "cron", day_of_week="sun", hour=8, minute=0, id="seasonality")
     scheduler.add_job(job_options_refresh, "cron", hour=8, minute=0, id="options_data")
     scheduler.add_job(job_institutional_holdings_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="institutional_holdings")
     scheduler.add_job(job_trends_refresh, "cron", hour=8, minute=0, id="trends_interest")

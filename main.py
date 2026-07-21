@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from unemployment_rate_client import get_unemployment_rate
 from case_shiller_client import get_case_shiller
 from wage_growth import get_wage_growth
 from stablecoin_flow import get_stablecoin_flow
@@ -2080,6 +2081,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/unemployment-rate")
+@login_required
+def api_unemployment_rate():
+    """Civilian Unemployment Rate (FRED UNRATE) -- headline labor-market
+    macro badge (FSI L2). Cached 1h, see unemployment_rate_client.py."""
+    return jsonify(get_unemployment_rate() or {})
 @app.route("/api/case-shiller")
 @login_required
 def api_case_shiller():
@@ -3316,6 +3323,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Civilian Unemployment Rate (cached 1h in unemployment_rate_client.py)
+        try:
+            ur = get_unemployment_rate()
+            if ur:
+                _macro_cache = {**_macro_cache, "UNEMPLOYMENT_RATE": {
+                    "label": "Unemployment", "value": ur["latest_pct"], "rating": ur["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] unemployment_rate error: {e}")
         # S&P/Case-Shiller home price index regime signal (cached 1h in case_shiller_client.py)
         try:
             cs = get_case_shiller()

@@ -27,9 +27,11 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 import requests
+from dotenv import load_dotenv
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
+load_dotenv()
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN", "")
 GITHUB_REPO  = os.getenv("GITHUB_REPO", "essentialbit/fredai")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -126,6 +128,23 @@ def _gh_post(path: str, body: dict) -> dict | None:
     except Exception as e:
         print(f"  [GH] POST error {path}: {e}")
     return None
+
+
+def _gh_delete(path: str) -> bool:
+    try:
+        r = requests.delete(
+            f"{_GH_API}/{path.lstrip('/')}",
+            headers=_gh_headers(), timeout=_TIMEOUT
+        )
+        if r.status_code in (200, 204):
+            return True
+        # 404 means the label was already gone — treat as success, not an error.
+        if r.status_code == 404:
+            return True
+        print(f"  [GH] DELETE {path} → {r.status_code}: {r.text[:120]}")
+    except Exception as e:
+        print(f"  [GH] DELETE error {path}: {e}")
+    return False
 
 
 def _post_issue_comment(number: int, body: str) -> bool:

@@ -3926,16 +3926,18 @@ def on_chat(data):
     # Pass portfolio for context — values anonymized per privacy settings in agent.py
     holdings = get_portfolio(user_id) if user_id else []
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    tool_log = []
     entities_context = format_context_summary(user_id) if user_id else ""
     response = chat(user_msg, history, quotes=_quotes_cache,
                     user_interests=interests, portfolio=portfolio,
-                    tracked_entities=entities_context)
+                    tracked_entities=entities_context, tool_log=tool_log)
 
     history.append({"role": "assistant", "content": response})
     if len(history) > 24:
         _chat_histories[user_id] = history[-20:]
 
-    emit("chat_response", {"message": response, "timestamp": datetime.utcnow().isoformat()})
+    emit("chat_response", {"message": response, "timestamp": datetime.utcnow().isoformat(),
+                           "sources": tool_log})
 
 
 @socketio.on("view_symbol")

@@ -123,10 +123,14 @@ class _FredProvider:
         return self._provider
 
     def complete(self, messages: list, system: str, *,
-                  tier: str = "chat", max_tokens: int = 1024, grounding: bool = False) -> str:
+                  tier: str = "chat", max_tokens: int = 1024, grounding: bool = False,
+                  tools: bool = False, tool_log: list | None = None) -> str:
         """
         tier: "summary" → haiku/flash | "chat" → sonnet/flash | "rnd" → opus/pro
         Falls back through available providers (Anthropic -> Gemini -> Ollama) in case of errors.
+        tools=True enables the read-only agent_tools belt on providers that support
+        function calling (Anthropic/Gemini/Grok/Groq); Ollama keeps the plain
+        prompt-stuffed path unchanged. Executed tool names are appended to tool_log.
         """
         a_key, g_key = _get_api_keys()
 
@@ -164,28 +168,55 @@ class _FredProvider:
         providers_to_try = ["anthropic", "gemini", "grok", "groq", "ollama"]
         errors = []
         is_first = True
+        if tools:
+            from agent_tools import TOOLS_SYSTEM_NOTE
+            tools_system = system + TOOLS_SYSTEM_NOTE
         for p in providers_to_try:
             # Enforce 2.0s timeout limit on first (preferred) model to trigger immediate fallback if slow
             timeout = 2.0 if is_first else None
             is_first = False
+            # A failed provider may have executed some tools before erroring --
+            # drop its entries so the surfaced sources reflect only the answer
+            # that was actually returned.
+            log_mark = len(tool_log) if tool_log is not None else 0
 
             if p == "anthropic" and _key_is_valid(a_key):
-                result = self._anthropic_complete(messages, system, tier, max_tokens, a_key, timeout=timeout)
+                if tools:
+                    result = self._anthropic_complete_tools(messages, tools_system, tier, max_tokens, a_key, timeout=timeout, tool_log=tool_log)
+                else:
+                    result = self._anthropic_complete(messages, system, tier, max_tokens, a_key, timeout=timeout)
                 if not result.startswith("[Fred error"):
                     return result
                 errors.append(f"Anthropic error: {result}")
             elif p == "gemini" and _key_is_valid(g_key):
-                result = self._gemini_complete(messages, system, tier, max_tokens, g_key, timeout=timeout)
+                if tools:
+                    result = self._gemini_complete_tools(messages, tools_system, tier, max_tokens, g_key, timeout=timeout, tool_log=tool_log)
+                else:
+                    result = self._gemini_complete(messages, system, tier, max_tokens, g_key, timeout=timeout)
                 if not result.startswith("[Fred Gemini error"):
                     return result
                 errors.append(f"Gemini error: {result}")
             elif p == "grok" and _key_is_valid(XAI_API_KEY):
-                result = self._grok_complete(messages, system, tier, max_tokens, timeout=timeout)
+                if tools:
+                    result = self._openai_complete_tools(
+                        "https://api.x.ai/v1/chat/completions", XAI_API_KEY,
+                        {"summary": XAI_MODEL_SUMMARY, "chat": XAI_MODEL_CHAT, "rnd": XAI_MODEL_RND}.get(tier, XAI_MODEL_CHAT),
+                        "[Grok error", self._map_messages_for_grok(messages),
+                        tools_system, max_tokens, timeout=timeout, tool_log=tool_log)
+                else:
+                    result = self._grok_complete(messages, system, tier, max_tokens, timeout=timeout)
                 if not result.startswith("[Grok error"):
                     return result
                 errors.append(f"Grok error: {result}")
             elif p == "groq" and _key_is_valid(GROQ_API_KEY):
-                result = self._groq_complete(messages, system, tier, max_tokens, timeout=timeout)
+                if tools:
+                    result = self._openai_complete_tools(
+                        "https://api.groq.com/openai/v1/chat/completions", GROQ_API_KEY,
+                        {"summary": GROQ_MODEL_SUMMARY, "chat": GROQ_MODEL_CHAT, "rnd": GROQ_MODEL_RND}.get(tier, GROQ_MODEL_CHAT),
+                        "[Groq error", self._map_messages_for_groq(messages),
+                        tools_system, max_tokens, timeout=timeout, tool_log=tool_log)
+                else:
+                    result = self._groq_complete(messages, system, tier, max_tokens, timeout=timeout)
                 if not result.startswith("[Groq error"):
                     return result
                 errors.append(f"Groq error: {result}")
@@ -194,6 +225,9 @@ class _FredProvider:
                 if not result.startswith("[Ollama error"):
                     return result
                 errors.append(f"Ollama error: {result}")
+
+            if tool_log is not None and len(tool_log) > log_mark:
+                del tool_log[log_mark:]
 
         if errors:
             # Log full technical detail server-side for debugging; never surface raw
@@ -316,6 +350,136 @@ class _FredProvider:
             return resp.content[0].text
         except Exception as e:
             return f"[Fred error: {e}]"
+
+    def _anthropic_complete_tools(self, messages, system, tier, max_tokens, api_key,
+                                  timeout=None, tool_log=None) -> str:
+        from agent_tools import anthropic_tools, execute_tool, MAX_TOOL_ROUNDS
+        model = {
+            "summary": ANTHROPIC_MODEL_SUMMARY,
+            "chat": ANTHROPIC_MODEL_CHAT,
+            "rnd": ANTHROPIC_MODEL_RND,
+        }.get(tier, ANTHROPIC_MODEL_CHAT)
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+            mapped = self._map_messages_for_anthropic(messages)
+            for round_no in range(MAX_TOOL_ROUNDS + 1):
+                # Final round disables tools so the model must answer with text
+                # instead of erroring out at the round cap mid-lookup.
+                resp = client.messages.create(
+                    model=model,
+                    max_tokens=max_tokens,
+                    system=system,
+                    messages=mapped,
+                    tools=anthropic_tools(),
+                    tool_choice={"type": "none"} if round_no == MAX_TOOL_ROUNDS else {"type": "auto"},
+                    timeout=timeout if round_no == 0 else None,
+                )
+                tool_uses = [b for b in resp.content if b.type == "tool_use"]
+                if not tool_uses:
+                    text = "".join(b.text for b in resp.content if b.type == "text").strip()
+                    return text if text else "[Fred error: empty response]"
+                assistant_content, tool_results = [], []
+                for b in resp.content:
+                    if b.type == "text":
+                        assistant_content.append({"type": "text", "text": b.text})
+                    elif b.type == "tool_use":
+                        assistant_content.append({"type": "tool_use", "id": b.id,
+                                                  "name": b.name, "input": b.input})
+                        if tool_log is not None:
+                            tool_log.append(b.name)
+                        tool_results.append({"type": "tool_result", "tool_use_id": b.id,
+                                             "content": execute_tool(b.name, b.input)})
+                mapped.append({"role": "assistant", "content": assistant_content})
+                mapped.append({"role": "user", "content": tool_results})
+            return "[Fred error: tool loop exhausted]"
+        except Exception as e:
+            return f"[Fred error: {e}]"
+
+    def _gemini_complete_tools(self, messages, system, tier, max_tokens, api_key,
+                               timeout=None, tool_log=None) -> str:
+        from agent_tools import gemini_tool_declarations, execute_tool, MAX_TOOL_ROUNDS
+        model = {
+            "summary": GEMINI_MODEL_SUMMARY,
+            "chat": GEMINI_MODEL_CHAT,
+            "rnd": GEMINI_MODEL_RND,
+        }.get(tier, GEMINI_MODEL_CHAT)
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        contents = self._map_messages_for_gemini(messages)
+        try:
+            import requests as _req
+            for round_no in range(MAX_TOOL_ROUNDS + 1):
+                payload = {
+                    "contents": contents,
+                    "systemInstruction": {"parts": [{"text": system}]},
+                    "generationConfig": {"maxOutputTokens": max_tokens},
+                    "tools": [{"functionDeclarations": gemini_tool_declarations()}],
+                }
+                if round_no == MAX_TOOL_ROUNDS:
+                    payload["toolConfig"] = {"functionCallingConfig": {"mode": "NONE"}}
+                r = _req.post(url, json=payload, timeout=(timeout if round_no == 0 else None) or 60)
+                if r.status_code != 200:
+                    return f"[Fred Gemini error: Status {r.status_code} - {r.text[:200]}]"
+                parts = r.json()["candidates"][0]["content"]["parts"]
+                calls = [p["functionCall"] for p in parts if "functionCall" in p]
+                if not calls:
+                    text = "".join(p.get("text", "") for p in parts).strip()
+                    return text if text else "[Fred Gemini error: empty response]"
+                contents.append({"role": "model", "parts": parts})
+                responses = []
+                for c in calls:
+                    if tool_log is not None:
+                        tool_log.append(c["name"])
+                    # functionResponse.response must be a JSON object; the tool
+                    # result string (may be truncated JSON) goes in as a field.
+                    responses.append({"functionResponse": {
+                        "name": c["name"],
+                        "response": {"content": execute_tool(c["name"], c.get("args") or {})},
+                    }})
+                contents.append({"role": "user", "parts": responses})
+            return "[Fred Gemini error: tool loop exhausted]"
+        except Exception as e:
+            return f"[Fred Gemini error: {e}]"
+
+    def _openai_complete_tools(self, url, api_key, model, err_prefix, mapped, system,
+                               max_tokens, timeout=None, tool_log=None) -> str:
+        """Shared tool loop for the OpenAI-compatible providers (Grok, Groq)."""
+        from agent_tools import openai_tools, execute_tool, MAX_TOOL_ROUNDS
+        msgs = [{"role": "system", "content": system}] + mapped
+        try:
+            import requests as _req
+            for round_no in range(MAX_TOOL_ROUNDS + 1):
+                payload = {
+                    "model": model,
+                    "messages": msgs,
+                    "max_tokens": max_tokens,
+                    "tools": openai_tools(),
+                    "tool_choice": "none" if round_no == MAX_TOOL_ROUNDS else "auto",
+                }
+                r = _req.post(url, json=payload,
+                              headers={"Authorization": f"Bearer {api_key}"},
+                              timeout=(timeout if round_no == 0 else None) or 60)
+                if r.status_code != 200:
+                    return f"{err_prefix}: Status {r.status_code} - {r.text[:200]}]"
+                msg = r.json()["choices"][0]["message"]
+                tool_calls = msg.get("tool_calls")
+                if not tool_calls:
+                    text = (msg.get("content") or "").strip()
+                    return text if text else f"{err_prefix}: empty response]"
+                msgs.append(msg)
+                for tc in tool_calls:
+                    name = tc.get("function", {}).get("name", "")
+                    try:
+                        args = json.loads(tc["function"].get("arguments") or "{}")
+                    except (ValueError, KeyError):
+                        args = {}
+                    if tool_log is not None:
+                        tool_log.append(name)
+                    msgs.append({"role": "tool", "tool_call_id": tc.get("id", ""),
+                                 "content": execute_tool(name, args)})
+            return f"{err_prefix}: tool loop exhausted]"
+        except Exception as e:
+            return f"{err_prefix}: {e}]"
 
     def _gemini_complete(self, messages, system, tier, max_tokens, api_key, timeout=None, grounding=False) -> str:
         model_map = {
@@ -679,7 +843,7 @@ def _needs_disclaimer(user_msg: str, response: str) -> bool:
 
 def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None,
-         tracked_entities: str = "") -> str:
+         tracked_entities: str = "", tool_log: list | None = None) -> str:
     context = build_context_block(quotes, user_interests, portfolio, tracked_entities)
     try:
         from vault_semantic_search import get_vault_context
@@ -703,7 +867,8 @@ def chat(user_message: str, history: list[dict], quotes: dict = None,
         user_item["image"] = last_item["image"]
     messages.append(user_item)
 
-    response = _provider.complete(messages, FRED_SYSTEM, tier="chat", max_tokens=1024)
+    response = _provider.complete(messages, FRED_SYSTEM, tier="chat", max_tokens=1024,
+                                  tools=True, tool_log=tool_log)
 
     # Append disclaimer if response doesn't already contain one
     if _needs_disclaimer(user_message, response) and "not financial advice" not in response.lower():

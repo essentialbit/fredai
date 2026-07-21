@@ -136,7 +136,9 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
+    insert_alert,
     get_latest_central_bank_delta,
     insert_alert,
     get_optimized_params,
@@ -154,6 +156,7 @@ from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from sec_8k_client import fetch_current_8k_filings
 from earnings_predictor import refresh_earnings_history, predict_next_earnings_lean
 from confluence_engine import compute_confluence, refresh_confluence, get_cached_confluence
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
@@ -2609,6 +2612,13 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/filings/<ticker>")
+@login_required
+def api_filing_events(ticker):
+    """Recent SEC 8-K material-event filings (FSI L2)."""
+    days = request.args.get("days", 30, type=int)
+    filings = get_recent_filing_events(ticker.upper(), days=days)
+    return jsonify({"ticker": ticker.upper(), "days": days, "filings": filings})
 @app.route("/api/central-bank/latest-delta")
 @login_required
 def api_central_bank_latest_delta():
@@ -4147,6 +4157,9 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_sec_8k_refresh():
+        """Poll SEC EDGAR's current-filings feed for 8-Ks on portfolio/watchlist
+        tickers, then fire an alert for high-signal Item codes (FSI L2)."""
     def job_central_bank_refresh():
         """Check for a new FOMC statement daily (FSI L4). Idempotent --
         refresh_central_bank_deltas() only fetches meeting dates that have
@@ -4167,6 +4180,22 @@ if __name__ == "__main__":
             with _gc() as c:
                 port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
                 wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = {s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s}
+            if not symbols:
+                return
+            filings = fetch_current_8k_filings(tickers=symbols)
+            new_count = insert_filing_events(filings)
+            if new_count:
+                print(f"[SEC-8K] {new_count} new filing(s) stored")
+            for f in filings:
+                if f["signal_type"] != "material":
+                    continue
+                msg = f"{f['company']} ({f['ticker']}) filed 8-K: {f['item_summary']}"
+                socketio.emit("alert", {"title": f"${f['ticker']} Material 8-K Filing",
+                                        "message": msg, "level": "info"})
+                insert_alert("info", f"${f['ticker']} Material 8-K Filing", msg, f["ticker"])
+        except Exception as e:
+            print(f"[SEC-8K] Refresh error: {e}")
             tracked = {s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s}
             if not tracked:
                 return
@@ -4307,6 +4336,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_sec_8k_refresh, "interval", minutes=10, id="sec_8k", jitter=60)
     scheduler.add_job(job_central_bank_refresh, "cron", hour=19, minute=30, id="central_bank")
     scheduler.add_job(job_earnings_history_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="earnings_history")
     scheduler.add_job(job_param_optimizer, "cron", hour=7, minute=45, id="param_optimizer")

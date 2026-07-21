@@ -51,6 +51,7 @@ from natural_gas_client import get_natural_gas
 from household_debt_service_client import get_household_debt_service
 from federal_debt_gdp_client import get_federal_debt_gdp
 from federal_deficit_client import get_federal_deficit
+from foreign_treasury_holdings_client import get_foreign_treasury_holdings
 from credit_card_delinquency_client import get_credit_card_delinquency
 from t10y3m_spread_client import get_t10y3m_spread
 from labor_participation_client import get_labor_participation
@@ -2070,6 +2071,13 @@ def api_federal_deficit():
     """U.S. federal fiscal balance (FRED MTSDS133FMS), trailing-12mo rolling
     deficit run-rate (FSI L2) -- cached 6h, see federal_deficit_client.py."""
     return jsonify(get_federal_deficit() or {})
+@app.route("/api/foreign-treasury-holdings")
+@login_required
+def api_foreign_treasury_holdings():
+    """Foreign Holdings of US Treasury Debt (FRED FDHBFIN) -- geopolitical
+    capital-flow demand signal (FSI L2), distinct from the debt-burden and
+    deficit-run-rate badges. Cached 1h, see foreign_treasury_holdings_client.py."""
+    return jsonify(get_foreign_treasury_holdings() or {})
 @app.route("/api/credit-card-delinquency")
 @login_required
 def api_credit_card_delinquency():
@@ -3196,6 +3204,15 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] federal_debt_gdp error: {e}")
+        # Foreign Holdings of US Treasury Debt (geopolitical capital-flow demand signal, cached 1h in foreign_treasury_holdings_client.py)
+        try:
+            fth = get_foreign_treasury_holdings()
+            if fth:
+                _macro_cache = {**_macro_cache, "FOREIGN_UST_HOLDINGS": {
+                    "label": "Foreign UST Held", "value": fth["latest_trillions"], "rating": fth["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] foreign_treasury_holdings error: {e}")
         # Federal Surplus/Deficit fiscal-balance signal (cached 6h in federal_deficit_client.py)
         try:
             fd = get_federal_deficit()

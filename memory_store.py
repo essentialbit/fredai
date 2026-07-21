@@ -273,6 +273,20 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS analyst_ratings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            firm TEXT,
+            action TEXT,
+            from_grade TEXT,
+            to_grade TEXT,
+            price_target REAL,
+            prior_price_target REAL,
+            graded_at TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, firm, graded_at, action)
+        );
+
         CREATE TABLE IF NOT EXISTS filing_events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT,
@@ -338,6 +352,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_analyst_ratings_ticker ON analyst_ratings(ticker, graded_at);
         CREATE INDEX IF NOT EXISTS idx_central_bank_meeting ON central_bank_statements(bank, meeting_date);
         CREATE INDEX IF NOT EXISTS idx_earnings_history_ticker ON earnings_history(ticker, earnings_date);
 
@@ -1693,6 +1708,33 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     query += " ORDER BY transaction_date DESC"
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
+        return [dict(r) for r in rows]
+
+
+# ── ANALYST RATINGS ───────────────────────────────────────────────────────────
+
+def insert_analyst_ratings(ratings: list[dict]) -> int:
+    """Idempotent on (ticker, firm, graded_at, action) -- safe to call
+    repeatedly with overlapping upgrade/downgrade history."""
+    if not ratings:
+        return 0
+    with get_conn() as conn:
+        before = conn.total_changes
+        conn.executemany("""
+            INSERT OR IGNORE INTO analyst_ratings
+                (ticker, firm, action, from_grade, to_grade, price_target, prior_price_target, graded_at)
+            VALUES (:ticker, :firm, :action, :from_grade, :to_grade, :price_target, :prior_price_target, :graded_at)
+        """, ratings)
+        return conn.total_changes - before
+
+
+def get_recent_analyst_ratings(ticker: str, days: int = 90, limit: int = 10) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM analyst_ratings WHERE ticker=? AND graded_at >= ? ORDER BY graded_at DESC LIMIT ?",
+            (ticker, since, limit)
+        ).fetchall()
         return [dict(r) for r in rows]
 
 

@@ -156,6 +156,7 @@ from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from analyst_data import refresh_analyst_ratings, get_analyst_summary
 from sec_8k_client import fetch_current_8k_filings
 from earnings_predictor import refresh_earnings_history, predict_next_earnings_lean
 from confluence_engine import compute_confluence, refresh_confluence, get_cached_confluence
@@ -1586,7 +1587,28 @@ def api_analyst_report(ticker):
             user_prompt += f"- [{s.get('signal_type', 'signal')}] {s.get('content')[:150]} (Sentiment Score: {s.get('sentiment_score', 0.0)})\n"
     else:
         user_prompt += "No recent technical signal entries available for this symbol.\n"
-        
+
+    analyst_summary = get_analyst_summary(ticker)
+    if analyst_summary:
+        consensus = analyst_summary.get("consensus")
+        if consensus:
+            user_prompt += (
+                f"Real Wall Street Analyst Price-Target Consensus: mean ${consensus.get('mean')}, "
+                f"median ${consensus.get('median')}, range ${consensus.get('low')}-${consensus.get('high')} "
+                f"(implied upside vs current: {consensus.get('upside_pct')}%). "
+                "You MUST cite these exact real figures in your Recommendation section -- never invent a rating.\n"
+            )
+        recent_actions = analyst_summary.get("recent_actions")
+        if recent_actions:
+            user_prompt += "Recent Real Analyst Actions (cite firm names and dates exactly as given):\n"
+            for a in recent_actions[:5]:
+                user_prompt += f"- [{a.get('graded_at')}] {a.get('firm')}: {a.get('action')} ({a.get('from_grade')} -> {a.get('to_grade')}, target ${a.get('price_target')})\n"
+    else:
+        user_prompt += (
+            "No analyst-rating data available for this symbol -- explicitly state that analyst "
+            "coverage data is unavailable rather than inventing a rating or firm name.\n"
+        )
+
     try:
         report_markdown = _provider.complete([{"role": "user", "content": user_prompt}], system_prompt, tier="chat", max_tokens=1500)
     except Exception as e:
@@ -2612,6 +2634,16 @@ def api_insider_transactions(ticker):
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/analyst-ratings/<ticker>")
+@login_required
+def api_analyst_ratings(ticker):
+    """Real Wall Street analyst consensus target + recent upgrade/downgrade
+    actions (FSI L2) -- distinct from /api/analyst/report, which is Fred's
+    own LLM-generated narrative."""
+    summary = get_analyst_summary(ticker.upper().strip())
+    if not summary:
+        return jsonify({"ticker": ticker.upper(), "status": "no_data"})
+    return jsonify({"ticker": ticker.upper(), "status": "ok", **summary})
 @app.route("/api/filings/<ticker>")
 @login_required
 def api_filing_events(ticker):
@@ -4157,6 +4189,9 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_analyst_ratings_refresh():
+        """Refresh yfinance upgrade/downgrade history daily for portfolio +
+        watchlist symbols (FSI L2)."""
     def job_sec_8k_refresh():
         """Poll SEC EDGAR's current-filings feed for 8-Ks on portfolio/watchlist
         tickers, then fire an alert for high-signal Item codes (FSI L2)."""
@@ -4180,6 +4215,15 @@ if __name__ == "__main__":
             with _gc() as c:
                 port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
                 wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            total_new = 0
+            for sym in symbols:
+                total_new += refresh_analyst_ratings(sym)
+            print(f"[AnalystData] Ratings refreshed — {total_new} new actions across {len(symbols)} symbols")
+        except Exception as e:
+            print(f"[AnalystData] Ratings refresh error: {e}")
             symbols = {s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s}
             if not symbols:
                 return
@@ -4336,6 +4380,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=7, minute=45, id="analyst_ratings")
     scheduler.add_job(job_sec_8k_refresh, "interval", minutes=10, id="sec_8k", jitter=60)
     scheduler.add_job(job_central_bank_refresh, "cron", hour=19, minute=30, id="central_bank")
     scheduler.add_job(job_earnings_history_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="earnings_history")

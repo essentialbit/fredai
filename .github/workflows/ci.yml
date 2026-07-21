@@ -61,6 +61,16 @@ jobs:
           X_CONSUMER_SECRET: ${{ secrets.X_CONSUMER_SECRET || 'skip' }}
           X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN || 'skip' }}
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET || 'skip' }}
+      - name: Lint request.args.get type-default bug class
+        run: python3 scripts/lint_request_args_type_default.py
+      - name: Static QA / security audit
+        run: python3 scripts/qa_verify.py
+        # No server runs in this job, so qa_verify.py's DAST/UX sections self-skip
+        # (see the ConnectionError branch) -- only the static SBOM + SAST checks
+        # (dependency versions, hardcoded secrets, shell=True, raw SQL interpolation)
+        # actually gate CI here. The script previously existed but was never wired
+        # into any pipeline, so it never ran automatically -- this makes the checks
+        # it already had actually enforce on every PR instead of only-if-run-by-hand.
       - name: Set metadata
         id: meta
         run: echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
@@ -249,17 +259,31 @@ jobs:
           # a direct push here was silently rejected every time (git push
           # ... || true swallowed the failure, so this step always reported
           # success even though the change never landed). Push to a
-          # short-lived branch and open+auto-merge a PR instead, reusing
-          # the same gh pr merge --auto pattern used throughout this
-          # project's own PR-based workflow -- respects protection, no
-          # bypass needed.
-          BRANCH="docs/readme-sync-${{ steps.version.outputs.version }}"
-          git checkout -b "$BRANCH"
+          # branch and open+auto-merge a PR instead, reusing the same
+          # gh pr merge --auto pattern used throughout this project's own
+          # PR-based workflow -- respects protection, no bypass needed.
+          #
+          # The branch name used to include the version (docs/readme-sync-vX.Y.Z),
+          # a fresh one per release. Releases fire faster than each sync PR
+          # can pass CI + auto-merge, so multiple sync branches ended up open
+          # at once, every one of them rewriting the same CHANGELOG block --
+          # only the first to land could ever merge cleanly and the rest sat
+          # permanently CONFLICTING forever (30+ stale PRs observed live).
+          # One persistent branch, force-pushed and reusing the same open PR
+          # each cycle, keeps at most one sync PR open and always current.
+          BRANCH="docs/readme-sync"
+          git checkout -B "$BRANCH"
           git commit -m "docs: sync README changelog to ${{ steps.version.outputs.version }}"
-          git push origin "$BRANCH"
-          gh pr create --title "docs: sync README changelog to ${{ steps.version.outputs.version }}" \
-            --body "Automated changelog sync from the GitHub Release job." \
-            --base main --head "$BRANCH"
+          git push origin "$BRANCH" --force
+          EXISTING_PR=$(gh pr list --repo "$GITHUB_REPO" --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -z "$EXISTING_PR" ]; then
+            gh pr create --title "docs: sync README changelog to ${{ steps.version.outputs.version }}" \
+              --body "Automated changelog sync from the GitHub Release job." \
+              --base main --head "$BRANCH"
+          else
+            gh pr edit "$EXISTING_PR" --title "docs: sync README changelog to ${{ steps.version.outputs.version }}"
+            echo "Reused existing sync PR #$EXISTING_PR"
+          fi
           gh pr merge "$BRANCH" --squash --delete-branch --auto
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

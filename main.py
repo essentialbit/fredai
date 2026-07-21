@@ -157,6 +157,7 @@ from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_
 from correlation_engine import refresh_correlation_matrix
 from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
+from trends_client import refresh_trends_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
 from analyst_data import refresh_analyst_ratings, get_analyst_summary
@@ -4157,6 +4158,10 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Finviz] Short interest refresh error: {e}")
 
+    def job_trends_refresh():
+        """Refresh Google Trends search-interest velocity daily for portfolio + watchlist
+        symbols (L3). One conservative keyword per symbol -- pytrends is unofficial and
+        best-effort, never a hard dependency."""
     def job_short_volume_refresh():
         """Refresh FINRA Reg SHO daily short-volume ratios for portfolio +
         watchlist symbols, populate the watchlist-badge cache, and check for
@@ -4170,6 +4175,10 @@ if __name__ == "__main__":
             symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
             if not symbols:
                 return
+            stored = refresh_trends_interest(symbols)
+            print(f"[GoogleTrends] Search interest refreshed — {stored}/{len(symbols)} symbols")
+        except Exception as e:
+            print(f"[GoogleTrends] Search interest refresh error: {e}")
             stored = refresh_short_volume(symbols)
             cache = {}
             for sym in symbols:
@@ -4421,6 +4430,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_trends_refresh, "cron", hour=8, minute=0, id="trends_interest")
     scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=7, minute=45, id="analyst_ratings")
     scheduler.add_job(job_sec_8k_refresh, "interval", minutes=10, id="sec_8k", jitter=60)
     scheduler.add_job(job_central_bank_refresh, "cron", hour=19, minute=30, id="central_bank")

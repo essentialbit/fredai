@@ -226,6 +226,14 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS google_trends_interest (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            keyword TEXT NOT NULL,
+            interest_score REAL NOT NULL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS ticker_debates (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -352,6 +360,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_trends_interest_ticker ON google_trends_interest(ticker, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_analyst_ratings_ticker ON analyst_ratings(ticker, graded_at);
         CREATE INDEX IF NOT EXISTS idx_central_bank_meeting ON central_bank_statements(bank, meeting_date);
         CREATE INDEX IF NOT EXISTS idx_earnings_history_ticker ON earnings_history(ticker, earnings_date);
@@ -1542,6 +1551,25 @@ def get_short_interest_direction(symbol: str) -> str | None:
     return None
 
 
+# ── GOOGLE TRENDS SEARCH INTEREST ─────────────────────────────────────────────
+
+def insert_trends_interest(ticker: str, keyword: str, interest_score: float):
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO google_trends_interest (ticker, keyword, interest_score) VALUES (?, ?, ?)",
+            (ticker, keyword, interest_score)
+        )
+
+
+def get_latest_search_interest(ticker: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM google_trends_interest WHERE ticker=? ORDER BY fetched_at DESC LIMIT 1",
+            (ticker,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 # ── FINRA REG SHO SHORT VOLUME ────────────────────────────────────────────────
 
 def insert_short_volume(symbol: str, trade_date: str, short_volume: float, total_volume: float, short_volume_pct: float):
@@ -1577,6 +1605,32 @@ def get_latest_short_volume(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
+    """Latest daily search-interest reading vs the trailing average of up to
+    `lookback` prior readings, expressed as a % velocity. Requires at least
+    two stored readings (no fabricated baseline off a single point)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT interest_score FROM google_trends_interest WHERE ticker=? "
+            "ORDER BY fetched_at DESC LIMIT ?",
+            (ticker, lookback + 1)
+        ).fetchall()
+    if len(rows) < 2:
+        return None
+    latest = rows[0]["interest_score"]
+    prior = [r["interest_score"] for r in rows[1:]]
+    avg_prior = sum(prior) / len(prior)
+    if avg_prior <= 0:
+        return None
+    velocity_pct = (latest - avg_prior) / avg_prior * 100
+    return {
+        "ticker": ticker,
+        "latest": latest,
+        "avg_prior": round(avg_prior, 1),
+        "velocity_pct": round(velocity_pct, 1),
+    }
 
 
 def insert_ticker_debate(ticker: str, bull: dict, bear: dict, verdict: dict):

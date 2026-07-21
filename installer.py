@@ -27,11 +27,15 @@ STATIC_ICONS = BASE_DIR / "static" / "icons"
 # Bump whenever a generator function's launcher-script content changes in a way
 # that existing installs should pick up (e.g. the check-if-running/auto-start
 # logic added here) — see needs_install().
-# v3: launcher scripts no longer hardcode the port. They resolve it fresh on
-# every launch from data/.runtime_port.json (written by main.py's dynamic
-# find_free_port() at startup), so a shortcut created today keeps working
-# after the server gets reassigned to a different port on some future run.
-INSTALLER_VERSION = "3"
+# v4: launcher scripts no longer hardcode the port (resolved fresh on every
+# launch from data/.runtime_port.json, written by main.py's dynamic
+# find_free_port() at startup, so a shortcut created today keeps working
+# after the server gets reassigned to a different port on some future run)
+# AND verify actual FredAI identity via the page title, not just port
+# occupancy (bumped again from "3", which PR #411 already used for the
+# identity-check-only fix -- this version also needs a re-install for
+# the port-resolution behavior, so it can't reuse the same number).
+INSTALLER_VERSION = "4"
 RUNTIME_PORT_FILE_NAME = "data/.runtime_port.json"
 
 
@@ -180,13 +184,16 @@ def _install_macos(port: int = 8080) -> InstallResult:
         get_port() {{
             python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['port'])" "$PORT_FILE" 2>/dev/null
         }}
+        is_fredai() {{
+            curl -s -m 2 "http://localhost:$1/" 2>/dev/null | grep -q "<title>FredAI"
+        }}
         LIVE_PORT="$(get_port)"
-        if [ -z "$LIVE_PORT" ] || ! nc -z 127.0.0.1 "$LIVE_PORT" >/dev/null 2>&1; then
+        if [ -z "$LIVE_PORT" ] || ! is_fredai "$LIVE_PORT"; then
             ./venv/bin/python3 main.py >/dev/null 2>&1 &
             for i in $(seq 1 30); do
                 sleep 1
                 LIVE_PORT="$(get_port)"
-                [ -n "$LIVE_PORT" ] && nc -z 127.0.0.1 "$LIVE_PORT" >/dev/null 2>&1 && break
+                [ -n "$LIVE_PORT" ] && is_fredai "$LIVE_PORT" && break
             done
         fi
         open "http://localhost:${{LIVE_PORT:-{port}}}"
@@ -289,7 +296,7 @@ def _install_windows(port: int = 8080) -> InstallResult:
             set "PYEXE=venv\\Scripts\\python.exe"
             for /f "usebackq delims=" %%P in (`"%PYEXE%" -c "import json;print(json.load(open(r'%PORT_FILE%'))['port'])" 2^>nul`) do set "LIVE_PORT=%%P"
             if not defined LIVE_PORT set "LIVE_PORT={port}"
-            netstat -ano | findstr LISTENING | findstr :%LIVE_PORT% >nul
+            curl -s -m 2 "http://localhost:!LIVE_PORT!/" 2>nul | findstr /C:"<title>FredAI" >nul
             if errorlevel 1 (
                 start "" "%PYEXE%" main.py
                 for /l %%i in (1,1,20) do (
@@ -297,7 +304,7 @@ def _install_windows(port: int = 8080) -> InstallResult:
                     set "LIVE_PORT="
                     for /f "usebackq delims=" %%P in (`"%PYEXE%" -c "import json;print(json.load(open(r'%PORT_FILE%'))['port'])" 2^>nul`) do set "LIVE_PORT=%%P"
                     if defined LIVE_PORT (
-                        netstat -ano | findstr LISTENING | findstr :!LIVE_PORT! >nul && goto :ready
+                        curl -s -m 2 "http://localhost:!LIVE_PORT!/" 2>nul | findstr /C:"<title>FredAI" >nul && goto :ready
                     )
                 )
                 :ready
@@ -379,13 +386,16 @@ def _install_linux(device: dict, port: int = 8080) -> InstallResult:
             get_port() {{
                 python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['port'])" "$PORT_FILE" 2>/dev/null
             }}
+            is_fredai() {{
+                curl -s -m 2 "http://localhost:$1/" 2>/dev/null | grep -q "<title>FredAI"
+            }}
             LIVE_PORT="$(get_port)"
-            if [ -z "$LIVE_PORT" ] || ! nc -z 127.0.0.1 "$LIVE_PORT" >/dev/null 2>&1; then
+            if [ -z "$LIVE_PORT" ] || ! is_fredai "$LIVE_PORT"; then
                 ./venv/bin/python3 main.py >/dev/null 2>&1 &
                 for i in $(seq 1 30); do
                     sleep 1
                     LIVE_PORT="$(get_port)"
-                    [ -n "$LIVE_PORT" ] && nc -z 127.0.0.1 "$LIVE_PORT" >/dev/null 2>&1 && break
+                    [ -n "$LIVE_PORT" ] && is_fredai "$LIVE_PORT" && break
                 done
             fi
             xdg-open "http://localhost:${{LIVE_PORT:-{port}}}"

@@ -39,6 +39,7 @@ from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
 from mortgage_rate_client import get_mortgage_rate
+from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
 from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
 from commercial_paper_client import get_commercial_paper
@@ -125,6 +126,7 @@ from tracked_entities import (
     create_entity, link_entities, add_evidence, get_entity,
     get_user_entities, get_entity_graph, format_context_summary, VALID_ENTITY_TYPES,
 )
+from jobless_claims_client import get_jobless_claims
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
@@ -135,12 +137,16 @@ from memory_store import (
     get_latest_correlation_matrix,
     get_latest_short_interest,
     get_recent_insider_transactions,
+    insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
+    insert_alert,
+    get_latest_central_bank_delta,
     insert_alert,
     get_optimized_params,
 )
 from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
+from central_bank_client import refresh_central_bank_deltas
 from technical_alerts import run_technical_alerts, get_technicals
 from graph_engine import generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves, get_ticker_network
@@ -151,6 +157,9 @@ from sector_rotation import get_sector_rotation
 from finviz_client import refresh_short_interest
 from finra_short_volume import refresh_short_volume, compute_short_volume_signal
 from sec_client import fetch_form4_filings
+from analyst_data import refresh_analyst_ratings, get_analyst_summary
+from sec_8k_client import fetch_current_8k_filings
+from earnings_predictor import refresh_earnings_history, predict_next_earnings_lean
 from confluence_engine import compute_confluence, refresh_confluence, get_cached_confluence
 from config import PRIVACY_POLICY_VERSION, PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI, DATA_RETENTION_DAYS, NEWS_RETENTION_HOURS, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET
 import installer as _installer
@@ -1579,7 +1588,28 @@ def api_analyst_report(ticker):
             user_prompt += f"- [{s.get('signal_type', 'signal')}] {s.get('content')[:150]} (Sentiment Score: {s.get('sentiment_score', 0.0)})\n"
     else:
         user_prompt += "No recent technical signal entries available for this symbol.\n"
-        
+
+    analyst_summary = get_analyst_summary(ticker)
+    if analyst_summary:
+        consensus = analyst_summary.get("consensus")
+        if consensus:
+            user_prompt += (
+                f"Real Wall Street Analyst Price-Target Consensus: mean ${consensus.get('mean')}, "
+                f"median ${consensus.get('median')}, range ${consensus.get('low')}-${consensus.get('high')} "
+                f"(implied upside vs current: {consensus.get('upside_pct')}%). "
+                "You MUST cite these exact real figures in your Recommendation section -- never invent a rating.\n"
+            )
+        recent_actions = analyst_summary.get("recent_actions")
+        if recent_actions:
+            user_prompt += "Recent Real Analyst Actions (cite firm names and dates exactly as given):\n"
+            for a in recent_actions[:5]:
+                user_prompt += f"- [{a.get('graded_at')}] {a.get('firm')}: {a.get('action')} ({a.get('from_grade')} -> {a.get('to_grade')}, target ${a.get('price_target')})\n"
+    else:
+        user_prompt += (
+            "No analyst-rating data available for this symbol -- explicitly state that analyst "
+            "coverage data is unavailable rather than inventing a rating or firm name.\n"
+        )
+
     try:
         report_markdown = _provider.complete([{"role": "user", "content": user_prompt}], system_prompt, tier="chat", max_tokens=1500)
     except Exception as e:
@@ -1914,7 +1944,7 @@ def api_ai_universe():
 @login_required
 def api_correlation():
     """Latest 30-day/90-day rolling cross-asset correlation matrix (FSI L2)."""
-    window = request.args.get("window", "30", type=int)
+    window = request.args.get("window", 30, type=int)
     if window not in (30, 90):
         return jsonify({"error": "window must be 30 or 90"}), 400
     pairs = get_latest_correlation_matrix(window)
@@ -1978,6 +2008,14 @@ def api_mortgage_rate():
     """30-Year Fixed Mortgage Rate (FRED MORTGAGE30US) -- housing-cluster
     financing-cost macro badge (FSI L2). Cached 1h, see mortgage_rate_client.py."""
     return jsonify(get_mortgage_rate() or {})
+@app.route("/api/ppi")
+@login_required
+def api_ppi():
+    """Producer Price Index Final Demand (FRED PPIFIS) -- upstream
+    wholesale-inflation leading indicator (FSI L2), distinct from the
+    downstream Core PCE consumer-inflation gauge -- cached 1h, see
+    ppi_client.py."""
+    return jsonify(get_ppi() or {})
 @app.route("/api/jolts-quits-rate")
 @login_required
 def api_jolts_quits_rate():
@@ -2536,6 +2574,12 @@ def api_optimized_params(ticker):
     """Best-scoring RSI / MA-cross parameter combo for this ticker, from
     the daily grid-search backtest (FSI L3) -- see param_optimizer.py."""
     return jsonify({"ticker": ticker.upper(), "params": get_optimized_params(ticker.upper())})
+@app.route("/api/jobless-claims")
+@login_required
+def api_jobless_claims():
+    """Weekly initial jobless claims (FRED ICSA) leading labor-market
+    indicator (FSI L2) -- cached daily, see jobless_claims_client.py."""
+    return jsonify(get_jobless_claims() or {})
 
 
 @app.route("/api/ticker-relationships")
@@ -2592,11 +2636,44 @@ def api_save_layout():
 @login_required
 def api_insider_transactions(ticker):
     """Recent SEC Form 4 open-market insider buy/sell transactions (FSI L2)."""
-    days = request.args.get("days", "90", type=int)
+    days = request.args.get("days", 90, type=int)
     txns = get_recent_insider_transactions(ticker.upper(), days=days, signal_only=True)
     return jsonify({"ticker": ticker.upper(), "days": days, "transactions": txns})
 
 
+@app.route("/api/analyst-ratings/<ticker>")
+@login_required
+def api_analyst_ratings(ticker):
+    """Real Wall Street analyst consensus target + recent upgrade/downgrade
+    actions (FSI L2) -- distinct from /api/analyst/report, which is Fred's
+    own LLM-generated narrative."""
+    summary = get_analyst_summary(ticker.upper().strip())
+    if not summary:
+        return jsonify({"ticker": ticker.upper(), "status": "no_data"})
+    return jsonify({"ticker": ticker.upper(), "status": "ok", **summary})
+@app.route("/api/filings/<ticker>")
+@login_required
+def api_filing_events(ticker):
+    """Recent SEC 8-K material-event filings (FSI L2)."""
+    days = request.args.get("days", 30, type=int)
+    filings = get_recent_filing_events(ticker.upper(), days=days)
+    return jsonify({"ticker": ticker.upper(), "days": days, "filings": filings})
+@app.route("/api/central-bank/latest-delta")
+@login_required
+def api_central_bank_latest_delta():
+    """Paragraph/word-level diff of the most recent FOMC statement against
+    the one before it, plus a sentiment shift on just the changed text
+    (FSI L4). Cache-only -- job_central_bank_refresh keeps this warm."""
+    bank = request.args.get("bank", "Fed")
+    return jsonify(get_latest_central_bank_delta(bank))
+@app.route("/api/earnings-lean/<ticker>")
+@login_required
+def api_earnings_lean(ticker):
+    """Historical EPS beat rate + current pre-print signal trend (FSI L3).
+    Explicitly not a guaranteed prediction -- an interpretable, rules-based
+    lean with every contributing input shown."""
+    lean = predict_next_earnings_lean(ticker.upper())
+    return jsonify(lean)
 @app.route("/api/confluence/<symbol>")
 @login_required
 def api_confluence(symbol):
@@ -3093,6 +3170,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] mortgage_rate error: {e}")
+        # Producer Price Index Final Demand -- upstream wholesale-inflation
+        # leading indicator (cached 1h in ppi_client.py)
+        try:
+            ppi = get_ppi()
+            if ppi:
+                _macro_cache = {**_macro_cache, "PPI": {
+                    "label": "PPI", "value": ppi["change_mom_pct"], "rating": ppi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] ppi_client error: {e}")
         # JOLTS Quits Rate worker-confidence labor-market signal (cached 1h in jolts_quits_client.py)
         try:
             jq = get_jolts_quits()
@@ -3777,6 +3864,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] median_home_price_client error: {e}")
+        # Initial jobless claims -- weekly leading labor-market indicator
+        # (cached daily in jobless_claims_client.py, ICSA only updates Thursdays)
+        try:
+            jc = get_jobless_claims()
+            if jc:
+                _macro_cache = {**_macro_cache, "JOBLESS_CLAIMS": {
+                    "label": "Jobless Claims", "value": jc["latest"], "rating": jc["trend_8w"]["direction"],
+                }}
+        except Exception as e:
+            print(f"[Job] jobless_claims error: {e}")
 
         socketio.emit("market_update", {
             "quotes": quotes,
@@ -4108,6 +4205,71 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[SEC] Insider signals refresh error: {e}")
 
+    def job_analyst_ratings_refresh():
+        """Refresh yfinance upgrade/downgrade history daily for portfolio +
+        watchlist symbols (FSI L2)."""
+    def job_sec_8k_refresh():
+        """Poll SEC EDGAR's current-filings feed for 8-Ks on portfolio/watchlist
+        tickers, then fire an alert for high-signal Item codes (FSI L2)."""
+    def job_central_bank_refresh():
+        """Check for a new FOMC statement daily (FSI L4). Idempotent --
+        refresh_central_bank_deltas() only fetches meeting dates that have
+        already happened and aren't stored yet, so a daily cadence is just
+        a cheap no-op on the ~358 days/year without a fresh statement."""
+        try:
+            results = refresh_central_bank_deltas("Fed")
+            if results:
+                print(f"[CentralBank] Fetched {len(results)} new FOMC statement delta(s)")
+        except Exception as e:
+            print(f"[CentralBank] Refresh error: {e}")
+    def job_earnings_history_refresh():
+        """Refresh EPS beat/miss history weekly, scoped to portfolio + watchlist
+        symbols with an earnings print due in the next 30 days (reuses the
+        existing calendar_client data instead of a full-universe refetch)."""
+        try:
+            from memory_store import get_conn as _gc
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            total_new = 0
+            for sym in symbols:
+                total_new += refresh_analyst_ratings(sym)
+            print(f"[AnalystData] Ratings refreshed — {total_new} new actions across {len(symbols)} symbols")
+        except Exception as e:
+            print(f"[AnalystData] Ratings refresh error: {e}")
+            symbols = {s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s}
+            if not symbols:
+                return
+            filings = fetch_current_8k_filings(tickers=symbols)
+            new_count = insert_filing_events(filings)
+            if new_count:
+                print(f"[SEC-8K] {new_count} new filing(s) stored")
+            for f in filings:
+                if f["signal_type"] != "material":
+                    continue
+                msg = f"{f['company']} ({f['ticker']}) filed 8-K: {f['item_summary']}"
+                socketio.emit("alert", {"title": f"${f['ticker']} Material 8-K Filing",
+                                        "message": msg, "level": "info"})
+                insert_alert("info", f"${f['ticker']} Material 8-K Filing", msg, f["ticker"])
+        except Exception as e:
+            print(f"[SEC-8K] Refresh error: {e}")
+            tracked = {s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s}
+            if not tracked:
+                return
+            upcoming = {e["symbol"] for e in get_calendar_events(days=30)
+                        if e["event_type"] == "earnings" and e["symbol"] in tracked}
+            if not upcoming:
+                return
+            total_new = 0
+            for sym in upcoming:
+                total_new += refresh_earnings_history(sym)
+            print(f"[Earnings] History refreshed for {len(upcoming)} symbol(s) with upcoming prints — {total_new} new quarters")
+        except Exception as e:
+            print(f"[Earnings] History refresh error: {e}")
+
     def job_tech_alerts():
         """Check technical alerts every 5 minutes during market hours."""
         try:
@@ -4234,6 +4396,10 @@ if __name__ == "__main__":
     scheduler.add_job(job_short_interest_refresh, "cron", hour=7, minute=0, id="short_interest")
     scheduler.add_job(job_short_volume_refresh, "cron", hour=7, minute=15, id="short_volume")
     scheduler.add_job(job_insider_signals_refresh, "cron", hour=7, minute=30, id="insider_signals")
+    scheduler.add_job(job_analyst_ratings_refresh, "cron", hour=7, minute=45, id="analyst_ratings")
+    scheduler.add_job(job_sec_8k_refresh, "interval", minutes=10, id="sec_8k", jitter=60)
+    scheduler.add_job(job_central_bank_refresh, "cron", hour=19, minute=30, id="central_bank")
+    scheduler.add_job(job_earnings_history_refresh, "cron", day_of_week="mon", hour=8, minute=0, id="earnings_history")
     scheduler.add_job(job_param_optimizer, "cron", hour=7, minute=45, id="param_optimizer")
     scheduler.add_job(job_tech_alerts, "interval", minutes=5, id="tech_alerts")
     scheduler.add_job(job_update_check, "interval", hours=6, id="update_check")

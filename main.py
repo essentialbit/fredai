@@ -12,6 +12,7 @@ RAM_GB = _psutil.virtual_memory().total / 1e9
 LITE_MODE = RAM_GB < 1.0  # Raspberry Pi Zero / wearable companion
 
 from config import SECRET_KEY, PORT, SCAN_INTERVAL_HOURS, MARKET_REFRESH_SECONDS, WATCHLIST, DISPLAY_SYMBOLS, FREDAI_DEPLOY_SECRET
+from port_utils import find_free_port, write_runtime_port, current_port
 from memory_store import (
     init_db, get_signals, get_latest_summary, get_summaries,
     get_sentiment_timeline, get_recent_alerts, insert_summary,
@@ -1121,7 +1122,7 @@ def api_device():
 @login_required
 def api_install():
     """Autonomously install FredAI shortcuts on the host device."""
-    port = int(request.json.get("port", PORT)) if request.json else PORT
+    port = int(request.json.get("port")) if request.json and request.json.get("port") else current_port(PORT)
     try:
         result = _installer.install(port)
         return jsonify(result)
@@ -4010,6 +4011,12 @@ def on_view_symbol(data):
 
 if __name__ == "__main__":
     print("=== SENTINEL FI — Financial Intelligence Dashboard ===")
+
+    RESOLVED_PORT = find_free_port(PORT)
+    if RESOLVED_PORT != PORT:
+        print(f"[Init] Port {PORT} unavailable — reassigned to {RESOLVED_PORT}")
+    write_runtime_port(RESOLVED_PORT)
+
     init_db()
 
     # Claude's and Gemini's RnD cycles both write files and run `git add -A`
@@ -4400,7 +4407,7 @@ if __name__ == "__main__":
     # Auto-install shortcuts on first run (or if missing)
     def _auto_install():
         try:
-            result = _installer.install(PORT)
+            result = _installer.install(RESOLVED_PORT)
             if result["success"] and result["actions"]:
                 print(f"[Install] Shortcuts created: {', '.join(result['actions'])}")
             elif result.get("warnings"):
@@ -4440,5 +4447,5 @@ if __name__ == "__main__":
 
     threading.Thread(target=_startup, daemon=True).start()
 
-    print(f"[Init] Dashboard → http://localhost:{PORT}")
-    socketio.run(app, host="0.0.0.0", port=PORT, debug=False, allow_unsafe_werkzeug=True)
+    print(f"[Init] Dashboard → http://localhost:{RESOLVED_PORT}")
+    socketio.run(app, host="0.0.0.0", port=RESOLVED_PORT, debug=False, allow_unsafe_werkzeug=True)

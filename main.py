@@ -3235,6 +3235,7 @@ def job_market_refresh():
                 _macro_cache = {**_macro_cache, "FEAR_GREED": {
                     "label": "Fear & Greed", "value": fg["score"], "rating": fg.get("rating"),
                     "change": round(fg["score"] - fg["previous_close"], 2) if fg.get("previous_close") is not None else None,
+                    "severity": round(abs(fg["score"] - 50) / 50, 2),
                 }}
                 if not get_trend_history("MARKET", "fear_greed", hours=20):
                     insert_trend("MARKET", "fear_greed", fg["score"], fg.get("rating", ""))
@@ -3295,6 +3296,7 @@ def job_market_refresh():
             if cg:
                 _macro_cache = {**_macro_cache, "COPPER_GOLD": {
                     "label": "Cu/Au", "value": cg["ratio"], "rating": cg["regime"],
+                    "severity": round(min(abs(cg["trend_20d"]["z_score"]) / 3, 1.0), 2),
                 }}
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")

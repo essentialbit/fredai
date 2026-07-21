@@ -16,6 +16,7 @@ torch>=2.0.0
 transformers>=4.30.0
 spacy>=3.7.0
 ccxt>=4.5.0
+pytrends>=4.9.2
 yfinance>=0.2.40
 statsmodels>=0.14.0
 xlrd>=2.0.1

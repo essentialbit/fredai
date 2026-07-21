@@ -38,6 +38,7 @@ from yield_curve import compute_yield_curve_spread
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from hypothesis_engine import run_hypothesis_generation, run_hypothesis_resolution
 from fear_greed_client import fetch_fear_greed
+from cot_client import fetch_all_cot_positioning
 from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
@@ -2018,6 +2019,12 @@ def api_correlation():
     })
 
 
+@app.route("/api/cot-positioning")
+@login_required
+def api_cot_positioning():
+    """CFTC Commitment of Traders noncommercial ("speculator") net-positioning
+    crowding, per tracked contract (FSI L2) -- cached 12h, see cot_client.py."""
+    return jsonify({"contracts": fetch_all_cot_positioning()})
 @app.route("/api/credit-spread")
 @login_required
 def api_credit_spread():
@@ -3234,6 +3241,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
 
+        # CFTC Commitment of Traders positioning crowding (cached 12h in cot_client.py)
+        try:
+            cot = fetch_all_cot_positioning()
+            if cot:
+                most_extreme = max(cot.values(), key=lambda r: abs(r["z_score"]))
+                _macro_cache = {**_macro_cache, "COT": {
+                    "label": "COT", "value": most_extreme["z_score"], "rating": most_extreme["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] cot_client error: {e}")
         # Credit spread regime -- HYG vs LQD relative strength (cached 15min in credit_spread.py)
         try:
             cs = get_credit_spread()

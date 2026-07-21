@@ -560,6 +560,18 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     quotes = quotes or {}
     track_record = _format_track_record()
 
+    # CFTC COT positioning -- cache-only (12h internal cache), only surface
+    # contracts crowded enough to be an actionable contrarian signal.
+    cot_block = ""
+    try:
+        from cot_client import fetch_all_cot_positioning
+        crowded = [r for r in fetch_all_cot_positioning().values() if abs(r["z_score"]) >= 1.5]
+        if crowded:
+            lines = [f"  {r['contract']}: {r['classification']} (z={r['z_score']:+.2f})" for r in crowded]
+            cot_block = "\nSPECULATOR POSITIONING CROWDING (CFTC COT, contrarian signal):\n" + "\n".join(lines)
+    except Exception:
+        pass
+
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
 
@@ -648,6 +660,7 @@ ACTIVE ALERTS:
 
 LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
+{cot_block}
 """
     return ctx
 

@@ -36,6 +36,7 @@ from nasdaq_client import get_macro_snapshot
 from yield_curve import compute_yield_curve_spread
 from backtesting_engine import log_scan_outcomes, run_backtest_check, get_accuracy_report
 from fear_greed_client import fetch_fear_greed
+from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
@@ -1958,6 +1959,12 @@ def api_correlation():
     })
 
 
+@app.route("/api/credit-spread")
+@login_required
+def api_credit_spread():
+    """HYG-vs-LQD relative-strength credit-stress regime (FSI L2) -- cached
+    15min, see credit_spread.py."""
+    return jsonify(get_credit_spread() or {})
 @app.route("/api/yield-curve")
 @login_required
 def api_yield_curve():
@@ -3132,6 +3139,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] fear_greed error: {e}")
 
+        # Credit spread regime -- HYG vs LQD relative strength (cached 15min in credit_spread.py)
+        try:
+            cs = get_credit_spread()
+            if cs:
+                _macro_cache = {**_macro_cache, "CREDIT_SPREAD": {
+                    "label": "Credit Spread", "value": cs["spread_20d"], "rating": cs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] credit_spread error: {e}")
         # 2s10s yield curve spread (pure arithmetic on the macro snapshot above)
         try:
             yc = compute_yield_curve_spread(_macro_cache)

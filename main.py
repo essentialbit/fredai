@@ -1067,6 +1067,16 @@ def api_backtest_source_health():
     return jsonify(get_underperforming_sources())
 
 
+@app.route("/api/market-debate/<ticker>")
+@login_required
+def api_market_debate(ticker):
+    """Bull/Bear/Arbiter thesis synthesis (FSI L4) over a single asset's
+    already-computed signals -- cached per ticker/day. ?refresh=1 forces
+    a fresh debate instead of serving today's cached one."""
+    from market_debate import get_market_debate_for
+    force_refresh = request.args.get("refresh") == "1"
+    result = get_market_debate_for(ticker.upper(), force_refresh=force_refresh)
+    return jsonify(result)
 @app.route("/api/hypotheses")
 @login_required
 def api_hypotheses():

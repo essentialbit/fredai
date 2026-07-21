@@ -27,7 +27,7 @@ STATIC_ICONS = BASE_DIR / "static" / "icons"
 # Bump whenever a generator function's launcher-script content changes in a way
 # that existing installs should pick up (e.g. the check-if-running/auto-start
 # logic added here) — see needs_install().
-INSTALLER_VERSION = "2"
+INSTALLER_VERSION = "3"
 
 
 # ── Result type ───────────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ def _install_macos(port: int = 8080) -> InstallResult:
     exe.write_text(textwrap.dedent(f"""\
         #!/bin/bash
         # FREDAI_INSTALLER_VERSION={INSTALLER_VERSION}
-        if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
+        if ! curl -s -m 2 "{url}/" 2>/dev/null | grep -q "<title>FredAI"; then
             cd "{BASE_DIR}"
             ./venv/bin/python3 main.py >/dev/null 2>&1 &
             sleep 3
@@ -268,7 +268,7 @@ def _install_windows(port: int = 8080) -> InstallResult:
             @echo off
             rem FREDAI_INSTALLER_VERSION={INSTALLER_VERSION}
             cd /d "{BASE_DIR}"
-            netstat -ano | findstr LISTENING | findstr :{port} >nul
+            curl -s -m 2 "{url}/" 2>nul | findstr /C:"<title>FredAI" >nul
             if %errorlevel% neq 0 (
                 start "" "venv\\Scripts\\python.exe" main.py
                 timeout /t 3 >nul
@@ -343,7 +343,7 @@ def _install_linux(device: dict, port: int = 8080) -> InstallResult:
         launcher_path.write_text(textwrap.dedent(f"""\
             #!/bin/bash
             # FREDAI_INSTALLER_VERSION={INSTALLER_VERSION}
-            if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
+            if ! curl -s -m 2 "{url}/" 2>/dev/null | grep -q "<title>FredAI"; then
                 cd "{BASE_DIR}"
                 ./venv/bin/python3 main.py >/dev/null 2>&1 &
                 sleep 3

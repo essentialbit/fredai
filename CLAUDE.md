@@ -28,6 +28,7 @@ FredAI is an AI-powered financial intelligence dashboard with:
 - `agent.py` — FredAI persona, Claude integration (PRESERVE soul.md personality)
 - `soul.md` — Fred's identity and operating contract (DO NOT alter Fred's core values)
 - `memory_store.py` — SQLite: users, watchlist, portfolio, signals, trends, summaries
+- `rag_store.py` / `rag_retriever.py` — Fred Recall: FTS5+embedding storage and retrieval over Fred's own accumulated intelligence (see FSI L4 note below)
 - `twitter_client.py` — X API v2 via requests (no tweepy)
 - `market_data.py` — yfinance price/history fetching
 - `trend_detector.py` — sentiment shift detection, alerts
@@ -43,11 +44,13 @@ FredAI is an AI-powered financial intelligence dashboard with:
 - L1 Signal Intelligence ✅ — multi-source sentiment, live price data, 4h briefings (complete)
 - L2 Pattern Intelligence 🔄 — FinBERT, cross-asset correlation, options flow, insider filings, Fear&Greed
 - L3 Predictive Intelligence 🔲 — backtesting, anomaly detection, macro regime, earnings prediction
-- L4 Reasoning Intelligence 🔲 — multi-agent debate, causal attribution, 10-K analysis, 13F positioning
+- L4 Reasoning Intelligence 🔄 — multi-agent debate, causal attribution, 10-K analysis, 13F positioning, **Fred Recall (hybrid FTS5+vector RAG grounding chat/briefings in Fred's own signal/news/briefing/debate/filing/vault history, cited inline) — shipped**
 - L5 World Model 🔲 — cross-market contagion, alternative data, fine-tuned LLM, agent swarms
 - L6 Super Intelligence 🔲 — self-directing research, novel edge discovery, autonomous recommendations
 
 **Evaluation criterion for every proposed improvement:** "Does this push Fred closer to L6? If not, is it critical infrastructure that unblocks L2+ work?" If neither is true, deprioritise it.
+
+**Fred Recall (FSI L4, shipped)**: `rag_store.py` (storage: `rag_chunks` + FTS5 `rag_fts`, source_types news/signal/briefing/debate/insider/entity_evidence/vault) + `rag_retriever.py` (BM25+cosine via Reciprocal Rank Fusion, recency decay, ticker boost). Write-time hooks are FTS-only (`embed=False`) at every ingestion path (news_client, reddit/twitter_client, ticker_debate, main.py's briefing/entity-evidence routes) — embedding happens asynchronously in the hourly `job_rag_embed_backlog` job, never inline on a hot path. `chat()` and `generate_summary()` in agent.py both call `retrieve()`/`format_context()` for grounded, cited context; `GET /api/recall?q=` + the dashboard's "Ask Fred's Memory" panel expose it directly. Per-user privacy enforced inside `rag_store.py` (global rows + caller's own `user_id` rows only), never left to the caller. `vault_semantic_search.py` is now a thin wrapper over `rag_store` (source_type='vault') — the old standalone `vault_embeddings` table is dead schema, left in place.
 
 When invoked for improvement cycles:
 

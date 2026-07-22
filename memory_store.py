@@ -447,6 +447,41 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS rag_chunks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            user_id INTEGER,
+            title TEXT,
+            content TEXT NOT NULL,
+            tickers TEXT DEFAULT '',
+            url TEXT,
+            published_at DATETIME,
+            embedding TEXT,
+            mtime REAL,
+            indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(source_type, source_id)
+        );
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS rag_fts USING fts5(
+            content, title, tickers, content='rag_chunks', content_rowid='id'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS rag_chunks_ai AFTER INSERT ON rag_chunks BEGIN
+            INSERT INTO rag_fts(rowid, content, title, tickers) VALUES (new.id, new.content, new.title, new.tickers);
+        END;
+        CREATE TRIGGER IF NOT EXISTS rag_chunks_ad AFTER DELETE ON rag_chunks BEGIN
+            INSERT INTO rag_fts(rag_fts, rowid, content, title, tickers) VALUES ('delete', old.id, old.content, old.title, old.tickers);
+        END;
+        CREATE TRIGGER IF NOT EXISTS rag_chunks_au AFTER UPDATE ON rag_chunks BEGIN
+            INSERT INTO rag_fts(rag_fts, rowid, content, title, tickers) VALUES ('delete', old.id, old.content, old.title, old.tickers);
+            INSERT INTO rag_fts(rowid, content, title, tickers) VALUES (new.id, new.content, new.title, new.tickers);
+        END;
+
+        CREATE INDEX IF NOT EXISTS idx_rag_chunks_source ON rag_chunks(source_type, indexed_at);
+        CREATE INDEX IF NOT EXISTS idx_rag_chunks_user ON rag_chunks(user_id);
+        CREATE INDEX IF NOT EXISTS idx_rag_chunks_published ON rag_chunks(published_at);
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -759,10 +794,11 @@ def get_portfolio(user_id: int) -> list[dict]:
 # ── SIGNALS ───────────────────────────────────────────────────────────────────
 def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0, signal_type="neutral", sentiment_model="vader", metadata=None):
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO signals (source, asset, content, author, sentiment_score, signal_type, sentiment_model, metadata) VALUES (?,?,?,?,?,?,?,?)",
             (source, asset, content, author, sentiment_score, signal_type, sentiment_model, json.dumps(metadata or {}))
         )
+        return cur.lastrowid
 
 
 def get_signals(hours=4, asset=None, limit=200) -> list[dict]:
@@ -944,10 +980,11 @@ def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
 # ── SUMMARIES ─────────────────────────────────────────────────────────────────
 def insert_summary(period_start, period_end, content, key_signals, overall_sentiment, risk_level, signal_count):
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO summaries (period_start, period_end, content, key_signals, overall_sentiment, risk_level, signal_count) VALUES (?,?,?,?,?,?,?)",
             (period_start.isoformat(), period_end.isoformat(), content, json.dumps(key_signals), overall_sentiment, risk_level, signal_count)
         )
+        return cur.lastrowid
 
 
 def get_latest_summary() -> dict | None:
@@ -1845,13 +1882,14 @@ def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
 
 def insert_ticker_debate(ticker: str, bull: dict, bear: dict, verdict: dict):
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             """INSERT INTO ticker_debates
                (ticker, bull_json, bear_json, verdict_json, consensus, confidence)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (ticker, json.dumps(bull), json.dumps(bear), json.dumps(verdict),
              verdict.get("consensus"), verdict.get("confidence"))
         )
+        return cur.lastrowid
 
 
 def get_latest_ticker_debate(ticker: str, max_age_s: float | None = None) -> dict | None:

@@ -361,6 +361,16 @@ def init_db():
             verdict TEXT,
             confidence REAL,
             signals_snapshot TEXT,
+            risk_case TEXT,
+            direction TEXT,
+            conviction INTEGER,
+            time_horizon TEXT,
+            key_risks TEXT,
+            invalidation_trigger TEXT,
+            bull_score REAL,
+            bear_score REAL,
+            contested INTEGER DEFAULT 0,
+            est_tokens INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(ticker, debate_date)
         );
@@ -671,6 +681,21 @@ def init_db():
             "ALTER TABLE news_items ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
             "ALTER TABLE signal_outcomes ADD COLUMN source TEXT DEFAULT 'aggregate'",
             "ALTER TABLE signal_outcomes ADD COLUMN baseline_direction TEXT",
+            # Research Desk (FSI L4) -- extends the existing Bull/Bear/Arbiter
+            # market_debates table with a Risk Officer role + a structured PM
+            # verdict, rather than standing up parallel committee_runs/
+            # committee_verdicts tables (see scenario_engine.py-era decision to
+            # extend existing systems instead of parallel-building).
+            "ALTER TABLE market_debates ADD COLUMN risk_case TEXT",
+            "ALTER TABLE market_debates ADD COLUMN direction TEXT",
+            "ALTER TABLE market_debates ADD COLUMN conviction INTEGER",
+            "ALTER TABLE market_debates ADD COLUMN time_horizon TEXT",
+            "ALTER TABLE market_debates ADD COLUMN key_risks TEXT",
+            "ALTER TABLE market_debates ADD COLUMN invalidation_trigger TEXT",
+            "ALTER TABLE market_debates ADD COLUMN bull_score REAL",
+            "ALTER TABLE market_debates ADD COLUMN bear_score REAL",
+            "ALTER TABLE market_debates ADD COLUMN contested INTEGER DEFAULT 0",
+            "ALTER TABLE market_debates ADD COLUMN est_tokens INTEGER",
         ):
             try:
                 conn.execute(ddl)
@@ -2293,16 +2318,28 @@ def get_market_debate(ticker: str, debate_date: str) -> dict | None:
 
 
 def save_market_debate(ticker: str, debate_date: str, bull_case: str, bear_case: str,
-                        verdict: str, confidence: float, signals_snapshot: str) -> None:
+                        verdict: str, confidence: float, signals_snapshot: str,
+                        risk_case: str = None, direction: str = None, conviction: int = None,
+                        time_horizon: str = None, key_risks: str = None, invalidation_trigger: str = None,
+                        bull_score: float = None, bear_score: float = None, contested: bool = False,
+                        est_tokens: int = None) -> None:
     with get_conn() as conn:
         conn.execute(
-            """INSERT INTO market_debates (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
-               VALUES (?,?,?,?,?,?,?)
+            """INSERT INTO market_debates (ticker, debate_date, bull_case, bear_case, verdict, confidence,
+                   signals_snapshot, risk_case, direction, conviction, time_horizon, key_risks,
+                   invalidation_trigger, bull_score, bear_score, contested, est_tokens)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(ticker, debate_date) DO UPDATE SET
                    bull_case=excluded.bull_case, bear_case=excluded.bear_case,
                    verdict=excluded.verdict, confidence=excluded.confidence,
-                   signals_snapshot=excluded.signals_snapshot""",
-            (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
+                   signals_snapshot=excluded.signals_snapshot,
+                   risk_case=excluded.risk_case, direction=excluded.direction, conviction=excluded.conviction,
+                   time_horizon=excluded.time_horizon, key_risks=excluded.key_risks,
+                   invalidation_trigger=excluded.invalidation_trigger, bull_score=excluded.bull_score,
+                   bear_score=excluded.bear_score, contested=excluded.contested, est_tokens=excluded.est_tokens""",
+            (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot,
+             risk_case, direction, conviction, time_horizon, key_risks, invalidation_trigger,
+             bull_score, bear_score, int(contested), est_tokens)
         )
 
 

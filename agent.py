@@ -819,6 +819,38 @@ def chat(user_message: str, history: list[dict], quotes: dict = None,
         except Exception:
             pass  # scenario simulator unavailable -- chat degrades gracefully without it
 
+    if re.search(r"\brun\s+the\s+desk\b|\bresearch\s+desk\b|\bcommittee\s+(view|verdict)\b", user_message, re.IGNORECASE):
+        try:
+            from rag_retriever import parse_query
+            from market_debate import get_market_debate_for
+            tickers = parse_query(user_message)["tickers"]
+            if tickers:
+                desk = get_market_debate_for(tickers[0])
+                if desk.get("direction") and desk.get("time_horizon"):
+                    key_risks = "; ".join(desk.get("key_risks") or [])
+                    contested_note = " | CONTESTED (bull and bear cases both strong)" if desk.get("contested") else ""
+                    desk_block = (
+                        f"\n\nRESEARCH DESK COMMITTEE VERDICT for {tickers[0]} (model estimate -- narrate "
+                        f"plainly, close with the standard disclaimer):\n"
+                        f"Direction: {desk['direction']} | Conviction: {desk['conviction']}/100 | "
+                        f"Horizon: {desk['time_horizon']}{contested_note}\n"
+                        f"Bull case: {desk['bull_case']}\nBear case: {desk['bear_case']}\n"
+                        + (f"Risk Officer: {desk['risk_case']}\n" if desk.get("risk_case") else "")
+                        + (f"Key risks: {key_risks}\n" if key_risks else "")
+                        + (f"Would flip on: {desk['invalidation_trigger']}\n" if desk.get("invalidation_trigger") else "")
+                    )
+                else:
+                    desk_block = (
+                        f"\n\nRESEARCH DESK for {tickers[0]} degraded to a simpler Bull/Bear verdict this "
+                        f"run (budget-constrained or a parse issue): {desk['verdict']}\n"
+                    )
+                context = f"{context}{desk_block}"
+            else:
+                context = (f"{context}\n\nRESEARCH DESK: the user asked to run the desk but didn't name "
+                           f"a ticker Fred recognizes. Ask them which one.")
+        except Exception:
+            pass  # research desk unavailable -- chat degrades gracefully without it
+
     messages = []
     # Copy previous history items and retain image payloads
     for h in history[:-1][-7:]:

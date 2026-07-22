@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from cpi_client import get_cpi
 from mortgage_rate_client import get_mortgage_rate
 from real_gdp_client import get_real_gdp
 from unemployment_rate_client import get_unemployment_rate
@@ -2083,6 +2084,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/cpi-inflation")
+@login_required
+def api_cpi_inflation():
+    """Headline CPI YoY Inflation (FRED CPIAUCSL) -- the actual realized
+    inflation print (FSI L2), distinct from Core PCE/PPI/MICH/T10YIE/Kalshi
+    consensus badges already shipped. Cached 1h, see cpi_client.py."""
+    return jsonify(get_cpi() or {})
 @app.route("/api/mortgage-rate")
 @login_required
 def api_mortgage_rate():
@@ -3337,6 +3345,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Headline CPI YoY Inflation (cached 1h in cpi_client.py)
+        try:
+            cpi = get_cpi()
+            if cpi:
+                _macro_cache = {**_macro_cache, "CPI": {
+                    "label": "CPI YoY", "value": cpi["yoy_pct"], "rating": cpi["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] cpi error: {e}")
         # 30-Year Fixed Mortgage Rate (cached 1h in mortgage_rate_client.py)
         try:
             mtg = get_mortgage_rate()

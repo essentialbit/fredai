@@ -29,16 +29,23 @@ def _key(*parts) -> str:
 
 
 # ── FOMC 2026 SCHEDULE ────────────────────────────────────────────────────────
-# Source: federalreserve.gov — published annually, accurate through Dec 2026
+# Source: federalreserve.gov/monetarypolicy/fomccalendars.htm, re-verified live
+# 2026-07-09 -- the previous hardcoded dates for Jan/Jun/Nov(->Oct)/Dec were
+# wrong (off by anywhere from 1 to 7 days), caught because central_bank_client.py
+# fetches the Fed's statement page at a URL keyed directly off this date and
+# four of the eight got a 404. Also: since 2019 the Fed chair holds a press
+# conference after every meeting, not just the quarterly SEP ones (the "*" in
+# the Fed's own listing marks SEP meetings specifically, not press-conference
+# meetings) -- every row below gets the "+ Press Conference" tag now.
 FOMC_2026 = [
-    ("2026-01-28", "2026-01-29", "FOMC Meeting (Jan)"),
+    ("2026-01-27", "2026-01-28", "FOMC Meeting + Press Conference (Jan)"),
     ("2026-03-17", "2026-03-18", "FOMC Meeting + Press Conference (Mar)"),
-    ("2026-04-28", "2026-04-29", "FOMC Meeting (Apr)"),
-    ("2026-06-09", "2026-06-10", "FOMC Meeting + Press Conference (Jun)"),
-    ("2026-07-28", "2026-07-29", "FOMC Meeting (Jul)"),
+    ("2026-04-28", "2026-04-29", "FOMC Meeting + Press Conference (Apr)"),
+    ("2026-06-16", "2026-06-17", "FOMC Meeting + Press Conference (Jun)"),
+    ("2026-07-28", "2026-07-29", "FOMC Meeting + Press Conference (Jul)"),
     ("2026-09-15", "2026-09-16", "FOMC Meeting + Press Conference (Sep)"),
-    ("2026-11-03", "2026-11-04", "FOMC Meeting (Nov)"),
-    ("2026-12-15", "2026-12-16", "FOMC Meeting + Press Conference (Dec)"),
+    ("2026-10-27", "2026-10-28", "FOMC Meeting + Press Conference (Oct)"),
+    ("2026-12-08", "2026-12-09", "FOMC Meeting + Press Conference (Dec)"),
 ]
 
 # ── RBA 2026 SCHEDULE ─────────────────────────────────────────────────────────

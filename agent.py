@@ -514,8 +514,10 @@ current.
   explicitly: "I don't have current price data for X right now" — do NOT invent a plausible-sounding
   price, historical high, or trend to fill the gap.
 - NEVER invent analyst ratings, firm names, or specific corporate actions (e.g. "Goldman Sachs
-  downgraded to Sell") — this codebase has no analyst-rating data source at all. If asked about analyst
-  sentiment, say you don't have that data source, don't fabricate one.
+  downgraded to Sell") unless they appear verbatim in the LIVE CONTEXT block. Real analyst consensus
+  targets and recent upgrade/downgrade actions ARE available for symbols with coverage (via
+  /api/analyst-ratings/<ticker> and the equity-report generator) — cite them exactly when present, but
+  a symbol with no cached rating data still has none: say so, don't fabricate one.
 - Inventing financial data is a worse failure than admitting uncertainty. A confident wrong answer is
   never acceptable here, even when the "Character" guidance below asks for directness.
 
@@ -558,6 +560,18 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     quotes = quotes or {}
     track_record = _format_track_record()
 
+    # CFTC COT positioning -- cache-only (12h internal cache), only surface
+    # contracts crowded enough to be an actionable contrarian signal.
+    cot_block = ""
+    try:
+        from cot_client import fetch_all_cot_positioning
+        crowded = [r for r in fetch_all_cot_positioning().values() if abs(r["z_score"]) >= 1.5]
+        if crowded:
+            lines = [f"  {r['contract']}: {r['classification']} (z={r['z_score']:+.2f})" for r in crowded]
+            cot_block = "\nSPECULATOR POSITIONING CROWDING (CFTC COT, contrarian signal):\n" + "\n".join(lines)
+    except Exception:
+        pass
+
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
 
@@ -587,24 +601,56 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         if confluence_line:
             port_block += f"\n{_strip_portfolio(confluence_line)}"
 
+    macro_block = ""
+    try:
+        from jobless_claims_client import get_jobless_claims
+        jc = get_jobless_claims()
+        if jc:
+            macro_block = (
+                f"\nMACRO: Initial jobless claims {jc['latest']:,.0f} ({jc['date']}), "
+                f"{jc['trend_8w']['direction']} vs 8wk avg, WoW {jc['change_wow']:+,.0f}, "
+                f"level {jc['level_flag']}"
+            )
+    except Exception:
+        pass
+
+    # Cache-only on purpose: chat must never block on live pytrends calls.
+    # Populated by the daily job_trends_refresh scan; surfaces only tickers
+    # with a real velocity reading (skipped silently otherwise).
+    trends_block = ""
+    if quotes:
+        from memory_store import get_search_interest_velocity
+        movers = []
+        for sym in list(quotes.keys())[:12]:
+            v = get_search_interest_velocity(sym)
+            if v and abs(v["velocity_pct"]) >= 15:
+                movers.append(f"{sym} {v['velocity_pct']:+.0f}%")
+        if movers:
+            trends_block = f"\nSEARCH-INTEREST VELOCITY (Google Trends, vs 7d avg): {', '.join(movers)}"
+
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "
         "rate-limited, or the app just started. Do not invent prices, historical highs, or figures "
         "for any asset; say plainly that current data isn't available yet.)\n" if not quotes else ""
     )
 
+    onchain_block = ""
+    if "BTC-USD" in quotes:
+        onchain_block = f"\n\nBTC NETWORK HEALTH (on-chain, cache-only):\n{_format_onchain()}"
+
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
 {_build_privacy_notice()}
 {interest_block}{port_block}{entities_block}
 
-MARKET SNAPSHOT:{market_snapshot_warning}
-{json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}
+MARKET SNAPSHOT:{market_snapshot_warning}{macro_block}
+{json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}{onchain_block}
 
 SIGNAL SUMMARY (last 4h):
 - Total: {len(signals)} | Bullish: {len(bullish)} ({len(bullish)/max(len(signals),1)*100:.0f}%) | Bearish: {len(bearish)} ({len(bearish)/max(len(signals),1)*100:.0f}%)
 
 TRENDING ASSETS (by signal volume):
 {json.dumps([{"asset": t["asset"], "signals": t["signal_count"], "bullish_pct": round(t.get("bullish_pct",0),1)} for t in trending[:6]], indent=2)}
+{trends_block}
 {f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
 TOP RECENT SIGNALS:
 {_format_signals(signals[:8])}
@@ -614,8 +660,26 @@ ACTIVE ALERTS:
 
 LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
+{cot_block}
 """
     return ctx
+
+
+def _format_onchain() -> str:
+    """Cache-only (DB read, no live blockchain.info call) so chat never blocks
+    on a network fetch -- data is populated by main.py's daily onchain_metrics
+    job. Empty means the job hasn't run yet, not that BTC has no activity."""
+    from memory_store import get_latest_onchain_metrics
+    metrics = get_latest_onchain_metrics()
+    if not metrics:
+        return "  No on-chain data cached yet."
+    lines = []
+    for name, m in metrics.items():
+        if m.get("z_score") is not None:
+            lines.append(f"  {name}: {m['latest_value']:.0f} ({m['direction']}, z={m['z_score']:.2f})")
+        else:
+            lines.append(f"  {name}: {m['latest_value']:.0f}")
+    return "\n".join(lines)
 
 
 def _format_track_record() -> str:

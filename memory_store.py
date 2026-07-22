@@ -438,6 +438,15 @@ def init_db():
             UNIQUE(symbol, trade_date)
         );
 
+        CREATE TABLE IF NOT EXISTS beige_book_sentiment (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            release_date TEXT NOT NULL UNIQUE,
+            composite_score REAL NOT NULL,
+            prior_score REAL,
+            score_delta REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
@@ -483,6 +492,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_ticker_debates_ticker ON ticker_debates(ticker, created_at);
         CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
         CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
+        CREATE INDEX IF NOT EXISTS idx_beige_book_release ON beige_book_sentiment(release_date);
 
         CREATE TABLE IF NOT EXISTS tracked_entities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1717,6 +1727,27 @@ def get_short_volume_series(symbol: str, limit: int = 30) -> list[dict]:
             (symbol, limit)
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def get_latest_beige_book_sentiment() -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM beige_book_sentiment ORDER BY release_date DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def insert_beige_book_sentiment(release_date: str, composite_score: float, prior_score: float | None, score_delta: float | None):
+    """One row per release_date -- INSERT OR IGNORE keeps a same-release cache
+    refresh idempotent instead of duplicating rows (releases are infrequent,
+    ~8/year, so this only actually inserts when a genuinely new release is found)."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO beige_book_sentiment
+               (release_date, composite_score, prior_score, score_delta)
+               VALUES (?, ?, ?, ?)""",
+            (release_date, composite_score, prior_score, score_delta)
+        )
 
 
 def get_latest_short_volume(symbol: str) -> dict | None:

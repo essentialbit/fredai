@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from beige_book_client import get_beige_book_sentiment
 from moody_credit_quality_spread import get_moody_credit_quality_spread
 from household_net_worth_client import get_household_net_worth
 from pce_price_index_client import get_pce_price_index
@@ -2089,6 +2090,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/beige-book-sentiment")
+@login_required
+def api_beige_book_sentiment():
+    """Federal Reserve Beige Book regional-conditions VADER sentiment score
+    (FSI L2, nlp_signal) -- cached 24h, see beige_book_client.py."""
+    return jsonify(get_beige_book_sentiment() or {})
 @app.route("/api/moody-credit-quality-spread")
 @login_required
 def api_moody_credit_quality_spread():
@@ -3382,6 +3389,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Fed Beige Book regional-sentiment score (cached 24h in beige_book_client.py)
+        try:
+            bb = get_beige_book_sentiment()
+            if bb:
+                _macro_cache = {**_macro_cache, "BEIGE_BOOK": {
+                    "label": "Beige Book", "value": bb["composite_score"], "rating": bb["rating"],
+                    "change": bb["score_delta"],
+                }}
+        except Exception as e:
+            print(f"[Job] beige_book_sentiment error: {e}")
         # Moody's Aaa-Baa credit quality spread (cached 1h in moody_credit_quality_spread.py)
         try:
             mcs = get_moody_credit_quality_spread()

@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from moody_credit_quality_spread import get_moody_credit_quality_spread
 from household_net_worth_client import get_household_net_worth
 from pce_price_index_client import get_pce_price_index
 from cfnai_index import get_cfnai
@@ -2088,6 +2089,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/moody-credit-quality-spread")
+@login_required
+def api_moody_credit_quality_spread():
+    """Moody's Aaa-Baa corporate bond quality spread -- within-credit-quality
+    flight-to-quality signal (FSI L2), distinct from the Baa/10Y treasury-
+    relative spread. Cached 1h, see moody_credit_quality_spread.py."""
+    return jsonify(get_moody_credit_quality_spread() or {})
 @app.route("/api/household-net-worth")
 @login_required
 def api_household_net_worth():
@@ -3374,6 +3382,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Moody's Aaa-Baa credit quality spread (cached 1h in moody_credit_quality_spread.py)
+        try:
+            mcs = get_moody_credit_quality_spread()
+            if mcs:
+                _macro_cache = {**_macro_cache, "MOODY_SPREAD": {
+                    "label": "Aaa-Baa", "value": mcs["spread"], "rating": mcs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] moody_credit_quality_spread error: {e}")
         # Household Net Worth YoY growth (cached 6h in household_net_worth_client.py)
         try:
             hnw = get_household_net_worth()

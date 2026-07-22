@@ -160,6 +160,7 @@ from memory_store import (
     insert_institutional_holdings, get_institutional_holdings_for_symbol,
     insert_filing_events, get_recent_filing_events,
     get_layout_prefs, save_layout_prefs,
+    insert_alert, run_data_integrity_checks,
     insert_onchain_metric, get_latest_onchain_metrics,
     save_seasonal_bias, get_current_seasonality,
     insert_alert,
@@ -4428,6 +4429,21 @@ if __name__ == "__main__":
         total = sum(result["deleted"].values())
         if total:
             print(f"[Prune] Removed {total} records older than {DATA_RETENTION_DAYS}d: {result['deleted']}")
+
+        try:
+            for check in run_data_integrity_checks():
+                if check["status"] != "alert":
+                    continue
+                print(f"[Integrity] {check['check']}: {check['detail']}")
+                insert_alert("warning", f"Data Integrity: {check['check']}", check["detail"])
+                socketio.emit("alert", {
+                    "level": "warning",
+                    "title": f"Data Integrity: {check['check']}",
+                    "message": check["detail"],
+                    "timestamp": datetime.utcnow().isoformat(),
+                })
+        except Exception as e:
+            print(f"[Integrity] Check error: {e}")
 
     def job_news_refresh():
         """Refresh news from all sources every 30 minutes (global + ASX)."""

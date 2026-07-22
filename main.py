@@ -1020,7 +1020,15 @@ def api_entity_evidence(entity_id):
     note = data.get("note", "").strip()
     if not note:
         return jsonify({"error": "note required"}), 400
-    add_evidence(entity_id, note, data.get("source", ""))
+    evidence_id = add_evidence(entity_id, note, data.get("source", ""))
+    try:
+        from rag_store import upsert_chunk
+        upsert_chunk(
+            "entity_evidence", str(evidence_id), note, title=f"Evidence: {entity['name']}",
+            tickers=entity["name"], user_id=entity["user_id"], embed=False,
+        )
+    except Exception:
+        pass  # Fred Recall indexing unavailable -- evidence save already succeeded
     return jsonify({"status": "ok"})
 
 
@@ -2746,6 +2754,23 @@ def api_vault_reindex():
     return jsonify(reindex_vault())
 
 
+@app.route("/api/recall")
+@login_required
+def api_recall():
+    """Fred Recall: ranked search across ALL of Fred's own accumulated
+    intelligence (news, signals, briefings, debates, insider filings,
+    entity evidence, vault notes) -- the same retrieve() chat calls
+    automatically, exposed directly for the dashboard's memory search box
+    and for debugging/direct testing. User-scoped: global rows plus this
+    user's own rows only, enforced inside rag_store, not here."""
+    from rag_retriever import retrieve
+    q = request.args.get("q", "")
+    if not q:
+        return jsonify({"results": []})
+    uid = session.get("user_id")
+    return jsonify({"results": retrieve(q, uid, k=15)})
+
+
 @app.route("/api/optimized-params/<ticker>")
 @login_required
 def api_optimized_params(ticker):
@@ -4280,7 +4305,7 @@ def job_scan_cycle():
             from agent import _top_mentioned_assets
             key_signals = _top_mentioned_assets(all_signals)
 
-            insert_summary(
+            summary_id = insert_summary(
                 period_start=period_start,
                 period_end=period_end,
                 content=summary_text,
@@ -4289,6 +4314,21 @@ def job_scan_cycle():
                 risk_level=risk,
                 signal_count=len(all_signals),
             )
+            try:
+                from rag_store import upsert_chunk
+                # Space-separated to match summaries.timestamp's own
+                # CURRENT_TIMESTAMP default -- NOT .isoformat() (see the
+                # repo-wide timestamp rule: 'T' sorts above ' ', so a
+                # T-separated published_at here would silently defeat
+                # rag_retriever's recency-decay strptime parse).
+                published_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+                upsert_chunk(
+                    "briefing", str(summary_id), summary_text, title="4h briefing",
+                    tickers=",".join(key_signals.keys()) if key_signals else "",
+                    published_at=published_at, embed=False,
+                )
+            except Exception:
+                pass  # Fred Recall indexing unavailable -- briefing generation already succeeded
 
             trending = get_trending_assets_with_fallback(hours=4, limit=15)
             timeline = get_sentiment_timeline(hours=24)
@@ -4364,7 +4404,7 @@ def on_chat(data):
     entities_context = format_context_summary(user_id) if user_id else ""
     response = chat(user_msg, history, quotes=_quotes_cache,
                     user_interests=interests, portfolio=portfolio,
-                    tracked_entities=entities_context)
+                    tracked_entities=entities_context, user_id=user_id or None)
 
     history.append({"role": "assistant", "content": response})
     if len(history) > 24:
@@ -4461,6 +4501,8 @@ if __name__ == "__main__":
                 au_items = fetch_au_news(watchlist_asx=asx_syms)
                 if au_items:
                     upsert_news_items(au_items)
+                    from news_client import _index_news_items
+                    _index_news_items(au_items)
                     count += len(au_items)
             except Exception as e:
                 print(f"[ASX News] Error: {e}")
@@ -4553,6 +4595,27 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[VaultSearch] Reindex error: {e}")
 
+    def job_rag_embed_backlog():
+        """Fred Recall (FSI L4) -- every write-time hook and backfill_all()
+        writes FTS-only (embed=False) to stay fast/non-blocking; this job is
+        where embedding actually happens, plus retention pruning. Batch-capped
+        per run so one slow Ollama cycle can't run indefinitely; the next run
+        picks up wherever this one left off (get_chunks_missing_embeddings is
+        just a WHERE embedding IS NULL scan, naturally idempotent)."""
+        try:
+            from rag_store import get_chunks_missing_embeddings, embed_text, set_embedding, prune_old_chunks
+            chunks = get_chunks_missing_embeddings(limit=200)
+            embedded = 0
+            for c in chunks:
+                vec = embed_text(c["content"][:2000])
+                if vec:
+                    set_embedding(c["id"], vec)
+                    embedded += 1
+            pruned = prune_old_chunks(days=180)
+            print(f"[FredRecall] Embed backlog — {embedded}/{len(chunks)} embedded, {pruned} stale news/signal chunk(s) pruned")
+        except Exception as e:
+            print(f"[FredRecall] Embed backlog error: {e}")
+
     def job_param_optimizer():
         """Daily grid-search backtest of RSI / MA-cross parameters per
         portfolio+watchlist ticker (FSI L3) -- see param_optimizer.py."""
@@ -4569,6 +4632,30 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[ParamOptimizer] Error: {e}")
 
+    def _index_insider_txns_for_recall(txns: list[dict]) -> None:
+        """Fred Recall write-time hook -- FTS-only (embed=False), matching
+        _backfill_insider's is_signal_code=1 filter and composite source_id
+        scheme (rag_store.insider_source_id) so a later backfill run never
+        duplicates an already-indexed transaction. Never blocks/fails the
+        caller."""
+        try:
+            from rag_store import upsert_chunk, insider_source_id
+            for t in txns:
+                if not t.get("is_signal_code"):
+                    continue
+                content = (
+                    f"{t['owner_name']} ({t.get('owner_title') or 'insider'}) {t['transaction_code']} "
+                    f"{t['shares']} shares of {t['ticker']} at ${t.get('price_per_share')}"
+                )
+                source_id = insider_source_id(t["ticker"], t["owner_name"], t["transaction_date"],
+                                               t["transaction_code"], t["shares"])
+                upsert_chunk(
+                    "insider", source_id, content, title=f"{t['ticker']} Form 4 filing",
+                    tickers=t["ticker"], published_at=t["transaction_date"], embed=False,
+                )
+        except Exception:
+            pass
+
     def job_insider_signals_refresh():
         """Refresh SEC Form 4 insider-trading data daily for portfolio + watchlist symbols,
         then check for buying/selling clusters (FSI L2)."""
@@ -4584,6 +4671,7 @@ if __name__ == "__main__":
             for sym in symbols:
                 txns = fetch_form4_filings(sym, limit=5)
                 total_new += insert_insider_transactions(txns)
+                _index_insider_txns_for_recall(txns)
             alerts_fired = detect_insider_clusters(symbols)
             _insider_cluster_cache.clear()
             for a in alerts_fired:
@@ -4885,6 +4973,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_hypothesis_generation, "cron", hour=8, minute=15, id="hypothesis_generation")
     scheduler.add_job(job_hypothesis_resolution, "interval", hours=6, id="hypothesis_resolution", jitter=600)
     scheduler.add_job(job_vault_reindex, "interval", hours=6, id="vault_reindex", jitter=600)
+    scheduler.add_job(job_rag_embed_backlog, "interval", hours=1, id="rag_embed_backlog", jitter=180)
     scheduler.start()
 
     # Auto-install shortcuts on first run (or if missing)

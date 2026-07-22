@@ -529,6 +529,14 @@ current.
 - 10-year thesis required for any long-term observation: clear growth story to 2035+.
 - Ignore: meme momentum, short-term pumps, assets without multi-year thesis.
 
+## Fred's Memory (Fred Recall)
+When a "FRED'S MEMORY (retrieved, cite as [source · date])" block is present in the context, it is
+Fred's own accumulated history (past signals, briefings, debates, filings, notes) — retrieved because
+it may be relevant to this conversation, not guaranteed to be. Cite it inline as [source · date] when
+you use it. If a user asks something that sounds like it needs Fred's history and no relevant memory
+was retrieved, say plainly "I don't have history on that" — never invent a past signal, briefing, or
+note that wasn't actually retrieved.
+
 ## Character
 - Direct and data-anchored. Every claim uses actual numbers FROM THE PROVIDED CONTEXT (see above — never invented).
 - Proactive — surface opportunities and risks before asked.
@@ -730,15 +738,15 @@ def _needs_disclaimer(user_msg: str, response: str) -> bool:
 
 def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None,
-         tracked_entities: str = "") -> str:
+         tracked_entities: str = "", user_id: int | None = None) -> str:
     context = build_context_block(quotes, user_interests, portfolio, tracked_entities)
     try:
-        from vault_semantic_search import get_vault_context
-        vault_context = get_vault_context(user_message)
-        if vault_context:
-            context = f"{context}\n\n{vault_context}"
+        from rag_retriever import retrieve, format_context
+        recalled = format_context(retrieve(user_message, user_id))
+        if recalled:
+            context = f"{context}\n\nFRED'S MEMORY (retrieved, cite as [source · date]):\n{recalled}"
     except Exception:
-        pass  # local Ollama embeddings unavailable -- chat degrades gracefully without vault context
+        pass  # Fred Recall unavailable (FTS5/Ollama down, etc.) -- chat degrades gracefully without it
     messages = []
     # Copy previous history items and retain image payloads
     for h in history[:-1][-7:]:
@@ -772,6 +780,7 @@ def generate_summary(signals: list[dict], quotes: dict,
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
     top_assets = _top_mentioned_assets(signals)
     track_record = _format_briefing_track_record()
+    recall_block = _format_recall_for_briefing(top_assets)
 
     prompt = f"""You are FredAI. Generate a board-level financial intelligence briefing.
 
@@ -780,7 +789,7 @@ TOP ASSETS BY SIGNAL VOLUME: {json.dumps(top_assets)}
 
 MARKET DATA:
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:10]}, indent=2)}
-{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
+{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}{recall_block}
 REPRESENTATIVE SIGNALS:
 {_format_signals(signals[:15])}
 
@@ -793,7 +802,7 @@ Write a structured briefing:
 
 **ASSET SPOTLIGHT**
 - (top 2-3 assets: sentiment direction + signal count + price context)
-
+{"\n**WHAT CHANGED SINCE LAST BRIEFING** — (2-4 bullets grounded ONLY in the WHAT CHANGED SINCE LAST BRIEFING context above; omit this section entirely if that context is empty, do not invent prior state)\n" if recall_block else ""}
 **RISK LEVEL: [LOW/MEDIUM/HIGH]** — (one sentence rationale)
 
 **FRED'S WATCHLIST** — (3-5 items to monitor next 4h with reason)
@@ -810,6 +819,36 @@ Direct. Specific. No filler."""
     if "not financial advice" not in result.lower():
         result += DISCLAIMER_FOOTER
     return result
+
+
+def _format_recall_for_briefing(top_assets: dict) -> str:
+    """Previous 2 briefings + top related news for this period's top-mentioned
+    assets, formatted for the 'WHAT CHANGED SINCE LAST BRIEFING' prompt
+    section. Empty string (never fabricated) if Fred Recall has nothing yet
+    (first briefing ever, empty index, or FTS5/Ollama unavailable) -- the
+    caller drops the whole section when this returns ''."""
+    try:
+        from memory_store import get_summaries
+        from rag_retriever import retrieve, format_context
+
+        prior = get_summaries(limit=2)
+        prior_block = ""
+        if prior:
+            lines = [f"- [{p['timestamp'][:16]}] {p['content'][:300]}" for p in prior]
+            prior_block = "PRIOR BRIEFINGS:\n" + "\n".join(lines)
+
+        news_block = ""
+        if top_assets:
+            query = " ".join(list(top_assets.keys())[:3])
+            news_chunks = [c for c in retrieve(query, user_id=None, k=8) if c["source_type"] == "news"][:4]
+            if news_chunks:
+                news_block = "RELATED NEWS SINCE THEN:\n" + format_context(news_chunks)
+
+        if not prior_block and not news_block:
+            return ""
+        return f"\nWHAT CHANGED SINCE LAST BRIEFING (context, cite as [source · date]):\n{prior_block}\n{news_block}\n"
+    except Exception:
+        return ""  # Fred Recall unavailable -- briefing generates exactly as before
 
 
 def _format_briefing_track_record() -> str:

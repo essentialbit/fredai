@@ -343,7 +343,31 @@ def fetch_all_news(watchlist: list[str]) -> int:
     # RBA
     all_items.extend(_fetch_rba_news())
 
-    return upsert_news_items(all_items)
+    saved = upsert_news_items(all_items)
+    _index_news_items(all_items)
+    return saved
+
+
+def _index_news_items(items: list[dict]) -> None:
+    """Fred Recall write-time hook -- FTS-only (embed=False), the nightly
+    embed-backlog job picks up embeddings later. Never blocks/fails the
+    caller: news ingestion must succeed even if indexing has a problem."""
+    try:
+        from rag_store import upsert_chunk
+        for item in items:
+            guid = item.get("guid")
+            if not guid:
+                continue
+            content = f"{item.get('title', '')}\n{item.get('summary', '') or ''}".strip()
+            if not content:
+                continue
+            upsert_chunk(
+                "news", guid, content, title=item.get("title", ""),
+                tickers=item.get("tickers", "") or "", url=item.get("url", "") or "",
+                published_at=item.get("published_at"), embed=False,
+            )
+    except Exception:
+        pass
 
 
 # ── TICKER INFO ENRICHMENT ────────────────────────────────────────────────────

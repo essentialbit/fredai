@@ -156,7 +156,7 @@ def fetch_reddit_signals(limit_per_sub: int = 25) -> list[dict]:
             if post["id"] in already_seen:
                 continue
             for asset in post["tickers"]:
-                insert_signal(
+                signal_id = insert_signal(
                     source="reddit",
                     content=post["text"],
                     asset=asset,
@@ -170,7 +170,20 @@ def fetch_reddit_signals(limit_per_sub: int = 25) -> list[dict]:
                         "permalink": post["permalink"],
                     },
                 )
+                _index_signal_for_recall(signal_id, "reddit", post["author"], post["text"], asset)
             collected.append(post)
         time.sleep(2.0)  # Reddit rate-limits aggressively on rapid repeat requests
 
     return collected
+
+
+def _index_signal_for_recall(signal_id: int, source: str, author: str, content: str, asset: str) -> None:
+    """Fred Recall write-time hook -- FTS-only (embed=False), the nightly
+    embed-backlog job picks up embeddings later. Never blocks/fails the
+    caller."""
+    try:
+        from rag_store import upsert_chunk
+        title = f"{source} signal" + (f" ({author})" if author else "")
+        upsert_chunk("signal", str(signal_id), content, title=title, tickers=asset or "", embed=False)
+    except Exception:
+        pass

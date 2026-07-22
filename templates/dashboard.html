@@ -1665,6 +1665,17 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- FRED'S MEMORY — search across Fred's own accumulated intelligence (Fred Recall) -->
+    <div class="panel" id="ov-recall" style="grid-column:1/-1">
+      <div class="ph">Ask Fred's Memory <span class="ptag">RECALL</span></div>
+      <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <input id="recall-input" placeholder="Search Fred's history... (e.g. NVDA insider buying, Fed pivot)" oninput="onRecallInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();runRecallSearch();}" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;font-family:inherit">
+      </div>
+      <div class="scroll" id="recall-results" style="max-height:280px">
+        <div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Search signals, briefings, debates, filings, and vault notes Fred has accumulated.</div>
+      </div>
+    </div>
+
     <!-- OVERVIEW: Portfolio panel -->
     <div class="panel" id="ov-portfolio">
       <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
@@ -5094,6 +5105,46 @@ function renderTrendBarChart(data){
     ]},
     options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},plugins:{legend:{labels:{color:'#7a9bbf',font:{size:IS_ULTRA?12:9}}}},scales:{x:{stacked:true,ticks:{color:'#3d5a73',font:{size:IS_ULTRA?11:9}},grid:{color:'#162840'}},y:{stacked:true,ticks:{color:'#3d5a73',font:{size:9}},grid:{color:'#162840'},min:0,max:100}}}
   });
+}
+let _recallTimer=null;
+function onRecallInput(){
+  clearTimeout(_recallTimer);
+  _recallTimer=setTimeout(runRecallSearch,400);
+}
+async function runRecallSearch(){
+  const q=g('recall-input').value.trim();
+  const box=g('recall-results');
+  if(!q){box.innerHTML='<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Search signals, briefings, debates, filings, and vault notes Fred has accumulated.</div>';return}
+  box.innerHTML='<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Searching...</div>';
+  try{
+    const r=await fetch(`/api/recall?q=${encodeURIComponent(q)}`);
+    const d=await r.json();
+    renderRecallResults(d.results||[]);
+  }catch(e){
+    box.innerHTML='<div class="empty" style="padding:14px;color:var(--red);font-size:10px">Search failed.</div>';
+  }
+}
+function renderRecallResults(results){
+  const box=g('recall-results'); if(!box) return;
+  if(!results.length){box.innerHTML='<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">No matches.</div>';return}
+  box.innerHTML=results.map(r=>{
+    const date=(r.published_at||'').slice(0,10)||'undated';
+    // scheme-allowlisted + quote-stripped: esc() is a textContent round-trip
+    // that does NOT escape quotes, so it can't safely protect an href
+    // attribute on its own (see the onclick note elsewhere in this file) --
+    // r.url comes from external news RSS content, not just our own data.
+    const safeUrl=(r.url&&/^https?:\/\//i.test(r.url))?r.url.replace(/"/g,'%22'):'';
+    const link=safeUrl?`<a href="${safeUrl}" target="_blank" rel="noopener" style="color:var(--blue)">↗</a>`:'';
+    return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
+        <span style="font-size:8px;background:rgba(0,180,255,.1);color:var(--blue);border-radius:2px;padding:1px 4px;text-transform:uppercase;letter-spacing:.5px">${esc(r.source_type)}</span>
+        <span style="color:var(--t3)">${esc(date)}</span>
+        <span style="color:var(--t2);font-weight:600">${esc(r.title||'')}</span>
+        ${link}
+      </div>
+      <div style="color:var(--t2)">${esc(r.content.slice(0,220))}${r.content.length>220?'…':''}</div>
+    </div>`;
+  }).join('');
 }
 function jumpToSymbol(asset){
   const sel=g('sym-sel');if([...sel.options].some(o=>o.value===asset))sel.value=asset;

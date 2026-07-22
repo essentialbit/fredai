@@ -6,53 +6,27 @@ not configurable without a code change. This is FredAI's own
 signal/summary/improvement journal, not the user's full personal vault
 (which also holds unrelated Claude-memory and other personal notes).
 
-Embeddings come from a local Ollama model (nomic-embed-text) via a direct
-HTTP call to OLLAMA_URL/api/embeddings, matching the existing raw-HTTP
-Ollama pattern already used elsewhere in this codebase (agent.py,
-debate.py) rather than the `ollama` pip package. No external vector DB --
-chunks and their embeddings are stored as JSON in sentinel.db (this
-project is SQLite-only by design) and cosine similarity is computed in
-Python, which is plenty for one vault subfolder's worth of notes.
+Storage/embedding now goes through rag_store.py (source_type='vault') as
+part of Fred Recall -- this module is a thin wrapper preserving its own
+public API (semantic_search/reindex_vault/get_vault_context) and privacy
+boundary (FREDAI_DIR only, no other rag_chunks source_type touched here).
+Previously vault chunks lived in their own vault_embeddings table with a
+hand-rolled cosine scan; that table is now unused dead schema, left in
+place rather than dropped since removing a table definition from
+init_db() has no benefit (CREATE TABLE IF NOT EXISTS is a no-op either
+way) and touching production schema beyond what's needed is unnecessary
+risk.
 """
+import json
 import math
 import os
 
-import requests
-
-from config import OLLAMA_URL
 from obsidian_bridge import FREDAI_DIR, vault_available
-from memory_store import (
-    upsert_vault_chunk, get_all_vault_chunks, get_vault_chunk_mtimes, delete_vault_chunks_for_path,
-)
+from rag_store import upsert_chunk, delete_chunk, get_mtimes, chunk_text, embed_text
+from memory_store import get_conn
 
-_EMBED_MODEL = "nomic-embed-text"
-_CHUNK_CHARS = 2000  # ~500 tokens
 _TOP_K = 3
 _MIN_SIMILARITY = 0.5
-_EMBED_TIMEOUT_S = 30
-
-
-def _embed(text: str) -> list[float] | None:
-    try:
-        r = requests.post(
-            f"{OLLAMA_URL}/api/embeddings",
-            json={"model": _EMBED_MODEL, "prompt": text},
-            timeout=_EMBED_TIMEOUT_S,
-        )
-        if r.status_code != 200:
-            return None
-        return r.json().get("embedding") or None
-    except requests.RequestException:
-        return None
-
-
-def _chunk_text(text: str) -> list[str]:
-    chunks = []
-    for i in range(0, len(text), _CHUNK_CHARS):
-        chunk = text[i:i + _CHUNK_CHARS].strip()
-        if chunk:
-            chunks.append(chunk)
-    return chunks
 
 
 def _iter_vault_files():
@@ -68,7 +42,12 @@ def reindex_vault() -> dict:
     """Incrementally (re)index every .md file under FREDAI_DIR whose mtime
     is newer than what's already stored -- unchanged files are skipped
     rather than re-embedded. Returns {"indexed": N, "skipped": N}."""
-    stored_mtimes = get_vault_chunk_mtimes()
+    # get_mtimes keys are chunk-level source_ids ("path#0", "path#1", ...) --
+    # collapse to one mtime per base path (all chunks of one file share it).
+    stored_mtimes = {}
+    for source_id, mtime in get_mtimes("vault").items():
+        path = source_id.rsplit("#", 1)[0]
+        stored_mtimes[path] = mtime
     indexed, skipped = 0, 0
     for path in _iter_vault_files():
         mtime = os.path.getmtime(path)
@@ -80,13 +59,27 @@ def reindex_vault() -> dict:
                 text = f.read()
         except OSError:
             continue
-        delete_vault_chunks_for_path(path)
-        for chunk in _chunk_text(text):
-            embedding = _embed(chunk)
-            if embedding:
-                upsert_vault_chunk(path, chunk, embedding, mtime)
+        _delete_all_chunks_for_path(path)
+        for i, chunk in enumerate(chunk_text(text)):
+            upsert_chunk(
+                "vault", f"{path}#{i}", chunk, title=os.path.basename(path),
+                published_at=None, mtime=mtime,
+            )
         indexed += 1
     return {"indexed": indexed, "skipped": skipped}
+
+
+def _delete_all_chunks_for_path(path: str) -> None:
+    """A file can produce multiple chunks (source_id f'{path}#0', '#1', ...)
+    -- delete every one before re-chunking so a shrunk file doesn't leave
+    stale trailing chunks behind."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT source_id FROM rag_chunks WHERE source_type='vault' AND source_id LIKE ?",
+            (f"{path}#%",),
+        ).fetchall()
+    for row in rows:
+        delete_chunk("vault", row["source_id"])
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -102,14 +95,20 @@ def semantic_search(query: str, top_k: int = _TOP_K) -> list[dict]:
     """Top-k vault chunks most similar to query, above _MIN_SIMILARITY.
     [] (never fabricated) if the vault isn't indexed yet or the local
     embedding call fails."""
-    query_emb = _embed(query)
+    query_emb = embed_text(query)
     if not query_emb:
         return []
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT source_id, content, embedding FROM rag_chunks WHERE source_type='vault' AND embedding IS NOT NULL"
+        ).fetchall()
     scored = []
-    for row in get_all_vault_chunks():
-        sim = _cosine(query_emb, row["embedding"])
+    for row in rows:
+        embedding = json.loads(row["embedding"])
+        sim = _cosine(query_emb, embedding)
         if sim >= _MIN_SIMILARITY:
-            scored.append({"path": row["path"], "chunk_text": row["chunk_text"], "similarity": round(sim, 3)})
+            path = row["source_id"].rsplit("#", 1)[0]
+            scored.append({"path": path, "chunk_text": row["content"], "similarity": round(sim, 3)})
     scored.sort(key=lambda r: r["similarity"], reverse=True)
     return scored[:top_k]
 

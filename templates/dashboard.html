@@ -5304,7 +5304,7 @@ function renderCalendar(events) {
           <span class="cal-type-tag cal-type-${esc(et)}">${esc(et.replace('_',' '))}</span>
           ${esc(ev.title)}
         </div>
-        <div class="cal-meta">${esc(ev.event_time||'')} UTC · ${esc(ev.source||'')}${ev.eps_forecast?` · Est: ${esc(ev.eps_forecast)}`:''}</div>
+        <div class="cal-meta">${esc(ev.event_time||'')} UTC · ${esc(ev.source||'')}${ev.eps_forecast?` · Est: ${esc(ev.eps_forecast)}`:''}${ev.avg_reaction?` · Avg move: ±${ev.avg_reaction.avg_abs_move_pct}% (n=${ev.avg_reaction.sample_size})`:''}</div>
       </div>
     </div>`;
   }).join('');

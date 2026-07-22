@@ -412,6 +412,51 @@ def init_db():
             UNIQUE(accession_number)
         );
 
+        CREATE TABLE IF NOT EXISTS filings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            cik TEXT,
+            form_type TEXT NOT NULL,
+            accession_number TEXT NOT NULL,
+            filed_date TEXT,
+            fiscal_period TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(accession_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS filing_sections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filing_id INTEGER NOT NULL,
+            section TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(filing_id, section)
+        );
+
+        CREATE TABLE IF NOT EXISTS filing_diffs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            section TEXT NOT NULL,
+            comparison TEXT NOT NULL,
+            current_filing_id INTEGER NOT NULL,
+            prior_filing_id INTEGER,
+            change_type TEXT NOT NULL,
+            before_text TEXT,
+            after_text TEXT,
+            para_hash TEXT NOT NULL,
+            change_ratio REAL,
+            materiality_score REAL,
+            sentiment_delta REAL,
+            high_signal_terms TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(current_filing_id, prior_filing_id, section, para_hash)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_filings_ticker ON filings(ticker, form_type, filed_date);
+        CREATE INDEX IF NOT EXISTS idx_filing_sections_filing ON filing_sections(filing_id);
+        CREATE INDEX IF NOT EXISTS idx_filing_diffs_ticker ON filing_diffs(ticker, materiality_score);
+        CREATE INDEX IF NOT EXISTS idx_filing_diffs_current ON filing_diffs(current_filing_id);
+
         CREATE TABLE IF NOT EXISTS central_bank_statements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             bank TEXT NOT NULL,

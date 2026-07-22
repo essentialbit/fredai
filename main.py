@@ -1242,6 +1242,20 @@ def api_market_debate(ticker):
     force_refresh = request.args.get("refresh") == "1"
     result = get_market_debate_for(ticker.upper(), force_refresh=force_refresh)
     return jsonify(result)
+
+
+@app.route("/api/filing-watch/<ticker>")
+@login_required
+def api_filing_watch(ticker):
+    """10-K/10-Q filing history + materiality-scored risk-language/MD&A
+    changes for the ticker-detail 'Filing Watch' view (FSI L2/L4) -- see
+    filing_intel.py. Distinct from /api/filings/<ticker> (8-K material-
+    event filings, sec_8k_client.py) -- this covers annual/quarterly
+    report language diffing, a different filing class entirely."""
+    from filing_intel import get_filing_watch
+    return jsonify(get_filing_watch(ticker.upper()))
+
+
 @app.route("/api/hypotheses")
 @login_required
 def api_hypotheses():
@@ -5045,6 +5059,30 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[ThesisTracker] Auto-evidence loop error: {e}")
 
+    def job_filing_intel_refresh():
+        """Nightly 10-K/10-Q ingestion + risk-factor/MD&A paragraph diffing
+        for portfolio+watchlist tickers (FSI L2/L4) -- see filing_intel.py.
+        Backfill mode (last 2 filings/ticker) auto-detects on an empty
+        `filings` table; every run after that is incremental. Sequential,
+        SEC-fair-use rate-limited -- may legitimately take a while on a
+        large watchlist, that's expected, not a hang."""
+        try:
+            from memory_store import get_conn as _gc
+            from filing_intel import run_filing_intel_cycle
+            with _gc() as c:
+                port_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM portfolio WHERE shares > 0").fetchall()]
+                wl_rows = [r[0] for r in c.execute("SELECT DISTINCT symbol FROM watchlist").fetchall()]
+                is_first_run = c.execute("SELECT COUNT(*) FROM filings").fetchone()[0] == 0
+            symbols = [s for s in set(port_rows + wl_rows) if not is_asx_ticker(s) and "-" not in s]
+            if not symbols:
+                return
+            result = run_filing_intel_cycle(symbols, backfill=is_first_run)
+            print(f"[FilingIntel] Refreshed ({'backfill' if is_first_run else 'incremental'}) — "
+                  f"{result['tickers_processed']} ticker(s), {result['filings_ingested']} filing(s) ingested, "
+                  f"{result['diffs_persisted']} diff(s) persisted")
+        except Exception as e:
+            print(f"[FilingIntel] Refresh error: {e}")
+
     def job_hypothesis_generation():
         """Propose up to MAX_PER_DAY new falsifiable theses on tickers with
         a live signal (FSI L4 hypothesis testing loop)."""
@@ -5103,6 +5141,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_calibration_refresh, "cron", hour=3, minute=30, id="calibration_refresh")
     scheduler.add_job(job_thesis_auto_evidence, "cron", hour=4, minute=0, id="thesis_auto_evidence")
+    scheduler.add_job(job_filing_intel_refresh, "cron", hour=5, minute=0, id="filing_intel")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)

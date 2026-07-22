@@ -1048,6 +1048,100 @@ def api_entities_link():
     return jsonify({"status": "ok", "id": link_id})
 
 
+# ── THESIS TRACKER ROUTES (FSI L4) ─────────────────────────────────────────────
+
+@app.route("/api/theses", methods=["GET", "POST"])
+@login_required
+def api_theses():
+    from thesis_tracker import VALID_DIRECTIONS, create_thesis, get_user_theses
+    uid = session["user_id"]
+    if request.method == "POST":
+        data = request.json or {}
+        title = data.get("title", "").strip()
+        statement = data.get("statement", "").strip()
+        direction = data.get("direction", "").strip()
+        assumptions = data.get("assumptions", [])
+        if not title or not statement:
+            return jsonify({"error": "title and statement required"}), 400
+        if direction not in VALID_DIRECTIONS:
+            return jsonify({"error": f"direction must be one of {sorted(VALID_DIRECTIONS)}"}), 400
+        if not isinstance(assumptions, list) or not [a for a in assumptions if isinstance(a, str) and a.strip()]:
+            return jsonify({"error": "at least one assumption required"}), 400
+        try:
+            conviction = max(0, min(100, int(data.get("conviction", 50))))
+        except (TypeError, ValueError):
+            conviction = 50
+        tid = create_thesis(uid, title, statement, direction, data.get("tickers", ""), assumptions, conviction)
+        return jsonify({"status": "ok", "id": tid})
+    return jsonify(get_user_theses(uid, request.args.get("status")))
+
+
+@app.route("/api/theses/decompose", methods=["POST"])
+@login_required
+def api_theses_decompose():
+    """LLM-assisted draft of falsifiable assumptions from a natural-language
+    thesis statement -- a preview only, not persisted. The user reviews/
+    edits before POSTing to /api/theses to actually save."""
+    from thesis_tracker import decompose_thesis
+    statement = (request.json or {}).get("statement", "").strip()
+    if not statement:
+        return jsonify({"error": "statement required"}), 400
+    return jsonify({"assumptions": decompose_thesis(statement)})
+
+
+@app.route("/api/theses/<int:thesis_id>", methods=["GET", "POST"])
+@login_required
+def api_thesis_detail(thesis_id):
+    from thesis_tracker import VALID_STATUS, get_thesis, update_thesis
+    thesis = get_thesis(thesis_id)
+    if not thesis or thesis["user_id"] != session["user_id"]:
+        return jsonify({"error": "not found"}), 404
+    if request.method == "POST":
+        data = request.json or {}
+        fields = {k: data[k] for k in ("status", "conviction", "title", "statement") if k in data}
+        if "status" in fields and fields["status"] not in VALID_STATUS:
+            return jsonify({"error": f"status must be one of {sorted(VALID_STATUS)}"}), 400
+        update_thesis(thesis_id, **fields)
+        return jsonify({"status": "ok"})
+    return jsonify(thesis)
+
+
+@app.route("/api/theses/<int:thesis_id>/assumptions", methods=["POST"])
+@login_required
+def api_thesis_add_assumption(thesis_id):
+    from thesis_tracker import get_thesis, add_assumption
+    thesis = get_thesis(thesis_id)
+    if not thesis or thesis["user_id"] != session["user_id"]:
+        return jsonify({"error": "not found"}), 404
+    text = (request.json or {}).get("text", "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    aid = add_assumption(thesis_id, text)
+    return jsonify({"status": "ok", "id": aid})
+
+
+@app.route("/api/theses/<int:thesis_id>/evidence", methods=["POST"])
+@login_required
+def api_thesis_evidence(thesis_id):
+    from thesis_tracker import VALID_STANCE, get_thesis, add_evidence, check_assumption_health
+    thesis = get_thesis(thesis_id)
+    if not thesis or thesis["user_id"] != session["user_id"]:
+        return jsonify({"error": "not found"}), 404
+    data = request.json or {}
+    stance = data.get("stance", "").strip()
+    note = data.get("note", "").strip()
+    if stance not in VALID_STANCE:
+        return jsonify({"error": f"stance must be one of {sorted(VALID_STANCE)}"}), 400
+    if not note:
+        return jsonify({"error": "note required"}), 400
+    assumption_id = data.get("assumption_id")
+    if assumption_id is not None and assumption_id not in {a["id"] for a in thesis["assumptions"]}:
+        return jsonify({"error": "assumption_id does not belong to this thesis"}), 400
+    evidence_id = add_evidence(thesis_id, stance, note=note, assumption_id=assumption_id)
+    check_assumption_health(thesis_id)
+    return jsonify({"status": "ok", "id": evidence_id})
+
+
 # ── PORTFOLIO ROUTES ──────────────────────────────────────────────────────────
 
 @app.route("/api/portfolio", methods=["GET", "POST", "DELETE"])
@@ -4937,6 +5031,20 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Calibration] Refresh error: {e}")
 
+    def job_thesis_auto_evidence():
+        """Nightly Fred Recall auto-evidence loop for every active thesis
+        (FSI L4 thesis tracker) -- retrieves fresh candidate evidence,
+        classifies support/contradiction via the cheap LLM tier, attaches,
+        and re-checks assumption health (pushes alerts on new
+        weakening/broken transitions)."""
+        try:
+            from thesis_tracker import run_auto_evidence_loop
+            result = run_auto_evidence_loop()
+            print(f"[ThesisTracker] Auto-evidence — {result['theses_processed']} thesis/es processed, "
+                  f"{result['attached']} evidence item(s) attached, {result['alerts']} health alert(s)")
+        except Exception as e:
+            print(f"[ThesisTracker] Auto-evidence loop error: {e}")
+
     def job_hypothesis_generation():
         """Propose up to MAX_PER_DAY new falsifiable theses on tickers with
         a live signal (FSI L4 hypothesis testing loop)."""
@@ -4994,6 +5102,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_calibration_refresh, "cron", hour=3, minute=30, id="calibration_refresh")
+    scheduler.add_job(job_thesis_auto_evidence, "cron", hour=4, minute=0, id="thesis_auto_evidence")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)

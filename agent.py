@@ -560,7 +560,8 @@ note that wasn't actually retrieved.
 # ── CONTEXT BLOCK ─────────────────────────────────────────────────────────────
 
 def build_context_block(quotes: dict = None, user_interests: list = None,
-                        portfolio: dict = None, tracked_entities: str = "") -> str:
+                        portfolio: dict = None, tracked_entities: str = "",
+                        active_theses: str = "") -> str:
     signals = get_signals(hours=4, limit=50)
     summary = get_latest_summary()
     alerts = get_recent_alerts(limit=8)
@@ -589,6 +590,7 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         interest_block = f"\nUSER'S TOP INTERESTS: {', '.join(top)}"
 
     entities_block = f"\n{tracked_entities}" if tracked_entities else ""
+    theses_block = f"\n{active_theses}" if active_theses else ""
 
     # Portfolio context — strip exact values if privacy mode active
     port_block = ""
@@ -648,7 +650,7 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
 
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
 {_build_privacy_notice()}
-{interest_block}{port_block}{entities_block}
+{interest_block}{port_block}{entities_block}{theses_block}
 
 MARKET SNAPSHOT:{market_snapshot_warning}{macro_block}
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}{onchain_block}
@@ -757,7 +759,14 @@ def _needs_disclaimer(user_msg: str, response: str) -> bool:
 def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None,
          tracked_entities: str = "", user_id: int | None = None) -> str:
-    context = build_context_block(quotes, user_interests, portfolio, tracked_entities)
+    active_theses = ""
+    if user_id:
+        try:
+            from thesis_tracker import format_context_summary
+            active_theses = format_context_summary(user_id)
+        except Exception:
+            pass  # thesis tracker unavailable -- chat degrades gracefully without it
+    context = build_context_block(quotes, user_interests, portfolio, tracked_entities, active_theses)
     try:
         from rag_retriever import retrieve, format_context
         recalled = format_context(retrieve(user_message, user_id))

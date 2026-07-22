@@ -1698,6 +1698,30 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- THESIS TRACKER — living, evidence-fed investment theses (FSI L4) -->
+    <div class="panel" id="ov-theses" style="grid-column:1/-1">
+      <div class="ph">Investment Theses <span class="ptag">LIVING</span>
+        <button class="btn btn-p" style="font-size:var(--font-xs);padding:3px 9px" onclick="toggleThesisComposer()">+ New Thesis</button>
+      </div>
+      <div id="thesis-composer" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
+        <input id="tc-title" placeholder="Thesis title (e.g. Long semis capex supercycle)" style="width:100%;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;margin-bottom:6px">
+        <textarea id="tc-statement" placeholder="Write the thesis in your own words..." rows="3" style="width:100%;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;margin-bottom:6px;resize:vertical"></textarea>
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <select id="tc-direction" style="background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;font-size:11px;padding:5px">
+            <option value="long">Long</option><option value="short">Short</option>
+          </select>
+          <input id="tc-tickers" placeholder="Tickers (comma-separated)" style="flex:1;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:5px 9px;font-size:11px">
+          <button class="btn btn-b" style="font-size:var(--font-xs)" onclick="decomposeThesis()">Decompose w/ Fred →</button>
+        </div>
+        <div id="tc-assumptions"></div>
+        <button class="btn btn-p" style="font-size:var(--font-xs);margin-top:6px" onclick="saveThesis()">Save Thesis</button>
+        <span id="tc-status" style="font-size:9px;color:var(--t3);margin-left:8px"></span>
+      </div>
+      <div class="scroll" id="theses-list" style="max-height:460px">
+        <div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+    </div>
+
     <!-- OVERVIEW: Portfolio panel -->
     <div class="panel" id="ov-portfolio">
       <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
@@ -3065,6 +3089,7 @@ async function loadInitData() {
       setTimeout(loadOpsPicture, 1200);
       setTimeout(loadTrackRecord, 1600);
       setTimeout(loadCalibration, 1800);
+      setTimeout(loadTheses, 2000);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -5779,6 +5804,145 @@ async function loadCalibration() {
     tbody.innerHTML = '<tr><td colspan="4" style="color:var(--t3);padding:6px">Calibration data unavailable</td></tr>';
     console.warn('Calibration failed:', e);
   }
+}
+
+async function loadTheses() {
+  const box = g('theses-list');
+  if (!box) return;
+  try {
+    const r = await fetch('/api/theses');
+    const list = await r.json();
+    if (!list.length) {
+      box.innerHTML = '<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">No theses yet — click "+ New Thesis" to start one.</div>';
+      return;
+    }
+    const details = await Promise.all(list.map(t => fetch(`/api/theses/${t.id}`).then(r => r.json())));
+    renderTheses(details);
+  } catch(e) {
+    box.innerHTML = '<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Theses unavailable</div>';
+    console.warn('Theses failed:', e);
+  }
+}
+
+const THESIS_STATUS_COLOR = {active:'var(--blue)', proven:'var(--green)', broken:'var(--red)', closed:'var(--t3)'};
+const ASSUMPTION_STATUS_COLOR = {intact:'var(--green)', weakening:'var(--gold)', broken:'var(--red)'};
+
+function renderTheses(theses) {
+  const box = g('theses-list'); if (!box) return;
+  box.innerHTML = theses.map(t => {
+    const lights = (t.assumptions||[]).map(a =>
+      `<span title="${esc(a.text)} (${esc(a.status)})" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ASSUMPTION_STATUS_COLOR[a.status]||'var(--t3)'};margin-right:3px"></span>`
+    ).join('');
+    const suggested = t.suggested_conviction;
+    const suggestedLine = suggested!=null && suggested !== t.conviction
+      ? `<span style="color:var(--t3)"> (Fred suggests ${suggested})</span>` : '';
+    const evidenceRows = (t.evidence||[]).slice(0,10).map(e => {
+      const stanceColor = e.stance==='supporting'?'var(--green)':e.stance==='contradicting'?'var(--red)':'var(--t3)';
+      const date = (e.created_at||'').slice(0,10);
+      const autoTag = e.auto ? '<span style="color:var(--t3)"> · auto</span>' : '';
+      return `<div style="font-size:9px;padding:3px 0;border-top:1px solid var(--border)">
+        <span style="color:${stanceColor};text-transform:uppercase;font-size:8px">${esc(e.stance)}</span>
+        <span style="color:var(--t3)"> · ${esc(date)}${autoTag}</span><br>
+        <span style="color:var(--t2)">${esc(e.note||'')}</span>
+      </div>`;
+    }).join('') || '<div style="font-size:9px;color:var(--t3);padding:4px 0">No evidence yet.</div>';
+
+    return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:12px">${esc(t.title)}</span>
+        <span class="ptag" style="background:rgba(0,180,255,.08)">${esc(t.direction)}</span>
+        <span style="font-size:9px;color:var(--t3)">${esc(t.tickers||'')}</span>
+        <select onchange="updateThesisStatus(${t.id},this.value)" style="margin-left:auto;background:var(--bg2);border:1px solid var(--border);color:${THESIS_STATUS_COLOR[t.status]||'var(--t1)'};border-radius:3px;font-size:9px;padding:2px 4px">
+          ${['active','proven','broken','closed'].map(s=>`<option value="${s}" ${s===t.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div style="font-size:10px;color:var(--t2);margin:5px 0">${esc(t.statement)}</div>
+      <div style="font-size:9px;color:var(--t3);margin-bottom:5px">Conviction: <b style="color:var(--t1)">${t.conviction}</b>/100${suggestedLine}</div>
+      <div style="margin-bottom:6px">${lights}</div>
+      <details>
+        <summary style="cursor:pointer;font-size:9px;color:var(--blue)">Evidence (${(t.evidence||[]).length})</summary>
+        ${evidenceRows}
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <select id="ev-stance-${t.id}" style="background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:3px;font-size:9px;padding:3px">
+            <option value="supporting">Supporting</option><option value="contradicting">Contradicting</option><option value="neutral">Neutral</option>
+          </select>
+          <input id="ev-note-${t.id}" placeholder="Add evidence note..." style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:3px;font-size:9px;padding:3px 6px">
+          <button class="btn btn-b" style="font-size:8px;padding:2px 6px" onclick="addThesisEvidence(${t.id})">Add</button>
+        </div>
+      </details>
+    </div>`;
+  }).join('');
+}
+
+function toggleThesisComposer() {
+  const el = g('thesis-composer');
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+
+async function decomposeThesis() {
+  const statement = g('tc-statement').value.trim();
+  const status = g('tc-status');
+  if (!statement) { status.textContent = 'Write a statement first.'; return; }
+  status.textContent = 'Asking Fred...';
+  try {
+    const r = await fetch('/api/theses/decompose', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({statement})});
+    const d = await r.json();
+    const assumptions = d.assumptions || [];
+    status.textContent = assumptions.length
+      ? `${assumptions.length} assumption(s) drafted — edit before saving.`
+      : "Fred couldn't decompose this — add assumptions manually below.";
+    renderComposerAssumptions(assumptions.length ? assumptions : ['']);
+  } catch(e) {
+    status.textContent = 'Decompose failed — add assumptions manually.';
+    renderComposerAssumptions(['']);
+  }
+}
+
+function renderComposerAssumptions(assumptions) {
+  const box = g('tc-assumptions');
+  box.innerHTML = assumptions.map((a,i) =>
+    `<input class="tc-assumption-input" value="${esc(a)}" placeholder="Assumption ${i+1}" style="width:100%;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:5px 8px;font-size:10px;margin-bottom:4px">`
+  ).join('') + `<button class="btn btn-b" style="font-size:8px" onclick="renderComposerAssumptions([...document.querySelectorAll('.tc-assumption-input')].map(i=>i.value).concat(['']))">+ Add assumption</button>`;
+}
+
+async function saveThesis() {
+  const title = g('tc-title').value.trim();
+  const statement = g('tc-statement').value.trim();
+  const direction = g('tc-direction').value;
+  const tickers = g('tc-tickers').value.trim();
+  const assumptions = [...document.querySelectorAll('.tc-assumption-input')].map(i=>i.value.trim()).filter(Boolean);
+  const status = g('tc-status');
+  if (!title || !statement || !assumptions.length) {
+    status.textContent = 'Title, statement, and at least one assumption required.';
+    return;
+  }
+  try {
+    const r = await fetch('/api/theses', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({title, statement, direction, tickers, assumptions})});
+    const d = await r.json();
+    if (d.error) { status.textContent = d.error; return; }
+    g('tc-title').value=''; g('tc-statement').value=''; g('tc-tickers').value=''; g('tc-assumptions').innerHTML=''; status.textContent='';
+    toggleThesisComposer();
+    loadTheses();
+  } catch(e) {
+    status.textContent = 'Save failed.';
+  }
+}
+
+async function updateThesisStatus(id, status) {
+  try {
+    await fetch(`/api/theses/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status})});
+    loadTheses();
+  } catch(e) { console.warn('Thesis status update failed:', e); }
+}
+
+async function addThesisEvidence(id) {
+  const stance = g(`ev-stance-${id}`).value;
+  const note = g(`ev-note-${id}`).value.trim();
+  if (!note) return;
+  try {
+    await fetch(`/api/theses/${id}/evidence`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({stance, note})});
+    loadTheses();
+  } catch(e) { console.warn('Evidence add failed:', e); }
 }
 
 function renderOpsPicture(d) {

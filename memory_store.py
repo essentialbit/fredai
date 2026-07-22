@@ -574,6 +574,46 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_entity_links_from ON entity_links(from_entity_id);
         CREATE INDEX IF NOT EXISTS idx_entity_links_to ON entity_links(to_entity_id);
         CREATE INDEX IF NOT EXISTS idx_entity_evidence_entity ON entity_evidence(entity_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS theses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            statement TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            tickers TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            conviction INTEGER DEFAULT 50,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS thesis_assumptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thesis_id INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            status TEXT DEFAULT 'intact',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS thesis_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thesis_id INTEGER NOT NULL,
+            assumption_id INTEGER,
+            rag_chunk_id INTEGER,
+            stance TEXT NOT NULL,
+            weight REAL DEFAULT 1.0,
+            note TEXT DEFAULT '',
+            auto INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(thesis_id, rag_chunk_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_theses_user ON theses(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_thesis_assumptions_thesis ON thesis_assumptions(thesis_id);
+        CREATE INDEX IF NOT EXISTS idx_thesis_evidence_thesis ON thesis_evidence(thesis_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_thesis_evidence_assumption ON thesis_evidence(assumption_id);
         """)
 
         # Lightweight migrations for columns added after initial release —

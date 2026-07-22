@@ -1,5 +1,8 @@
 from datetime import datetime, timedelta
-from memory_store import get_signals, get_sentiment_timeline, insert_trend, insert_alert, get_recent_insider_transactions
+from memory_store import (
+    get_signals, get_sentiment_timeline, insert_trend, insert_alert,
+    get_recent_insider_transactions, get_options_data_prior_pair,
+)
 
 
 def compute_sentiment_stats(signals: list[dict]) -> dict:
@@ -110,6 +113,41 @@ def detect_insider_clusters(tickers: list[str], lookback_days: int = 30, min_clu
             alerts.append({"level": "warning", "title": f"${ticker} Insider Selling Cluster", "message": msg,
                            "asset": ticker, "direction": "sell", "distinct_owners": len(sell_owners)})
             insert_alert("warning", f"${ticker} Insider Selling Cluster", msg, ticker)
+
+    return alerts
+
+
+def detect_options_shifts(tickers: list[str], pc_ratio_alert_level: float = 1.0,
+                           iv_jump_pct: float = 25.0) -> list[dict]:
+    """Flag tickers where options positioning just crossed into elevated
+    bearish-hedging territory (put/call volume ratio >= pc_ratio_alert_level,
+    default 1.0 = puts outtrading calls) or where ATM IV moved sharply
+    (>= iv_jump_pct relative change) since the prior snapshot -- either
+    signals the market is repricing risk for that name, not routine noise."""
+    alerts = []
+    for ticker in tickers:
+        pair = get_options_data_prior_pair(ticker)
+        if not pair:
+            continue
+        latest, prior = pair
+
+        pc = latest.get("put_call_volume_ratio")
+        pc_prior = prior.get("put_call_volume_ratio")
+        if pc is not None and pc_prior is not None and pc >= pc_ratio_alert_level and pc_prior < pc_ratio_alert_level:
+            msg = f"${ticker} put/call volume ratio crossed {pc_ratio_alert_level:.1f} (now {pc:.2f}) -- bearish hedging picking up"
+            alerts.append({"level": "warning", "title": f"${ticker} Put/Call Ratio Elevated", "message": msg, "asset": ticker})
+            insert_alert("warning", f"${ticker} Put/Call Ratio Elevated", msg, ticker)
+
+        iv = latest.get("atm_iv_pct")
+        iv_prior = prior.get("atm_iv_pct")
+        if iv is not None and iv_prior and iv_prior > 0:
+            iv_delta_pct = (iv - iv_prior) / iv_prior * 100
+            if abs(iv_delta_pct) >= iv_jump_pct:
+                direction = "spiked" if iv_delta_pct > 0 else "collapsed"
+                msg = f"${ticker} ~30d ATM IV {direction} {iv_delta_pct:+.0f}% ({iv_prior:.1f}% → {iv:.1f}%) -- market repricing expected move"
+                level = "warning" if iv_delta_pct > 0 else "info"
+                alerts.append({"level": level, "title": f"${ticker} IV {'Spike' if iv_delta_pct > 0 else 'Drop'}", "message": msg, "asset": ticker})
+                insert_alert(level, f"${ticker} IV {'Spike' if iv_delta_pct > 0 else 'Drop'}", msg, ticker)
 
     return alerts
 

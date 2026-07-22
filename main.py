@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from pce_price_index_client import get_pce_price_index
 from cfnai_index import get_cfnai
 from totalsa_client import get_total_vehicle_sales
 from cpi_client import get_cpi
@@ -2086,6 +2087,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/pce-price-index")
+@login_required
+def api_pce_price_index():
+    """Headline PCE Price Index (PCEPI) -- the Fed's actual inflation-target
+    gauge (FSI L2) -- cached 1h, see pce_price_index_client.py."""
+    return jsonify(get_pce_price_index() or {})
 @app.route("/api/cfnai")
 @login_required
 def api_cfnai():
@@ -3360,6 +3367,16 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Headline PCE Price Index -- the Fed's actual inflation target gauge
+        # (cached 1h in pce_price_index_client.py)
+        try:
+            pce = get_pce_price_index()
+            if pce:
+                _macro_cache = {**_macro_cache, "PCE_PRICE_INDEX": {
+                    "label": "PCE Infl.", "value": pce["yoy_pct"], "rating": pce["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] pce_price_index error: {e}")
         # Chicago Fed National Activity Index (cached 6h in cfnai_index.py)
         try:
             cfnai = get_cfnai()

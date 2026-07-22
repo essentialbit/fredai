@@ -690,10 +690,27 @@ def _format_onchain() -> str:
     return "\n".join(lines)
 
 
+def _reliability_weight_suffix(source: str) -> str:
+    """' (reliability x1.3)' when a source's calibration weight is
+    meaningfully off-neutral, else '' -- avoids cluttering every line with
+    a redundant 'x1.0' for sources with no/low-sample calibration data yet."""
+    try:
+        from memory_store import get_calibration_weight
+        w = get_calibration_weight(source)
+        if abs(w - 1.0) < 0.05:
+            return ""
+        return f" (reliability x{w:.2f})"
+    except Exception:
+        return ""
+
+
 def _format_track_record() -> str:
     """One line per signal source with a large-enough 24h sample, so Fred can
     lean into sources that are actually proving predictive value and hedge on
-    ones that aren't, instead of treating every source as equally credible."""
+    ones that aren't, instead of treating every source as equally credible.
+    Includes the calibration-engine reliability weight (FSI L4) when it's
+    meaningfully off-neutral, so Fred can hedge on HOW confidently he cites
+    a source, not just whether to cite it."""
     report = get_accuracy_report().get("24h", {})
     lines = []
     for source, stats in report.get("sources", {}).items():
@@ -703,7 +720,8 @@ def _format_track_record() -> str:
         if delta is None:
             continue
         verdict = "proving value" if stats.get("proving_value") else "not proving value"
-        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})")
+        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})"
+                      f"{_reliability_weight_suffix(source)}")
     return " | ".join(lines)
 
 
@@ -854,7 +872,8 @@ def _format_recall_for_briefing(top_assets: dict) -> str:
 def _format_briefing_track_record() -> str:
     """Per-source 24h accuracy-vs-baseline view, so the briefing can lean
     into sources proving predictive value instead of treating every source
-    as equally credible."""
+    as equally credible. Includes the calibration reliability weight (FSI
+    L4) when meaningfully off-neutral, same as _format_track_record."""
     report = get_accuracy_report().get("24h", {})
     lines = []
     for source, stats in report.get("sources", {}).items():
@@ -864,7 +883,8 @@ def _format_briefing_track_record() -> str:
         if delta is None:
             continue
         verdict = "proving value" if stats.get("proving_value") else "not proving value"
-        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})")
+        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})"
+                      f"{_reliability_weight_suffix(source)}")
     return " | ".join(lines)
 
 

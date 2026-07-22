@@ -29,6 +29,7 @@ FredAI is an AI-powered financial intelligence dashboard with:
 - `soul.md` — Fred's identity and operating contract (DO NOT alter Fred's core values)
 - `memory_store.py` — SQLite: users, watchlist, portfolio, signals, trends, summaries
 - `rag_store.py` / `rag_retriever.py` — Fred Recall: FTS5+embedding storage and retrieval over Fred's own accumulated intelligence (see FSI L4 note below)
+- `calibration_engine.py` — Brier-scored self-calibration: per-source reliability weights fed into `confluence_engine.py`'s aggregation (see FSI L4 note below)
 - `twitter_client.py` — X API v2 via requests (no tweepy)
 - `market_data.py` — yfinance price/history fetching
 - `trend_detector.py` — sentiment shift detection, alerts
@@ -44,13 +45,15 @@ FredAI is an AI-powered financial intelligence dashboard with:
 - L1 Signal Intelligence ✅ — multi-source sentiment, live price data, 4h briefings (complete)
 - L2 Pattern Intelligence 🔄 — FinBERT, cross-asset correlation, options flow, insider filings, Fear&Greed
 - L3 Predictive Intelligence 🔲 — backtesting, anomaly detection, macro regime, earnings prediction
-- L4 Reasoning Intelligence 🔄 — multi-agent debate, causal attribution, 10-K analysis, 13F positioning, **Fred Recall (hybrid FTS5+vector RAG grounding chat/briefings in Fred's own signal/news/briefing/debate/filing/vault history, cited inline) — shipped**
+- L4 Reasoning Intelligence 🔄 — multi-agent debate, causal attribution, 10-K analysis, 13F positioning, **Fred Recall (hybrid FTS5+vector RAG grounding chat/briefings in Fred's own signal/news/briefing/debate/filing/vault history, cited inline) — shipped**, **Calibration Engine (Brier-scored per-source reliability weighting, feeds confluence_engine + chat hedging) — shipped**
 - L5 World Model 🔲 — cross-market contagion, alternative data, fine-tuned LLM, agent swarms
 - L6 Super Intelligence 🔲 — self-directing research, novel edge discovery, autonomous recommendations
 
 **Evaluation criterion for every proposed improvement:** "Does this push Fred closer to L6? If not, is it critical infrastructure that unblocks L2+ work?" If neither is true, deprioritise it.
 
 **Fred Recall (FSI L4, shipped)**: `rag_store.py` (storage: `rag_chunks` + FTS5 `rag_fts`, source_types news/signal/briefing/debate/insider/entity_evidence/vault) + `rag_retriever.py` (BM25+cosine via Reciprocal Rank Fusion, recency decay, ticker boost). Write-time hooks are FTS-only (`embed=False`) at every ingestion path (news_client, reddit/twitter_client, ticker_debate, main.py's briefing/entity-evidence routes) — embedding happens asynchronously in the hourly `job_rag_embed_backlog` job, never inline on a hot path. `chat()` and `generate_summary()` in agent.py both call `retrieve()`/`format_context()` for grounded, cited context; `GET /api/recall?q=` + the dashboard's "Ask Fred's Memory" panel expose it directly. Per-user privacy enforced inside `rag_store.py` (global rows + caller's own `user_id` rows only), never left to the caller. `vault_semantic_search.py` is now a thin wrapper over `rag_store` (source_type='vault') — the old standalone `vault_embeddings` table is dead schema, left in place.
+
+**Calibration Engine (FSI L4, shipped)**: `calibration_engine.py` turns each `signal_outcomes` row (from `backtesting_engine.py`) into a probabilistic forecast — `avg_sentiment` magnitude maps to a stated P(correct) in [0.5,1.0] when available, else a documented fixed 0.65 for deterministic binary-call sources (insider/short_interest/technical, which carry no magnitude in this codebase). Brier-scores each source at the 24h checkpoint over a 30-day window, maps to a `[0.2, 1.5]` reliability weight (pivot: brier=0.25 = neutral 1.0), pinning sources with `sample_n < 20` to neutral with a `low_sample` flag. Persisted to `calibration_scores` (one row per source) by the daily `job_calibration_refresh` job. Wired into `confluence_engine.py::compute_confluence()`'s score (not its `agreement`/`factor_count`, which stay raw/structural) behind `config.CALIBRATION_WEIGHTS_ENABLED` (default true; false reproduces the pre-calibration formula bit-for-bit — verified). `agent.py`'s existing track-record lines (chat + briefing) append `(reliability x1.3)`-style suffixes when a source's weight is meaningfully off-neutral. `GET /api/calibration` + the dashboard's "Fred's Calibration" panel (reliability diagram + per-source table) surface it, bad sources included, not hidden.
 
 When invoked for improvement cycles:
 

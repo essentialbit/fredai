@@ -1127,6 +1127,17 @@ def api_backtest_source_health():
     return jsonify(get_underperforming_sources())
 
 
+@app.route("/api/calibration")
+@login_required
+def api_calibration():
+    """Fred's self-calibration (FSI L4): per-source Brier score, sample
+    size, current reliability weight, and reliability-diagram curve data.
+    Honest framing -- badly-calibrated sources show up here too, not just
+    good ones (see calibration_engine.py's docstring)."""
+    from calibration_engine import get_calibration_report
+    return jsonify(get_calibration_report())
+
+
 @app.route("/api/market-debate/<ticker>")
 @login_required
 def api_market_debate(ticker):
@@ -4911,6 +4922,21 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Backtest] Error: {e}")
 
+    def job_calibration_refresh():
+        """Recompute Brier scores + reliability weights per signal source
+        (FSI L4 self-calibration) -- feeds confluence_engine's weighted
+        score via CALIBRATION_WEIGHTS_ENABLED, and agent.py's chat hedge."""
+        try:
+            from calibration_engine import compute_calibration
+            results = compute_calibration()
+            summary = ", ".join(
+                f"{src}: brier={r['brier']} n={r['sample_n']} w={r['reliability_weight']}"
+                for src, r in results.items()
+            )
+            print(f"[Calibration] Refreshed — {summary or 'no completed outcomes yet'}")
+        except Exception as e:
+            print(f"[Calibration] Refresh error: {e}")
+
     def job_hypothesis_generation():
         """Propose up to MAX_PER_DAY new falsifiable theses on tickers with
         a live signal (FSI L4 hypothesis testing loop)."""
@@ -4967,6 +4993,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_gemini_community, "interval", hours=6, id="gemini_community", jitter=2100)
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
+    scheduler.add_job(job_calibration_refresh, "cron", hour=3, minute=30, id="calibration_refresh")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)
     scheduler.add_job(job_crypto_spread_refresh, "interval", minutes=15, id="crypto_spread", jitter=60)

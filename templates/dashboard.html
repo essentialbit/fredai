@@ -1676,6 +1676,28 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- CALIBRATION — Brier-scored reliability weighting (FSI L4) -->
+    <div id="calibration-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◐</span>
+        <div class="ops-title">Fred's Calibration</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">When Fred says he's confident, is he actually more often right?</span>
+      </div>
+      <div style="display:flex;gap:16px;padding:12px 16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px;position:relative;height:180px">
+          <canvas id="calibration-chart"></canvas>
+        </div>
+        <div style="flex:1;min-width:260px;overflow-x:auto">
+          <table style="width:100%;font-size:10px;border-collapse:collapse">
+            <thead><tr style="color:var(--t3);text-align:left">
+              <th style="padding:3px 6px">Source</th><th style="padding:3px 6px">Brier</th><th style="padding:3px 6px">n</th><th style="padding:3px 6px">Weight</th>
+            </tr></thead>
+            <tbody id="calibration-tbody"><tr><td colspan="4" style="color:var(--t3);padding:6px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- OVERVIEW: Portfolio panel -->
     <div class="panel" id="ov-portfolio">
       <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
@@ -3042,6 +3064,7 @@ async function loadInitData() {
       setTimeout(loadRecommendations, 800);
       setTimeout(loadOpsPicture, 1200);
       setTimeout(loadTrackRecord, 1600);
+      setTimeout(loadCalibration, 1800);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -5686,6 +5709,76 @@ async function loadTrackRecord() {
       note.remove();
     }
   } catch(e) { /* non-critical, silently skip */ }
+}
+
+let calibrationChart = null;
+async function loadCalibration() {
+  const tbody = g('calibration-tbody');
+  const canvas = g('calibration-chart');
+  if (!tbody || !canvas) return;
+  try {
+    const r = await fetch('/api/calibration');
+    const d = await r.json();
+    const sources = d.sources || [];
+    if (!sources.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--t3);padding:6px">Not enough completed outcomes yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = sources.map(s => {
+      const wColor = s.reliability_weight > 1.05 ? 'var(--green)' : s.reliability_weight < 0.95 ? 'var(--red)' : 'var(--t3)';
+      const lowTag = s.low_sample ? '<span style="color:var(--t3);font-size:8px"> (low n)</span>' : '';
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:3px 6px">${esc(s.source)}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${s.brier!=null?s.brier.toFixed(3):'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${s.sample_n}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:${wColor}">x${s.reliability_weight.toFixed(2)}${lowTag}</td>
+      </tr>`;
+    }).join('');
+
+    const palette = ['#00b4ff','#00ff88','#ff3b5c','#f5a623','#9b59ff','#3d5a73'];
+    const points = [];
+    sources.forEach((s, i) => {
+      (s.curve || []).forEach(c => {
+        points.push({x: c.stated_midpoint, y: c.realized_frequency, source: s.source, n: c.sample_n, color: palette[i % palette.length]});
+      });
+    });
+
+    if (calibrationChart) { calibrationChart.destroy(); calibrationChart = null; }
+    calibrationChart = new Chart(canvas, {
+      data: {
+        datasets: [
+          {
+            type: 'line', label: 'Perfect calibration',
+            data: [{x:0.5,y:0.5},{x:1,y:1}],
+            borderColor: 'rgba(125,140,160,.4)', borderDash: [4,4], pointRadius: 0, fill: false,
+          },
+          {
+            type: 'scatter', label: 'Sources',
+            data: points,
+            pointBackgroundColor: points.map(p => p.color),
+            pointRadius: points.map(p => Math.min(10, 3 + Math.sqrt(p.n))),
+          },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+        scales: {
+          x: {min:0.4, max:1, title:{display:true, text:'Stated confidence', color:'#7a9bbf', font:{size:9}}, ticks:{color:'#3d5a73', font:{size:9}}, grid:{color:'#162840'}},
+          y: {min:0, max:1, title:{display:true, text:'Realized frequency', color:'#7a9bbf', font:{size:9}}, ticks:{color:'#3d5a73', font:{size:9}}, grid:{color:'#162840'}},
+        },
+        plugins: {
+          legend: {display:false},
+          tooltip: {callbacks: {label: (ctx) => {
+            const p = ctx.raw;
+            return p.source ? `${p.source}: stated ${(p.x*100).toFixed(0)}%, realized ${(p.y*100).toFixed(0)}% (n=${p.n})` : 'Perfect calibration';
+          }}},
+        },
+      },
+    });
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--t3);padding:6px">Calibration data unavailable</td></tr>';
+    console.warn('Calibration failed:', e);
+  }
 }
 
 function renderOpsPicture(d) {

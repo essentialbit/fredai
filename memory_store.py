@@ -209,6 +209,16 @@ def init_db():
             price_at_72h REAL
         );
 
+        CREATE TABLE IF NOT EXISTS calibration_scores (
+            source TEXT PRIMARY KEY,
+            window_days INTEGER NOT NULL,
+            brier REAL,
+            sample_n INTEGER NOT NULL DEFAULT 0,
+            reliability_weight REAL NOT NULL DEFAULT 1.0,
+            low_sample INTEGER NOT NULL DEFAULT 1,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS correlation_matrix (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             symbol_a TEXT NOT NULL,
@@ -1076,12 +1086,11 @@ def _score_rows(rows: list[dict], col: str, direction_field: str) -> dict | None
     return {"total": len(scored), "correct": correct, "accuracy_pct": round(correct / len(scored) * 100, 1)}
 
 
-def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict:
-    """Of outcomes completed at this checkpoint within the lookback window,
-    how often did Fred's predicted direction match the actual price move --
-    broken down per signal source, and compared against the naive momentum
-    baseline recorded alongside each prediction (MISSION.md Principle #4:
-    a source only proves its worth if it beats doing nothing clever)."""
+def get_outcome_rows_by_source(checkpoint: str, hours: int = 24 * 30) -> dict[str, list[dict]]:
+    """Completed signal_outcomes rows at this checkpoint within the lookback
+    window, grouped by source. Shared by get_backtest_accuracy (simple
+    hit-rate) and calibration_engine.py (Brier scoring) so both read the
+    exact same underlying rows/definition of 'completed'."""
     if checkpoint not in _OUTCOME_CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
     col = f"price_at_{checkpoint}"
@@ -1096,6 +1105,17 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
     by_source: dict[str, list[dict]] = {}
     for r in rows:
         by_source.setdefault(r.get("source") or "aggregate", []).append(r)
+    return by_source
+
+
+def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict:
+    """Of outcomes completed at this checkpoint within the lookback window,
+    how often did Fred's predicted direction match the actual price move --
+    broken down per signal source, and compared against the naive momentum
+    baseline recorded alongside each prediction (MISSION.md Principle #4:
+    a source only proves its worth if it beats doing nothing clever)."""
+    col = f"price_at_{checkpoint}"
+    by_source = get_outcome_rows_by_source(checkpoint, hours)
 
     sources = {}
     for src, src_rows in by_source.items():
@@ -1123,6 +1143,39 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
         "baseline_delta_pct": aggregate.get("baseline_delta_pct"),
         "sources": sources,
     }
+
+
+# ── CALIBRATION (Brier scoring / reliability weights, FSI L4) ─────────────────
+
+def upsert_calibration_score(source: str, window_days: int, brier: float | None,
+                              sample_n: int, reliability_weight: float, low_sample: bool) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO calibration_scores (source, window_days, brier, sample_n, reliability_weight, low_sample, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(source) DO UPDATE SET
+                   window_days=excluded.window_days, brier=excluded.brier, sample_n=excluded.sample_n,
+                   reliability_weight=excluded.reliability_weight, low_sample=excluded.low_sample,
+                   updated_at=CURRENT_TIMESTAMP""",
+            (source, window_days, brier, sample_n, reliability_weight, int(low_sample)),
+        )
+
+
+def get_calibration_scores() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM calibration_scores ORDER BY source").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_calibration_weight(source: str) -> float:
+    """1.0 (neutral) if this source has no calibration row yet -- new
+    sources, or before the first nightly compute_calibration() run, must
+    never be silently dampened/amplified."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT reliability_weight FROM calibration_scores WHERE source=?", (source,)
+        ).fetchone()
+    return row["reliability_weight"] if row else 1.0
 
 
 # ── ALERTS ────────────────────────────────────────────────────────────────────

@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from totalsa_client import get_total_vehicle_sales
 from cpi_client import get_cpi
 from mortgage_rate_client import get_mortgage_rate
 from real_gdp_client import get_real_gdp
@@ -2084,6 +2085,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/total-vehicle-sales")
+@login_required
+def api_total_vehicle_sales():
+    """Total Vehicle Sales (FRED TOTALSA) -- consumer-durables spending
+    and confidence macro badge (FSI L2). Cached 1h, see totalsa_client.py."""
+    return jsonify(get_total_vehicle_sales() or {})
 @app.route("/api/cpi-inflation")
 @login_required
 def api_cpi_inflation():
@@ -3345,6 +3352,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Total Vehicle Sales consumer-durables signal (cached 1h in totalsa_client.py)
+        try:
+            tvs = get_total_vehicle_sales()
+            if tvs:
+                _macro_cache = {**_macro_cache, "TOTAL_VEHICLE_SALES": {
+                    "label": "Vehicle Sales", "value": tvs["latest"], "rating": tvs["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] totalsa error: {e}")
         # Headline CPI YoY Inflation (cached 1h in cpi_client.py)
         try:
             cpi = get_cpi()

@@ -27,10 +27,40 @@ def _fsi_level(description: str) -> str:
     return m.group(1) if m else "?"
 
 
+_known_label_names: set[str] | None = None
+
+
+def _existing_label_names() -> set[str]:
+    """Repo's current label names, fetched once per process and cached.
+
+    Avoids a POST-and-swallow-422 round trip per label per proposal —
+    labels are effectively static (small fixed vocabulary), so a stale
+    cache just means one harmless extra create attempt on a rare miss,
+    not a correctness issue."""
+    global _known_label_names
+    if _known_label_names is None:
+        names: set[str] = set()
+        page = 1
+        while True:
+            data = _gh_get(f"repos/{GITHUB_REPO}/labels", {"per_page": 100, "page": page})
+            if not data:
+                break
+            names.update(l["name"] for l in data)
+            if len(data) < 100:
+                break
+            page += 1
+        _known_label_names = names
+    return _known_label_names
+
+
 def _ensure_label(name: str, color: str = "ededed"):
-    # Idempotent — community.py's _gh_post already logs and returns None on
-    # non-2xx (e.g. 422 "already exists"), which is exactly what we want here.
-    _gh_post(f"repos/{GITHUB_REPO}/labels", {"name": name, "color": color})
+    if name in _existing_label_names():
+        return
+    # community.py's _gh_post already logs and returns None on non-2xx
+    # (e.g. a 422 "already exists" race), which is exactly what we want here.
+    result = _gh_post(f"repos/{GITHUB_REPO}/labels", {"name": name, "color": color})
+    if result:
+        _known_label_names.add(name)
 
 
 def sync_proposal_to_issue(proposal: dict) -> int | None:

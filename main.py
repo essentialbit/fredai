@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from cfnai_index import get_cfnai
 from totalsa_client import get_total_vehicle_sales
 from cpi_client import get_cpi
 from mortgage_rate_client import get_mortgage_rate
@@ -2085,6 +2086,13 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/cfnai")
+@login_required
+def api_cfnai():
+    """Chicago Fed National Activity Index -- broad real-economic-activity
+    composite regime signal (FSI L2), distinct from the NFCI financial-
+    conditions composite. Cached 6h, see cfnai_index.py."""
+    return jsonify(get_cfnai() or {})
 @app.route("/api/total-vehicle-sales")
 @login_required
 def api_total_vehicle_sales():
@@ -3352,6 +3360,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Chicago Fed National Activity Index (cached 6h in cfnai_index.py)
+        try:
+            cfnai = get_cfnai()
+            if cfnai:
+                _macro_cache = {**_macro_cache, "CFNAI": {
+                    "label": "CFNAI", "value": cfnai["ma3"], "rating": cfnai["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] cfnai error: {e}")
         # Total Vehicle Sales consumer-durables signal (cached 1h in totalsa_client.py)
         try:
             tvs = get_total_vehicle_sales()

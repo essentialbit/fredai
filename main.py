@@ -43,6 +43,7 @@ from credit_spread import get_credit_spread
 from supply_chain_client import get_supply_chain_stress
 from vix_term_structure import get_vix_term_structure
 from copper_gold_ratio import get_copper_gold_ratio
+from household_net_worth_client import get_household_net_worth
 from pce_price_index_client import get_pce_price_index
 from cfnai_index import get_cfnai
 from totalsa_client import get_total_vehicle_sales
@@ -2087,6 +2088,12 @@ def api_copper_gold_ratio():
     return jsonify(get_copper_gold_ratio() or {})
 
 
+@app.route("/api/household-net-worth")
+@login_required
+def api_household_net_worth():
+    """Household Net Worth (FRED TNWBSHNO) YoY growth macro badge (FSI L2)
+    -- cached 6h, see household_net_worth_client.py."""
+    return jsonify(get_household_net_worth() or {})
 @app.route("/api/pce-price-index")
 @login_required
 def api_pce_price_index():
@@ -3367,6 +3374,15 @@ def job_market_refresh():
         except Exception as e:
             print(f"[Job] copper_gold_ratio error: {e}")
 
+        # Household Net Worth YoY growth (cached 6h in household_net_worth_client.py)
+        try:
+            hnw = get_household_net_worth()
+            if hnw:
+                _macro_cache = {**_macro_cache, "HOUSEHOLD_NET_WORTH": {
+                    "label": "HH Net Worth", "value": hnw["latest_yoy_pct"], "rating": hnw["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] household_net_worth error: {e}")
         # Headline PCE Price Index -- the Fed's actual inflation target gauge
         # (cached 1h in pce_price_index_client.py)
         try:

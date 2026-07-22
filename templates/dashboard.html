@@ -1722,6 +1722,23 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- SCENARIO LAB — interactive what-if engine (FSI L3) -->
+    <div class="panel" id="ov-scenario" style="grid-column:1/-1">
+      <div class="ph">Scenario Lab <span class="ptag">WHAT-IF</span></div>
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="sc-factor" style="background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:4px;font-size:11px;padding:6px">
+          <option value="">Loading factors...</option>
+        </select>
+        <input id="sc-magnitude" type="range" min="-50" max="50" value="10" step="1" style="flex:1;min-width:140px" oninput="g('sc-magnitude-val').textContent=this.value">
+        <span id="sc-magnitude-val" style="font-family:var(--mono);font-size:11px;min-width:36px;text-align:right">10</span>
+        <span id="sc-unit" style="font-size:9px;color:var(--t3)"></span>
+        <button class="btn btn-p" style="font-size:var(--font-xs);padding:5px 12px" onclick="runScenario()">Run Scenario →</button>
+      </div>
+      <div id="scenario-results" style="padding:10px 14px">
+        <div class="empty" style="color:var(--t3);font-size:10px">Pick a shock factor and magnitude, then run the scenario. Every result is a model estimate — see the assumptions block for what it does and doesn't account for.</div>
+      </div>
+    </div>
+
     <!-- OVERVIEW: Portfolio panel -->
     <div class="panel" id="ov-portfolio">
       <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
@@ -3092,6 +3109,7 @@ async function loadInitData() {
       setTimeout(loadTrackRecord, 1600);
       setTimeout(loadCalibration, 1800);
       setTimeout(loadTheses, 2000);
+      setTimeout(loadScenarioFactors, 2200);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -5945,6 +5963,107 @@ async function addThesisEvidence(id) {
     await fetch(`/api/theses/${id}/evidence`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({stance, note})});
     loadTheses();
   } catch(e) { console.warn('Evidence add failed:', e); }
+}
+
+let scenarioFactorUnits = {};
+let scenarioChart = null;
+
+async function loadScenarioFactors() {
+  const sel = g('sc-factor');
+  if (!sel) return;
+  try {
+    const r = await fetch('/api/scenario');
+    const d = await r.json();
+    const factors = d.factors || [];
+    sel.innerHTML = factors.map(f => `<option value="${esc(f.key)}">${esc(f.label)}</option>`).join('');
+    scenarioFactorUnits = Object.fromEntries(factors.map(f => [f.key, f.unit]));
+    if (factors.length) g('sc-unit').textContent = scenarioFactorUnits[factors[0].key] || '';
+    sel.onchange = () => { g('sc-unit').textContent = scenarioFactorUnits[sel.value] || ''; };
+  } catch(e) {
+    sel.innerHTML = '<option value="">Scenario factors unavailable</option>';
+    console.warn('Scenario factors failed:', e);
+  }
+}
+
+async function runScenario() {
+  const factor = g('sc-factor').value;
+  const magnitude = parseFloat(g('sc-magnitude').value);
+  const box = g('scenario-results');
+  if (!factor) return;
+  box.innerHTML = '<div class="empty" style="color:var(--t3);font-size:10px">Running scenario...</div>';
+  try {
+    const r = await fetch('/api/scenario', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({factor, magnitude})});
+    const d = await r.json();
+    renderScenarioResults(d);
+  } catch(e) {
+    box.innerHTML = '<div class="warn">Network error running scenario.</div>';
+    console.warn('Scenario run failed:', e);
+  }
+}
+
+function renderScenarioResults(d) {
+  const box = g('scenario-results');
+  if (!box) return;
+  if (d.status === 'unmapped') {
+    box.innerHTML = `<div style="color:var(--t3);font-size:11px">Can't model that combination — supported factors: ${(d.supported_factors||[]).map(f=>esc(f.label)).join(', ')}</div>`;
+    return;
+  }
+  if (d.status !== 'ok') {
+    box.innerHTML = `<div class="warn">${esc(d.error || 'Scenario failed.')}</div>`;
+    return;
+  }
+
+  const impacts = (d.impacts || []).slice(0, 15);
+  const portfolioCard = d.portfolio ? `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:4px">Your Portfolio Impact (estimate)</div>
+      <div style="font-size:18px;font-weight:700;color:${d.portfolio.total_pnl_estimate>=0?'var(--green)':'var(--red)'}">${d.portfolio.total_pnl_estimate>=0?'+':''}$${d.portfolio.total_pnl_estimate.toLocaleString()}</div>
+      ${d.portfolio.worst_position?`<div style="font-size:10px;color:var(--t3)">Worst position: ${esc(d.portfolio.worst_position.symbol)} (${d.portfolio.worst_position.estimated_pnl>=0?'+':''}$${d.portfolio.worst_position.estimated_pnl.toLocaleString()})</div>`:''}
+      ${(d.portfolio.risk_breach_notes||[]).length?`<div style="font-size:10px;color:var(--red);margin-top:4px">⚠ ${d.portfolio.risk_breach_notes.map(esc).join('; ')}</div>`:''}
+      <div style="font-size:9px;color:var(--t3);margin-top:4px">${esc(d.portfolio.risk_threshold_note)}</div>
+    </div>` : (d.portfolio === null ? '<div style="font-size:10px;color:var(--t3);margin-bottom:10px">No portfolio positions to overlay.</div>' : '');
+
+  const assumptions = (d.assumptions || []).map(a => `<li style="margin-bottom:3px">${esc(a)}</li>`).join('');
+
+  box.innerHTML = `
+    <div style="margin-bottom:8px;font-size:11px;color:var(--t2)">Shock: <b>${esc(d.label)} ${d.magnitude>=0?'+':''}${d.magnitude}${esc(d.unit)}</b></div>
+    ${portfolioCard}
+    <div style="position:relative;height:220px;margin-bottom:10px"><canvas id="scenario-waterfall"></canvas></div>
+    <details>
+      <summary style="cursor:pointer;font-size:9px;color:var(--blue)">Model assumptions — read before trusting this</summary>
+      <ul style="font-size:10px;color:var(--t3);margin:6px 0 0;padding-left:16px">${assumptions}</ul>
+    </details>
+  `;
+
+  if (scenarioChart) { scenarioChart.destroy(); scenarioChart = null; }
+  const canvas = g('scenario-waterfall');
+  if (canvas && impacts.length) {
+    scenarioChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: impacts.map(i => i.symbol + (i.order === 2 ? ' (2nd)' : '')),
+        datasets: [{
+          data: impacts.map(i => i.impact_score),
+          backgroundColor: impacts.map(i => i.impact_score >= 0 ? 'rgba(0,255,136,.5)' : 'rgba(255,59,92,.5)'),
+          borderColor: impacts.map(i => i.impact_score >= 0 ? '#00ff88' : '#ff3b5c'),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+        plugins: { legend: {display:false},
+          tooltip: {callbacks: {label: (ctx) => {
+            const i = impacts[ctx.dataIndex];
+            return `${i.impact_score>=0?'+':''}${i.impact_score}% est. — ${i.data_source}`;
+          }}},
+        },
+        scales: {
+          x: {ticks:{color:'#3d5a73',font:{size:9}}, grid:{color:'#162840'}},
+          y: {ticks:{color:'#3d5a73',font:{size:9}}, grid:{color:'#162840'}, title:{display:true,text:'Est. % move',color:'#7a9bbf',font:{size:9}}},
+        },
+      },
+    });
+  }
 }
 
 function renderOpsPicture(d) {

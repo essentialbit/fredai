@@ -1256,6 +1256,45 @@ def api_filing_watch(ticker):
     return jsonify(get_filing_watch(ticker.upper()))
 
 
+@app.route("/api/scenario", methods=["GET", "POST"])
+@login_required
+def api_scenario():
+    """Scenario Simulator (FSI L3): GET returns the shock-factor picker
+    vocabulary; POST runs one scenario (factor+magnitude OR a natural-
+    language 'text') and overlays it on the caller's own portfolio -- see
+    scenario_engine.py. Every result is a labeled model estimate with an
+    assumptions block, never presented as a prediction."""
+    from scenario_engine import SHOCK_VOCABULARY, parse_scenario, run_scenario_for_portfolio
+    if request.method == "GET":
+        return jsonify({"factors": [{"key": k, "label": v["label"], "unit": v["unit"]} for k, v in SHOCK_VOCABULARY.items()]})
+
+    data = request.json or {}
+    if data.get("text"):
+        parsed = parse_scenario(data["text"])
+        if parsed["status"] != "ok":
+            return jsonify(parsed)
+        factor, magnitude = parsed["factor"], parsed["magnitude"]
+    else:
+        factor = data.get("factor", "")
+        try:
+            magnitude = float(data.get("magnitude"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "magnitude must be a number"}), 400
+
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    positions, baseline_risk = None, None
+    if holdings:
+        from market_data import calculate_portfolio_value
+        from portfolio_risk import compute_portfolio_risk
+        port = calculate_portfolio_value(holdings, _quotes_cache or {})
+        positions = port["positions"]
+        baseline_risk = compute_portfolio_risk(positions, port["total_value"])
+
+    result = run_scenario_for_portfolio(factor, magnitude, positions, baseline_risk)
+    return jsonify(result)
+
+
 @app.route("/api/hypotheses")
 @login_required
 def api_hypotheses():

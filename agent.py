@@ -774,6 +774,51 @@ def chat(user_message: str, history: list[dict], quotes: dict = None,
             context = f"{context}\n\nFRED'S MEMORY (retrieved, cite as [source · date]):\n{recalled}"
     except Exception:
         pass  # Fred Recall unavailable (FTS5/Ollama down, etc.) -- chat degrades gracefully without it
+
+    if re.search(r"\bwhat\s+if\b|\bwhat\s+would\s+happen\s+if\b|\bscenario\b", user_message, re.IGNORECASE):
+        try:
+            from scenario_engine import parse_scenario, run_scenario_for_portfolio
+            parsed = parse_scenario(user_message)
+            if parsed["status"] == "ok":
+                positions, baseline_risk = None, None
+                if user_id:
+                    from memory_store import get_portfolio
+                    holdings = get_portfolio(user_id)
+                    if holdings:
+                        from market_data import calculate_portfolio_value
+                        from portfolio_risk import compute_portfolio_risk
+                        port = calculate_portfolio_value(holdings, quotes or {})
+                        positions = port["positions"]
+                        baseline_risk = compute_portfolio_risk(positions, port["total_value"])
+                result = run_scenario_for_portfolio(parsed["factor"], parsed["magnitude"], positions, baseline_risk)
+                if result["status"] == "ok":
+                    top_impacts = "\n".join(
+                        f"  {i['symbol']}: {i['impact_score']:+.2f}% (order {i['order']}, {i['data_source']})"
+                        for i in result["impacts"][:8]
+                    ) or "  (no impacts cleared the significance floor)"
+                    scenario_block = (
+                        f"\n\nSCENARIO SIMULATION (model estimate -- narrate this plainly, make clear it's "
+                        f"an estimate not a prediction, close with the standard disclaimer):\n"
+                        f"Shock: {result['label']} {result['magnitude']:+.1f}{result['unit']}\n"
+                        f"Estimated impacts:\n{top_impacts}\n"
+                        f"Assumptions: {' '.join(result['assumptions'])}"
+                    )
+                    if result.get("portfolio"):
+                        p = result["portfolio"]
+                        scenario_block += (
+                            f"\nUser's portfolio: estimated P&L {p['total_pnl_estimate']:+.2f}, "
+                            f"worst position {p['worst_position']}. {p['risk_threshold_note']}"
+                            + (f" BREACH: {'; '.join(p['risk_breach_notes'])}" if p["risk_breach_notes"] else "")
+                        )
+                    context = f"{context}{scenario_block}"
+                elif result["status"] == "unmapped":
+                    factors = ", ".join(f["label"] for f in result["supported_factors"])
+                    context = (f"{context}\n\nSCENARIO SIMULATION: the user's question didn't map to a "
+                               f"supported shock factor. Tell them plainly you can't model that yet, and "
+                               f"list what you CAN model: {factors}.")
+        except Exception:
+            pass  # scenario simulator unavailable -- chat degrades gracefully without it
+
     messages = []
     # Copy previous history items and retain image payloads
     for h in history[:-1][-7:]:

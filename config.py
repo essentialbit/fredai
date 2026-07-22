@@ -94,6 +94,12 @@ PRIVACY_POLICY_VERSION = "1.0"  # bump when policy changes to re-prompt consent
 # if calibration data ever looks wrong, without a code change/redeploy.
 CALIBRATION_WEIGHTS_ENABLED = os.getenv("CALIBRATION_WEIGHTS_ENABLED", "true").lower() == "true"
 
+# Research Desk (FSI L4) -- rough estimated-token budget (chars/4 heuristic,
+# not exact billed tokens) per Bull/Bear/Risk/PM committee run. Bull/Bear/
+# Risk use the cheap tier, PM uses chat tier -- cost control is a first-
+# class requirement here, not an afterthought (see market_debate.py).
+COMMITTEE_MAX_TOKENS = int(os.getenv("COMMITTEE_MAX_TOKENS", "6000"))
+
 WATCHLIST = [
     "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "META", "GOOGL",
     "JPM", "GS", "BAC",

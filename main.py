@@ -1232,14 +1232,39 @@ def api_calibration():
     return jsonify(get_calibration_report())
 
 
+_desk_refresh_attempts: dict = {}   # user_id -> [timestamps]
+_DESK_REFRESH_WINDOW = 3600          # 1-hour rolling window
+_DESK_REFRESH_MAX = 5                # max force-refresh committee runs per user per window
+
+
+def _check_desk_refresh_rate_limit(user_id: int) -> bool:
+    """Same sliding-window pattern as _check_rate_limit (login), keyed on
+    user_id instead of IP -- gates the EXPENSIVE path only (force_refresh),
+    since normal cached reads already cost nothing extra. Cost control is a
+    first-class requirement for the Research Desk committee (4 LLM calls
+    per run), not an afterthought."""
+    now = _time.time()
+    attempts = [t for t in _desk_refresh_attempts.get(user_id, []) if now - t < _DESK_REFRESH_WINDOW]
+    if len(attempts) >= _DESK_REFRESH_MAX:
+        _desk_refresh_attempts[user_id] = attempts
+        return False
+    attempts.append(now)
+    _desk_refresh_attempts[user_id] = attempts
+    return True
+
+
 @app.route("/api/market-debate/<ticker>")
 @login_required
 def api_market_debate(ticker):
-    """Bull/Bear/Arbiter thesis synthesis (FSI L4) over a single asset's
-    already-computed signals -- cached per ticker/day. ?refresh=1 forces
-    a fresh debate instead of serving today's cached one."""
+    """Bull/Bear/Risk Officer/PM Research Desk committee (FSI L4) over a
+    single asset's already-computed signals -- cached per ticker/day.
+    ?refresh=1 forces a fresh committee run instead of serving today's
+    cached one, rate-limited per user (see _check_desk_refresh_rate_limit)
+    since a forced run costs real LLM tokens across 4 roles."""
     from market_debate import get_market_debate_for
     force_refresh = request.args.get("refresh") == "1"
+    if force_refresh and not _check_desk_refresh_rate_limit(session["user_id"]):
+        return jsonify({"error": "Too many forced Research Desk refreshes this hour — try again later, or view the cached result."}), 429
     result = get_market_debate_for(ticker.upper(), force_refresh=force_refresh)
     return jsonify(result)
 
@@ -5084,6 +5109,27 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Calibration] Refresh error: {e}")
 
+    def job_research_desk_top_movers():
+        """Daily Research Desk committee run for the top 2 conviction
+        movers by signal volume (FSI L4) -- the HARD CONSTRAINT's own cost
+        ceiling for automatic (non-user-triggered) committee runs. Respects
+        the existing per-ticker/day cache: a ticker already debated today
+        (e.g. by a user manually opening its Research Desk tab) costs
+        nothing extra here."""
+        try:
+            from market_debate import get_market_debate_for
+            trending = get_trending_assets(hours=24, limit=2)
+            for t in trending:
+                ticker = t.get("asset")
+                if not ticker:
+                    continue
+                result = get_market_debate_for(ticker)
+                print(f"[ResearchDesk] Top-mover run for {ticker} — "
+                      f"direction={result.get('direction')}, conviction={result.get('conviction')}, "
+                      f"cached={result.get('cached')}")
+        except Exception as e:
+            print(f"[ResearchDesk] Top-movers job error: {e}")
+
     def job_thesis_auto_evidence():
         """Nightly Fred Recall auto-evidence loop for every active thesis
         (FSI L4 thesis tracker) -- retrieves fresh candidate evidence,
@@ -5180,6 +5226,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_calibration_refresh, "cron", hour=3, minute=30, id="calibration_refresh")
     scheduler.add_job(job_thesis_auto_evidence, "cron", hour=4, minute=0, id="thesis_auto_evidence")
+    scheduler.add_job(job_research_desk_top_movers, "cron", hour=6, minute=0, id="research_desk_top_movers")
     scheduler.add_job(job_filing_intel_refresh, "cron", hour=5, minute=0, id="filing_intel")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)

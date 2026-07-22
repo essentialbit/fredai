@@ -226,6 +226,16 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS options_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            expiration TEXT,
+            put_call_volume_ratio REAL,
+            put_call_oi_ratio REAL,
+            atm_iv_pct REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS google_trends_interest (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             ticker TEXT NOT NULL,
@@ -280,6 +290,43 @@ def init_db():
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
+
+        CREATE TABLE IF NOT EXISTS volume_anomalies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            count INTEGER NOT NULL,
+            z_score REAL NOT NULL,
+            level TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, date)
+        );
+
+
+        CREATE TABLE IF NOT EXISTS onchain_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            metric TEXT NOT NULL,
+            latest_value REAL,
+            baseline_mean REAL,
+            z_score REAL,
+            direction TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+
+        CREATE TABLE IF NOT EXISTS seasonality_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            period_type TEXT NOT NULL,
+            period_value INTEGER NOT NULL,
+            period_name TEXT,
+            sample_size INTEGER,
+            avg_return_pct REAL,
+            hit_rate_pct REAL,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, period_type, period_value)
+        );
+
 
         CREATE TABLE IF NOT EXISTS institutional_holdings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -406,6 +453,9 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_onchain_metric ON onchain_metrics(metric, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_seasonality_ticker ON seasonality_cache(ticker, period_type);
+        CREATE INDEX IF NOT EXISTS idx_options_symbol ON options_data(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_institutional_ticker ON institutional_holdings(ticker, filing_period);
         CREATE INDEX IF NOT EXISTS idx_hypotheses_ticker ON hypotheses(ticker);
         CREATE INDEX IF NOT EXISTS idx_hypotheses_resolves_at ON hypotheses(resolves_at);
@@ -1600,6 +1650,28 @@ def get_short_interest_direction(symbol: str) -> str | None:
     return None
 
 
+# ── OPTIONS DATA (put/call ratio + ATM IV) ─────────────────────────────────────
+
+def insert_options_data(symbol: str, expiration: str | None, put_call_volume_ratio: float | None,
+                         put_call_oi_ratio: float | None, atm_iv_pct: float | None):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO options_data
+               (symbol, expiration, put_call_volume_ratio, put_call_oi_ratio, atm_iv_pct)
+               VALUES (?, ?, ?, ?, ?)""",
+            (symbol, expiration, put_call_volume_ratio, put_call_oi_ratio, atm_iv_pct)
+        )
+
+
+def get_latest_options_data(symbol: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM options_data WHERE symbol=? ORDER BY fetched_at DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 # ── GOOGLE TRENDS SEARCH INTEREST ─────────────────────────────────────────────
 
 def insert_trends_interest(ticker: str, keyword: str, interest_score: float):
@@ -1654,6 +1726,20 @@ def get_latest_short_volume(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def get_options_data_prior_pair(symbol: str) -> tuple[dict, dict] | None:
+    """Latest two options_data snapshots for a symbol, newest first. Returns
+    None if there's fewer than two -- shift detection needs a prior reading,
+    not just a static snapshot."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM options_data WHERE symbol=? ORDER BY fetched_at DESC LIMIT 2",
+            (symbol,)
+        ).fetchall()
+    if len(rows) < 2:
+        return None
+    return dict(rows[0]), dict(rows[1])
 
 
 def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
@@ -1812,6 +1898,105 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
     with get_conn() as conn:
         rows = conn.execute(query, params).fetchall()
         return [dict(r) for r in rows]
+
+
+def insert_volume_anomaly(ticker: str, date: str, count: int, z_score: float, level: str) -> bool:
+    """Idempotent per (ticker, date) -- returns False if today's row for
+    this ticker already exists (already recorded/alerted, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM volume_anomalies WHERE ticker=? AND date=?", (ticker, date)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO volume_anomalies (ticker, date, count, z_score, level) VALUES (?,?,?,?,?)",
+            (ticker, date, count, z_score, level)
+        )
+        return True
+
+
+def get_recent_volume_anomalies(days: int = 7) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM volume_anomalies WHERE date >= ? AND level != 'normal' ORDER BY date DESC",
+            (since,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+
+
+# ── BITCOIN ON-CHAIN METRICS ────────────────────────────────────────────────────
+
+def insert_onchain_metric(metric: str, trend: dict) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO onchain_metrics (metric, latest_value, baseline_mean, z_score, direction) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (metric, trend.get("latest"), trend.get("mean"), trend.get("z_score"), trend.get("direction"))
+        )
+
+
+def get_latest_onchain_metrics() -> dict:
+    """{"hash_rate": {...}, "active_addresses": {...}} -- most recent row per
+    metric, or {} if the daily refresh job hasn't populated anything yet."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT m.* FROM onchain_metrics m
+            INNER JOIN (
+                SELECT metric, MAX(fetched_at) AS max_fetched
+                FROM onchain_metrics GROUP BY metric
+            ) latest ON m.metric = latest.metric AND m.fetched_at = latest.max_fetched
+        """).fetchall()
+        return {r["metric"]: dict(r) for r in rows}
+
+
+# ── SEASONALITY ────────────────────────────────────────────────────────────────
+
+def save_seasonal_bias(ticker: str, bias: dict) -> None:
+    """Upserts every period in a seasonality_engine.compute_seasonal_bias()
+    result. Stores all 12 months + up to 7 weekdays so `/api/seasonality`
+    lookups are always cache-hits regardless of what day it is."""
+    if bias.get("status") != "ok":
+        return
+    rows = [("month", p) for p in bias.get("months", [])] + [("dow", p) for p in bias.get("weekdays", [])]
+    with get_conn() as conn:
+        conn.executemany("""
+            INSERT INTO seasonality_cache
+                (ticker, period_type, period_value, period_name, sample_size, avg_return_pct, hit_rate_pct, computed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(ticker, period_type, period_value) DO UPDATE SET
+                period_name=excluded.period_name,
+                sample_size=excluded.sample_size,
+                avg_return_pct=excluded.avg_return_pct,
+                hit_rate_pct=excluded.hit_rate_pct,
+                computed_at=CURRENT_TIMESTAMP
+        """, [
+            (ticker, period_type, p["period_value"], p["period_name"], p["sample_size"], p["avg_return_pct"], p["hit_rate_pct"])
+            for period_type, p in rows
+        ])
+
+
+def get_current_seasonality(ticker: str) -> dict:
+    """Cache-only: this calendar month's bias + today's day-of-week bias for
+    `ticker`. Never triggers a live fetch -- weekly refresh job keeps this warm."""
+    now = datetime.utcnow()
+    with get_conn() as conn:
+        month_row = conn.execute(
+            "SELECT * FROM seasonality_cache WHERE ticker=? AND period_type='month' AND period_value=?",
+            (ticker, now.month),
+        ).fetchone()
+        dow_row = conn.execute(
+            "SELECT * FROM seasonality_cache WHERE ticker=? AND period_type='dow' AND period_value=?",
+            (ticker, now.weekday()),
+        ).fetchone()
+    return {
+        "ticker": ticker,
+        "month": dict(month_row) if month_row else None,
+        "day_of_week": dict(dow_row) if dow_row else None,
+    }
 
 
 # ── INSTITUTIONAL HOLDINGS (SEC Form 13F-HR) ──────────────────────────────────

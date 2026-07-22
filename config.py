@@ -88,6 +88,12 @@ DATA_RETENTION_DAYS = int(os.getenv("DATA_RETENTION_DAYS", "90"))
 NEWS_RETENTION_HOURS = int(os.getenv("NEWS_RETENTION_HOURS", "72"))
 PRIVACY_POLICY_VERSION = "1.0"  # bump when policy changes to re-prompt consent
 
+# Calibration Engine (FSI L4) -- multiply confluence_engine's per-source
+# score contribution by that source's Brier-derived reliability_weight.
+# Escape hatch to instantly revert to unweighted (bit-identical) scoring
+# if calibration data ever looks wrong, without a code change/redeploy.
+CALIBRATION_WEIGHTS_ENABLED = os.getenv("CALIBRATION_WEIGHTS_ENABLED", "true").lower() == "true"
+
 WATCHLIST = [
     "AAPL", "TSLA", "NVDA", "MSFT", "AMZN", "META", "GOOGL",
     "JPM", "GS", "BAC",

@@ -2384,10 +2384,12 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
       <div id="analyst-report-content" style="display:none"></div>
       <div id="analyst-debate-content" style="display:none"></div>
+      <div id="filing-watch-content" style="display:none"></div>
     </div>
     <div class="analyst-footer">
       <button class="login-btn" id="btn-email-report" onclick="emailAnalystReport()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0 6px 0 0;display:none">Email Report</button>
       <button class="login-btn" id="btn-toggle-debate" onclick="toggleMarketDebate()" style="background:#a78bfa;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Bull/Bear Debate</button>
+      <button class="login-btn" id="btn-toggle-filings" onclick="toggleFilingWatch()" style="background:#f5a623;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Filing Watch</button>
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
     </div>
@@ -6365,6 +6367,7 @@ async function openAnalystReport(ticker) {
   const loading = g('analyst-loading');
   const content = g('analyst-report-content');
   const debateContent = g('analyst-debate-content');
+  const filingContent = g('filing-watch-content');
 
   title.textContent = `EQUITY RESEARCH: ${ticker}`;
   loading.style.display = 'flex';
@@ -6374,6 +6377,10 @@ async function openAnalystReport(ticker) {
   window._marketDebateLoaded = false;
   const btnDebate = g('btn-toggle-debate');
   if (btnDebate) btnDebate.textContent = 'Bull/Bear Debate';
+  if (filingContent) { filingContent.style.display = 'none'; filingContent.innerHTML = ''; }
+  window._filingWatchLoaded = false;
+  const btnFilings = g('btn-toggle-filings');
+  if (btnFilings) btnFilings.textContent = 'Filing Watch';
   modal.classList.add('open');
 
   try {
@@ -6455,6 +6462,69 @@ async function toggleMarketDebate() {
   } catch (e) {
     loading.style.display = 'none';
     debateContent.innerHTML = `<div class="warn">Network error requesting Fred AI debate.</div>`;
+  }
+}
+
+async function toggleFilingWatch() {
+  const ticker = window._activeAnalystTicker;
+  if (!ticker) return;
+
+  const reportContent = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
+  const filingContent = g('filing-watch-content');
+  const btnFilings = g('btn-toggle-filings');
+  const loading = g('analyst-loading');
+
+  const showingFilings = filingContent.style.display !== 'none';
+  if (showingFilings) {
+    filingContent.style.display = 'none';
+    reportContent.style.display = 'block';
+    btnFilings.textContent = 'Filing Watch';
+    return;
+  }
+
+  reportContent.style.display = 'none';
+  debateContent.style.display = 'none';
+  filingContent.style.display = 'block';
+  btnFilings.textContent = 'Back to Report';
+
+  if (window._filingWatchLoaded) return;
+
+  loading.style.display = 'flex';
+  filingContent.innerHTML = '';
+  try {
+    const r = await fetch(`/api/filing-watch/${ticker}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+
+    if (r.ok) {
+      window._filingWatchLoaded = true;
+      if (!d.filings || !d.filings.length) {
+        filingContent.innerHTML = `<div style="color:var(--t3);font-size:12px">No 10-K/10-Q filing history tracked for ${esc(ticker)} yet.</div>`;
+      } else {
+        const filingsList = d.filings.map(f =>
+          `<span style="font-size:10px;color:var(--t3);margin-right:10px">${esc(f.form_type)} filed ${esc((f.filed_date||'').slice(0,10))}</span>`
+        ).join('');
+        const diffs = (d.top_diffs || []).slice(0, 15).map(diff => {
+          const typeColor = diff.change_type==='added'?'var(--green)':diff.change_type==='removed'?'var(--red)':'var(--gold)';
+          const terms = diff.high_signal_terms ? `<span style="color:var(--red);font-size:9px"> ⚠ ${esc(diff.high_signal_terms)}</span>` : '';
+          const before = diff.before_text ? `<div style="background:rgba(255,59,92,.08);border-left:2px solid var(--red);padding:6px 8px;margin:4px 0;font-size:11px;color:var(--t2)">${esc(diff.before_text.slice(0,400))}</div>` : '';
+          const after = diff.after_text ? `<div style="background:rgba(0,255,136,.08);border-left:2px solid var(--green);padding:6px 8px;margin:4px 0;font-size:11px;color:var(--t2)">${esc(diff.after_text.slice(0,400))}</div>` : '';
+          return `<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:${typeColor}">${esc(diff.section)} · ${esc(diff.change_type)} · ${esc(diff.comparison)}${terms}
+              <span style="color:var(--t3);float:right">materiality ${diff.materiality_score}</span>
+            </div>
+            ${before}${after}
+          </div>`;
+        }).join('') || '<div style="color:var(--t3);font-size:12px">No language changes detected yet.</div>';
+        filingContent.innerHTML = `<h3>📄 Filing Watch</h3><div style="margin-bottom:10px">${filingsList}</div>${diffs}`;
+      }
+    } else {
+      filingContent.innerHTML = `<div class="warn">Error: ${esc(d.error || 'Failed to load filings.')}</div>`;
+    }
+  } catch (e) {
+    loading.style.display = 'none';
+    filingContent.innerHTML = `<div class="warn">Network error requesting filing data.</div>`;
   }
 }
 

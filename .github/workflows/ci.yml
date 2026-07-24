@@ -53,6 +53,14 @@ jobs:
           props = get_top_proposals(limit=1)
           assert len(props) > 0
           print(f'All imports OK | VADER: {s:.3f}/{t}')
+          # Leaf-module imports above don't catch Flask app-build failures --
+          # e.g. two routes registering the same endpoint name only raises at
+          # 'from main import app' time. This let a real route collision sit
+          # latent and undetected on main (PR #497 postmortem).
+          from main import app
+          n_routes = len(list(app.url_map.iter_rules()))
+          assert n_routes > 50, f'suspiciously few routes: {n_routes}'
+          print(f'main.py Flask app builds OK | {n_routes} routes')
           "
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY || 'skip' }}

@@ -60,6 +60,7 @@ from empire_state_manufacturing_client import get_empire_state
 from payrolls import get_payrolls
 from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
+from cftc_cot_client import get_cot_positioning
 from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
 from commercial_paper_client import get_commercial_paper
 from gasoline_price_client import get_gasoline_price
@@ -2391,6 +2392,13 @@ def api_jolts_quits_rate():
     """JOLTS Quits Rate (FRED JTSQUR) worker-confidence labor-market
     signal (FSI L2) -- cached 1h, see jolts_quits_client.py."""
     return jsonify(get_jolts_quits() or {})
+@app.route("/api/cot-positioning")
+@login_required
+def api_cot_positioning():
+    """CFTC Commitment of Traders large-speculator positioning-extremes
+    signal for E-mini S&P 500 futures (FSI L2) -- cached 6h, see
+    cftc_cot_client.py."""
+    return jsonify(get_cot_positioning() or {})
 @app.route("/api/job-listings/<ticker>")
 @login_required
 def api_job_listings(ticker):
@@ -3755,6 +3763,16 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] jolts_quits error: {e}")
+        # CFTC Commitment of Traders large-speculator positioning-extremes signal
+        # (cached 6h in cftc_cot_client.py)
+        try:
+            cot = get_cot_positioning()
+            if cot:
+                _macro_cache = {**_macro_cache, "COT_SPX": {
+                    "label": "COT Spec Positioning", "value": cot["latest_net_noncomm"], "rating": cot["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] cftc_cot error: {e}")
         # Commercial paper outstanding funding-stress signal (cached 1h in commercial_paper_client.py)
         try:
             cp = get_commercial_paper()

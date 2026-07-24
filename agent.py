@@ -581,6 +581,24 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     except Exception:
         pass
 
+    # Divergence Radar -- DB-only read (never a live daily-close fetch here,
+    # same reasoning as get_cached_risk above: chat/briefing context must
+    # never block on network). Populated by the nightly job_divergence_radar_refresh.
+    divergence_block = ""
+    try:
+        from memory_store import get_active_divergence_events
+        from divergence_radar import PAIR_REGISTRY
+        active = get_active_divergence_events()
+        if active:
+            lines = [
+                f"  {PAIR_REGISTRY.get(e['pair'], {}).get('label', e['pair'])}: "
+                f"{e['direction']} divergence since {e['started_at']} (z={e['peak_z']:+.2f} peak)"
+                for e in active
+            ]
+            divergence_block = "\nACTIVE CROSS-ASSET DIVERGENCES:\n" + "\n".join(lines)
+    except Exception:
+        pass
+
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
 
@@ -670,7 +688,7 @@ ACTIVE ALERTS:
 
 LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
-{cot_block}
+{cot_block}{divergence_block}
 """
     return ctx
 

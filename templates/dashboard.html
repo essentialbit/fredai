@@ -1698,6 +1698,30 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- FRED'S ACCOUNTABILITY — honest counterfactual P&L simulation (FSI L3) -->
+    <div id="counterfactual-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◑</span>
+        <div class="ops-title">Fred's Accountability</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">If you had traded Fred's signals — the honest equity curve, drawdowns included</span>
+      </div>
+      <div style="padding:10px 16px;display:flex;gap:20px;flex-wrap:wrap" id="cf-headline">
+        <div style="color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+      <div style="padding:0 16px 12px;position:relative;height:200px">
+        <canvas id="counterfactual-chart"></canvas>
+      </div>
+      <div style="padding:0 16px 12px;overflow-x:auto">
+        <table style="width:100%;font-size:10px;border-collapse:collapse">
+          <thead><tr style="color:var(--t3);text-align:left">
+            <th style="padding:3px 6px">Source</th><th style="padding:3px 6px">Return (90d)</th><th style="padding:3px 6px">vs SPY</th><th style="padding:3px 6px">Max DD</th><th style="padding:3px 6px">Sharpe</th><th style="padding:3px 6px">Win Rate</th><th style="padding:3px 6px">Trades</th>
+          </tr></thead>
+          <tbody id="cf-tbody"><tr><td colspan="7" style="color:var(--t3);padding:6px">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div style="padding:8px 16px 12px;font-size:9px;color:var(--t3);border-top:1px solid var(--border)" id="cf-methodology"></div>
+    </div>
+
     <!-- THESIS TRACKER — living, evidence-fed investment theses (FSI L4) -->
     <div class="panel" id="ov-theses" style="grid-column:1/-1">
       <div class="ph">Investment Theses <span class="ptag">LIVING</span>
@@ -3108,6 +3132,7 @@ async function loadInitData() {
       setTimeout(loadOpsPicture, 1200);
       setTimeout(loadTrackRecord, 1600);
       setTimeout(loadCalibration, 1800);
+      setTimeout(loadCounterfactual, 1900);
       setTimeout(loadTheses, 2000);
       setTimeout(loadScenarioFactors, 2200);
       if (d.calendar) renderCalendar(d.calendar);
@@ -5823,6 +5848,74 @@ async function loadCalibration() {
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="4" style="color:var(--t3);padding:6px">Calibration data unavailable</td></tr>';
     console.warn('Calibration failed:', e);
+  }
+}
+
+let counterfactualChart = null;
+async function loadCounterfactual() {
+  const headline = g('cf-headline'), tbody = g('cf-tbody'), canvas = g('counterfactual-chart'), methodEl = g('cf-methodology');
+  if (!headline || !tbody || !canvas) return;
+  try {
+    const r = await fetch('/api/counterfactual');
+    const d = await r.json();
+    if (methodEl) methodEl.textContent = d.methodology || '';
+
+    const agg90 = (d.sources && d.sources.aggregate && d.sources.aggregate['90d']) || null;
+    if (agg90 && agg90.total_return_pct != null) {
+      const retColor = agg90.total_return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+      headline.innerHTML = `
+        <div><div style="font-size:9px;color:var(--t3)">90d Return</div><div style="font-size:18px;font-weight:600;color:${retColor}">${agg90.total_return_pct>=0?'+':''}${agg90.total_return_pct.toFixed(1)}%</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">Max Drawdown</div><div style="font-size:18px;font-weight:600;color:var(--red)">${agg90.max_drawdown_pct.toFixed(1)}%</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">vs ${esc(d.benchmark||'SPY')}</div><div style="font-size:18px;font-weight:600;color:var(--t2)">${agg90.benchmark_return_pct!=null?(agg90.benchmark_return_pct>=0?'+':'')+agg90.benchmark_return_pct.toFixed(1)+'%':'--'}</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">Sharpe</div><div style="font-size:18px;font-weight:600;color:var(--t2)">${agg90.sharpe!=null?agg90.sharpe.toFixed(2):'--'}</div></div>
+      `;
+    } else {
+      headline.innerHTML = '<div style="color:var(--t3);font-size:10px">No completed simulation runs yet — first nightly cycle populates this.</div>';
+    }
+
+    const sources = d.sources || {};
+    const rows = Object.keys(sources).map(src => {
+      const w = sources[src]['90d'];
+      if (!w || w.total_return_pct == null) return '';
+      const retColor = w.total_return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:3px 6px">${esc(src)}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:${retColor}">${w.total_return_pct>=0?'+':''}${w.total_return_pct.toFixed(1)}%</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.benchmark_return_pct!=null?(w.benchmark_return_pct>=0?'+':'')+w.benchmark_return_pct.toFixed(1)+'%':'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:var(--red)">${w.max_drawdown_pct.toFixed(1)}%</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.sharpe!=null?w.sharpe.toFixed(2):'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.win_rate_pct!=null?w.win_rate_pct.toFixed(0)+'%':'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.trade_count}</td>
+      </tr>`;
+    }).filter(Boolean).join('');
+    tbody.innerHTML = rows || '<tr><td colspan="7" style="color:var(--t3);padding:6px">No completed simulation runs yet</td></tr>';
+
+    const curve = d.aggregate_equity_curve || [];
+    const bench = d.aggregate_benchmark_curve || [];
+    if (counterfactualChart) { counterfactualChart.destroy(); counterfactualChart = null; }
+    if (curve.length > 1) {
+      counterfactualChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: curve.map(p => p.date),
+          datasets: [
+            { label: "Fred's signals (aggregate)", data: curve.map(p => p.equity), borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,.08)', fill: true, pointRadius: 0, borderWidth: 1.5, tension: 0.1 },
+            { label: `${d.benchmark||'SPY'} buy-and-hold`, data: bench.map(p => p.equity), borderColor: '#7a9bbf', borderDash: [4,4], fill: false, pointRadius: 0, borderWidth: 1, tension: 0.1 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+          scales: {
+            x: { ticks: {color:'#3d5a73', font:{size:8}, maxTicksLimit: 8}, grid:{color:'#162840'} },
+            y: { title:{display:true, text:'Equity (start=100)', color:'#7a9bbf', font:{size:9}}, ticks:{color:'#3d5a73', font:{size:9}}, grid:{color:'#162840'} },
+          },
+          plugins: { legend: {display:true, labels:{color:'#7a9bbf', font:{size:9}, boxWidth:10}} },
+        },
+      });
+    }
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--t3);padding:6px">Accountability data unavailable</td></tr>';
+    console.warn('Counterfactual failed:', e);
   }
 }
 

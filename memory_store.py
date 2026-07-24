@@ -219,6 +219,20 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS counterfactual_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            window TEXT NOT NULL,
+            methodology_version INTEGER NOT NULL,
+            total_return_pct REAL,
+            max_drawdown_pct REAL,
+            sharpe REAL,
+            win_rate_pct REAL,
+            benchmark_return_pct REAL,
+            trade_count INTEGER,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS correlation_matrix (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             symbol_a TEXT NOT NULL,
@@ -550,6 +564,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
+        CREATE INDEX IF NOT EXISTS idx_counterfactual_source_window ON counterfactual_runs(source, window, computed_at);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
@@ -1253,6 +1268,66 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
         "baseline_delta_pct": aggregate.get("baseline_delta_pct"),
         "sources": sources,
     }
+
+
+# ── COUNTERFACTUAL P&L (honest simulated equity curve, FSI L3) ────────────────
+
+def get_signal_outcomes_for_simulation() -> dict[str, list[dict]]:
+    """Every signal_outcomes row (all-time -- the simulation itself windows
+    by predicted_at, not this query), grouped by source and ordered oldest
+    first within each group. Deliberately not filtered by checkpoint
+    completion (unlike get_outcome_rows_by_source): counterfactual_pnl.py
+    derives its own entry/exit prices from daily closes, it doesn't need
+    Fred's own 4h/24h/72h backtest checkpoints to have filled in yet."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT asset, predicted_direction, avg_sentiment, predicted_at, source
+               FROM signal_outcomes ORDER BY predicted_at ASC"""
+        ).fetchall()
+    by_source: dict[str, list[dict]] = {}
+    for r in rows:
+        d = dict(r)
+        by_source.setdefault(d.get("source") or "aggregate", []).append(d)
+    return by_source
+
+
+def insert_counterfactual_run(source: str, window: str, methodology_version: int,
+                               total_return_pct: float | None, max_drawdown_pct: float | None,
+                               sharpe: float | None, win_rate_pct: float | None,
+                               benchmark_return_pct: float | None, trade_count: int) -> None:
+    """Always INSERTs a new row, never UPDATEs -- history of the metric
+    itself must survive a future methodology change (each row carries its
+    own methodology_version), per the playbook's explicit no-silent-rewrite
+    constraint."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO counterfactual_runs
+               (source, window, methodology_version, total_return_pct, max_drawdown_pct,
+                sharpe, win_rate_pct, benchmark_return_pct, trade_count)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (source, window, methodology_version, total_return_pct, max_drawdown_pct,
+             sharpe, win_rate_pct, benchmark_return_pct, trade_count),
+        )
+
+
+def get_latest_counterfactual_results() -> dict[str, dict]:
+    """Most recent persisted run per (source, window) -- what GET
+    /api/counterfactual serves. Live recomputation belongs to the nightly
+    job only (run_simulation() re-fetches ~1y of daily closes per asset,
+    too expensive for a page-load path)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT r.* FROM counterfactual_runs r
+               INNER JOIN (
+                   SELECT source, window, MAX(computed_at) AS latest
+                   FROM counterfactual_runs GROUP BY source, window
+               ) m ON r.source = m.source AND r.window = m.window AND r.computed_at = m.latest"""
+        ).fetchall()
+    out: dict[str, dict] = {}
+    for r in rows:
+        d = dict(r)
+        out.setdefault(d["source"], {})[d["window"]] = d
+    return out
 
 
 # ── CALIBRATION (Brier scoring / reliability weights, FSI L4) ─────────────────

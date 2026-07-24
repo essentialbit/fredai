@@ -130,14 +130,16 @@ Each level unlocks the next. No level is skipped.
 - [x] Community engagement system
 
 ### L2 Priority queue (next implementations)
-1. FinBERT sentiment (huggingface `ProsusAI/finbert`)
-2. Fear & Greed Index (CNN Business)
-3. SEC insider trading Form 4 feed (EDGAR)
-4. Cross-asset rolling correlation matrix
-5. Signal accuracy backtesting scaffold
-6. Reddit sentiment (PRAW or Pushshift)
-7. Options flow anomaly (Unusual Whales free API)
-8. Short interest (Finviz scrape)
+- [x] FinBERT sentiment (huggingface `ProsusAI/finbert`) — merged #47
+- [x] Fear & Greed Index (CNN Business) — merged #25 (closes #18)
+- [x] SEC insider trading Form 4 feed (EDGAR) — merged #81 (closes #10)
+- [x] Cross-asset rolling correlation matrix — merged #79 (closes #11)
+- [x] Signal accuracy backtesting scaffold — merged #27 (closes #9), v2 in #118 (closes #108)
+- [ ] Reddit sentiment (PRAW or Pushshift) — code-complete, PR #122 open awaiting merge (closes #58)
+- [ ] Options flow anomaly (Unusual Whales free API) — code-complete, PR #128 open awaiting merge (closes #12)
+- [x] Short interest (Finviz scrape) — merged #78 (closes #21)
+
+All 8 items are code-complete as of 2026-07-09; 6 are merged to `main`, 2 (Reddit, Options) sit in open PRs awaiting a merge pass. L2 is not "complete" until those two land — track via merged PRs, not issue-close counts (several L2-labelled issues were closed as duplicate-cleanup, not real completions).
 
 ---
 

@@ -231,6 +231,23 @@ body{
   display:flex;align-items:center;justify-content:center;padding:var(--pad);
   backdrop-filter:blur(4px);
 }
+
+/* ══ API KEY HEALTH & CONSENT MODAL ══════════════════════════════════════ */
+#keys-health-modal{
+  position:fixed;inset:0;z-index:2000;background:rgba(3,8,15,.92);
+  display:flex;align-items:center;justify-content:center;padding:var(--pad);
+  backdrop-filter:blur(4px);
+}
+.kh-box{
+  width:min(480px,100%);max-height:92dvh;background:var(--bg2);
+  border:1px solid rgba(198,132,255,.3);border-radius:12px;
+  display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.9);
+}
+.kh-hdr{
+  padding:16px 20px;border-bottom:1px solid rgba(198,132,255,.2);flex-shrink:0;
+  display:flex;align-items:center;gap:10px;
+}
+.kh-title{font-size:clamp(13px,2vw,15px);font-weight:700;letter-spacing:1.5px;color:var(--purple)}
 .disc-box{
   width:min(600px,100%);max-height:90dvh;background:var(--bg2);
   border:1px solid rgba(255,59,92,.3);border-radius:12px;
@@ -5315,6 +5332,7 @@ async function checkDisclaimer() {
     if (!r.ok) return;
     const d = await r.json();
     if (!d.accepted) showDisclaimerModal();
+    else checkKeysHealth();
   } catch(e) { /* silently skip if endpoint unavailable */ }
 }
 
@@ -5338,10 +5356,132 @@ async function acceptDisclaimer() {
   } catch(e) { /* best-effort */ }
   const el = g('disclaimer-modal');
   if (el) { el.style.opacity='0'; el.style.transition='opacity .3s'; setTimeout(()=>el.style.display='none',300); }
+  setTimeout(checkKeysHealth, 400);
 }
 
 function showFullDisclaimer() {
   window.open('/disclaimer','_blank','noopener,noreferrer');
+}
+
+// ── API KEY HEALTH & FALLBACK CONSENT ──────────────────────────────────────
+async function checkKeysHealth() {
+  try {
+    const r = await fetch('/api/user/keys-health');
+    if (!r.ok) return;
+    const d = await r.json();
+
+    // Badges update
+    updateBadge('kh-anthropic-badge', d.anthropic.status);
+    updateBadge('kh-gemini-badge', d.gemini.status);
+    updateBadge('kh-ollama-badge', d.ollama_available ? 'active' : 'offline');
+
+    // Descs update
+    g('kh-anthropic-desc').innerHTML = getStatusDescription('Anthropic', d.anthropic);
+    g('kh-gemini-desc').innerHTML = getStatusDescription('Gemini', d.gemini);
+    
+    // Consent checkbox
+    g('kh-consent-cb').checked = d.fallback_consent;
+
+    // Show modal if:
+    // 1. Any configured key is invalid or depleted, OR
+    // 2. Both keys are missing and fallback consent preference is not saved yet (meaning user hasn't seen the guide)
+    const antInvalid = d.anthropic.configured && (d.anthropic.status === 'invalid' || d.anthropic.status === 'depleted');
+    const gemInvalid = d.gemini.configured && (d.gemini.status === 'invalid' || d.gemini.status === 'depleted');
+    const bothMissing = !d.anthropic.configured && !d.gemini.configured;
+    
+    // Check if we need to show the modal
+    if (antInvalid || gemInvalid || (bothMissing && d.fallback_consent === true && !window._keysHealthCheckedOnce)) {
+      showKeysHealthModal();
+      window._keysHealthCheckedOnce = true;
+    }
+  } catch(e) {
+    console.error('Keys health check error:', e);
+  }
+}
+
+function updateBadge(id, status) {
+  const el = g(id);
+  if (!el) return;
+  el.textContent = status.toUpperCase();
+  if (status === 'valid' || status === 'active') {
+    el.style.background = 'var(--green)';
+    el.style.color = '#000';
+  } else if (status === 'invalid' || status === 'offline') {
+    el.style.background = 'var(--red)';
+    el.style.color = '#fff';
+  } else if (status === 'depleted') {
+    el.style.background = 'var(--yellow)';
+    el.style.color = '#000';
+  } else {
+    el.style.background = 'var(--border)';
+    el.style.color = '#fff';
+  }
+}
+
+function getStatusDescription(name, data) {
+  if (data.status === 'valid') {
+    return `<span style="color:var(--green)">✓ Key is active and verified.</span> (${data.source} key)`;
+  } else if (data.status === 'invalid') {
+    return `<span style="color:var(--red)">✗ Invalid key.</span> Please check spelling or configure a new key.`;
+  } else if (data.status === 'depleted') {
+    return `<span style="color:var(--yellow)">⚠ Key has depleted credits/quota limit.</span> Please top up billing.`;
+  } else if (data.status === 'missing') {
+    return `No key configured. Fred will use default settings or Ollama fallback.`;
+  } else {
+    return `Status: ${data.status}`;
+  }
+}
+
+function showKeysHealthModal() {
+  const el = g('keys-health-modal');
+  if (el) el.style.display = 'flex';
+}
+
+async function saveKeysHealthCheck() {
+  const antInput = g('kh-anthropic-input').value.trim();
+  const gemInput = g('kh-gemini-input').value.trim();
+  const consent = g('kh-consent-cb').checked;
+  const saveBtn = g('kh-save-btn');
+
+  const originalText = saveBtn.textContent;
+  saveBtn.textContent = 'SAVING CONFIGURATION...';
+  saveBtn.disabled = true;
+
+  try {
+    // If keys were entered, save them first
+    if (antInput || gemInput) {
+      await fetch('/api/user/keys', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ anthropic_key: antInput, gemini_key: gemInput })
+      });
+    }
+
+    // Save fallback consent
+    await fetch('/api/user/keys-health', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fallback_consent: consent })
+    });
+
+    logToHUD('API keys and fallback consent verified successfully.', 'info');
+    
+    // Close modal
+    const el = g('keys-health-modal');
+    if (el) {
+      el.style.opacity = '0';
+      el.style.transition = 'opacity .3s';
+      setTimeout(() => {
+        el.style.display = 'none';
+        el.style.opacity = '1';
+      }, 300);
+    }
+  } catch(e) {
+    alert('Error saving key health preferences.');
+  } finally {
+    saveBtn.textContent = originalText;
+    saveBtn.disabled = false;
+  }
 }
 
 // ── ECONOMIC CALENDAR ────────────────────────────────────────────────────
@@ -6846,6 +6986,69 @@ async function systemRefresh() {
       <div class="disc-notice">
         <button class="disc-bar-link" onclick="showFullDisclaimer()">View full disclaimer</button>
         &nbsp;·&nbsp; You must accept to continue using FredAI
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ API KEY HEALTH & CONSENT MODAL ══ -->
+<div id="keys-health-modal" style="display:none">
+  <div class="kh-box">
+    <div class="kh-hdr">
+      <span style="font-size:20px;color:var(--purple)">◈</span>
+      <div>
+        <div class="kh-title">API Key Health &amp; Fallback Guide</div>
+        <div class="disc-sub">Ensure Fred has access to AI reasoning clusters</div>
+      </div>
+    </div>
+    
+    <div class="disc-body" style="font-size:11px;color:var(--t2);line-height:1.5;">
+      <p style="margin-bottom:12px;color:var(--t2)">
+        Fred AI requires access to an AI model to generate market briefings, perform portfolio analyses, and run debates.
+      </p>
+
+      <!-- Anthropic Section -->
+      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:600;color:var(--t1)">Anthropic Claude API</span>
+          <span id="kh-anthropic-badge" style="font-size:9px;padding:2px 6px;border-radius:10px;color:#fff;background:var(--border)">Checking...</span>
+        </div>
+        <div id="kh-anthropic-desc" style="color:var(--t3);font-size:10px;margin-bottom:8px">Checking configuration...</div>
+        <input type="password" id="kh-anthropic-input" placeholder="Enter personal sk-ant-... key to override" style="width:100%;box-sizing:border-box;padding:6px;font-size:10px;background:rgba(8,13,25,0.6);border:1px solid var(--border);color:var(--t1);outline:none;border-radius:4px">
+      </div>
+
+      <!-- Gemini Section -->
+      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:600;color:var(--t1)">Google Gemini API</span>
+          <span id="kh-gemini-badge" style="font-size:9px;padding:2px 6px;border-radius:10px;color:#fff;background:var(--border)">Checking...</span>
+        </div>
+        <div id="kh-gemini-desc" style="color:var(--t3);font-size:10px;margin-bottom:8px">Checking configuration...</div>
+        <input type="password" id="kh-gemini-input" placeholder="Enter personal AIzaSy... key to override" style="width:100%;box-sizing:border-box;padding:6px;font-size:10px;background:rgba(8,13,25,0.6);border:1px solid var(--border);color:var(--t1);outline:none;border-radius:4px">
+      </div>
+
+      <!-- Ollama Status Section -->
+      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:16px">
+        <div>
+          <div style="font-weight:600;color:var(--t1)">Local Ollama Fallback</div>
+          <div style="color:var(--t3);font-size:9.5px;margin-top:2px">Runs entirely free and on-device (requires Ollama running on port 11434).</div>
+        </div>
+        <span id="kh-ollama-badge" style="font-size:9px;padding:2px 6px;border-radius:10px;color:#fff;background:var(--border);white-space:nowrap">Checking...</span>
+      </div>
+
+      <!-- Fallback Consent Checkbox -->
+      <label class="disc-check" style="background:rgba(198,132,255,0.03);border:1px solid rgba(198,132,255,0.15);border-radius:6px;padding:10px;display:flex;gap:8px;cursor:pointer;box-sizing:border-box">
+        <input type="checkbox" id="kh-consent-cb" checked style="margin-top:2px;flex-shrink:0;width:16px;height:16px;accent-color:var(--purple);cursor:pointer">
+        <span style="font-size:10px;color:var(--t2);line-height:1.4">
+          <strong>Consent to Fallback:</strong> Allow Fred AI to automatically fall back to local Ollama if cloud API keys are missing, invalid, or run out of credits.
+        </span>
+      </label>
+    </div>
+
+    <div class="disc-footer" style="padding:14px 20px;border-top:1px solid var(--border);flex-shrink:0;display:flex;flex-direction:column;gap:10px">
+      <button class="disc-accept ready" id="kh-save-btn" onclick="saveKeysHealthCheck()" style="width:100%;background:rgba(198,132,255,0.12);border:1px solid rgba(198,132,255,0.35);color:var(--purple);font-size:var(--font-sm);font-weight:700;letter-spacing:2px;cursor:pointer;border-radius:var(--radius);padding:11px;min-height:var(--touch)">CONFIRM &amp; PROCEED →</button>
+      <div style="text-align:center;font-size:9px;color:var(--t3)">
+        You can update these keys and preferences at any time in settings.
       </div>
     </div>
   </div>

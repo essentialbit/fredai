@@ -196,6 +196,13 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS provider_health (
+            provider TEXT PRIMARY KEY,
+            consecutive_failures INTEGER DEFAULT 0,
+            last_error TEXT,
+            last_error_at DATETIME
+        );
+
         CREATE TABLE IF NOT EXISTS signal_outcomes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             asset TEXT NOT NULL,
@@ -1426,6 +1433,35 @@ def get_track_record(agent: str) -> dict:
     if not row:
         return {"agent": agent, "proposals_implemented": 0, "proposals_succeeded": 0}
     return dict(row)
+
+
+def is_provider_backed_off(provider: str, window_minutes: int = 60) -> bool:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT last_error_at FROM provider_health WHERE provider=?", (provider,)
+        ).fetchone()
+    if not row or not row["last_error_at"]:
+        return False
+    cutoff = (datetime.utcnow() - timedelta(minutes=window_minutes)).strftime("%Y-%m-%d %H:%M:%S")
+    return row["last_error_at"] > cutoff
+
+
+def record_provider_failure(provider: str, error: str):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO provider_health (provider, consecutive_failures, last_error, last_error_at)
+               VALUES (?, 1, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(provider) DO UPDATE SET
+                 consecutive_failures = consecutive_failures + 1,
+                 last_error = excluded.last_error,
+                 last_error_at = CURRENT_TIMESTAMP""",
+            (provider, error[:500])
+        )
+
+
+def record_provider_success(provider: str):
+    with get_conn() as conn:
+        conn.execute("DELETE FROM provider_health WHERE provider=?", (provider,))
 
 
 def _bump_track_record(conn, agent: str, success: bool):

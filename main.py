@@ -1232,6 +1232,17 @@ def api_calibration():
     return jsonify(get_calibration_report())
 
 
+@app.route("/api/counterfactual")
+@login_required
+def api_counterfactual():
+    """Fred's Accountability (FSI L3): honest simulated equity curve of
+    'what if you had traded on Fred's signals', per source, drawdowns and
+    costs included. Hypothetical simulation, not advice -- see
+    counterfactual_pnl.py's always-visible methodology disclosure."""
+    from counterfactual_pnl import get_counterfactual_report
+    return jsonify(get_counterfactual_report())
+
+
 _desk_refresh_attempts: dict = {}   # user_id -> [timestamps]
 _DESK_REFRESH_WINDOW = 3600          # 1-hour rolling window
 _DESK_REFRESH_MAX = 5                # max force-refresh committee runs per user per window
@@ -5109,6 +5120,19 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Calibration] Refresh error: {e}")
 
+    def job_counterfactual_refresh():
+        """Nightly honest equity-curve simulation of Fred's own signals
+        (FSI L3 accountability) -- see counterfactual_pnl.py's methodology
+        disclosure. Re-fetches ~1y of daily closes per traded asset (cached
+        12h by portfolio_risk._daily_closes), so this belongs on the
+        scheduler, not a page-load path."""
+        try:
+            from counterfactual_pnl import job_counterfactual_refresh as _run
+            _run()
+            print("[Counterfactual] Refreshed")
+        except Exception as e:
+            print(f"[Counterfactual] Refresh error: {e}")
+
     def job_research_desk_top_movers():
         """Daily Research Desk committee run for the top 2 conviction
         movers by signal volume (FSI L4) -- the HARD CONSTRAINT's own cost
@@ -5225,6 +5249,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_calibration_refresh, "cron", hour=3, minute=30, id="calibration_refresh")
+    scheduler.add_job(job_counterfactual_refresh, "cron", hour=3, minute=45, id="counterfactual_refresh")
     scheduler.add_job(job_thesis_auto_evidence, "cron", hour=4, minute=0, id="thesis_auto_evidence")
     scheduler.add_job(job_research_desk_top_movers, "cron", hour=6, minute=0, id="research_desk_top_movers")
     scheduler.add_job(job_filing_intel_refresh, "cron", hour=5, minute=0, id="filing_intel")

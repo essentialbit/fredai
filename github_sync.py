@@ -22,9 +22,23 @@ _LABEL_COLORS = {
 }
 
 
-def _fsi_level(description: str) -> str:
+def _fsi_level(description: str, category: str = "") -> str:
+    """Best-effort FSI level for the `fsi-lN` label. Proposals authored via
+    fred_rnd.py/gemini_rnd.py always start their description with a literal
+    `[FSI L<N>]` tag (checked first, exact); ad-hoc proposals (e.g. posted
+    directly by an interactive/headless session) often don't follow that
+    convention, so fall back to the category's own `l<N>_...` prefix, then to
+    an unanchored `FSI L<N>` mention anywhere in the text. Returns "" (no
+    label) rather than a garbage "fsi-l?" tag when nothing matches — seen live
+    on issues #136/#145 before this fallback existed."""
     m = re.match(r"\[FSI L(\d+)\]", description or "")
-    return m.group(1) if m else "?"
+    if m:
+        return m.group(1)
+    m = re.match(r"l(\d+)_", category or "")
+    if m:
+        return m.group(1)
+    m = re.search(r"FSI L(\d+)", description or "")
+    return m.group(1) if m else ""
 
 
 def _ensure_label(name: str, color: str = "ededed"):
@@ -49,7 +63,7 @@ def sync_proposal_to_issue(proposal: dict) -> int | None:
     if existing and existing.get("github_issue_number"):
         return existing["github_issue_number"]
 
-    fsi = _fsi_level(proposal.get("description", ""))
+    fsi = _fsi_level(proposal.get("description", ""), proposal.get("category", ""))
     risk = classify_risk(
         proposal.get("category", ""),
         proposal.get("description", ""),
@@ -59,16 +73,17 @@ def sync_proposal_to_issue(proposal: dict) -> int | None:
 
     labels = [
         "agent-proposal",
-        f"fsi-l{fsi}",
         f"category:{proposal.get('category', 'general')}",
         f"risk:{risk}",
         f"proposed-by:{agent}",
     ]
+    if fsi:
+        labels.append(f"fsi-l{fsi}")
     for label in labels:
         _ensure_label(label, _LABEL_COLORS.get(label, "ededed"))
 
     body = "\n".join([
-        f"**FSI Level:** {fsi}",
+        f"**FSI Level:** {fsi or 'unknown'}",
         f"**Category:** {proposal.get('category', 'general')}",
         f"**Impact score:** {proposal.get('impact_score', '?')}",
         f"**Estimated hours:** {proposal.get('estimated_hours', '?')}",

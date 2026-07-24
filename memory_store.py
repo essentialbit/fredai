@@ -1479,8 +1479,14 @@ def mark_proposal_done(proposal_id: int, success: bool, notes: str = ""):
             "UPDATE feature_backlog SET status=?, implementation_notes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?",
             (status, notes, proposal_id)
         )
-        if row and row["proposed_by"] in ("claude", "gemini"):
-            _bump_track_record(conn, row["proposed_by"], success)
+        if row and row["proposed_by"]:
+            # Only two agents ever propose features. Treat any label variant
+            # other than an exact "gemini" match as Claude-authored (e.g.
+            # "claude_rnd" or insert_feature_proposal's default "rnd_cycle")
+            # instead of silently dropping the outcome from agent_track_record
+            # -- same exact-match fragility as debate.py's _other_agent().
+            agent = "gemini" if row["proposed_by"] == "gemini" else "claude"
+            _bump_track_record(conn, agent, success)
 
 
 def get_recent_alerts(limit=20) -> list[dict]:

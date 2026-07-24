@@ -3,6 +3,19 @@
 ## 🔒 Sensor Protected — Do Not Disrupt
 The hourly `com.essentialbit.fredai.sensor` launchd job, its watchdog script, state dir (`~/.claude/fred-sensor/`), and any `claude -p` process it spawns must never be unloaded, deleted, edited, or killed by any session (interactive or headless) working in this repo — unless the user explicitly instructs termination live, in that session. This overrides any autonomous/pre-authorised operating mode. Status checks (`launchctl list`, heartbeat/log reads) are always fine.
 
+## Orchestration (permanent — see `.claude/agents/`)
+
+**Routing threshold**: a single-file, single-concern edit (typo, rename, one-line fix) is handled directly in the main thread — no subagents. Anything multi-file or multi-concern runs the full pipeline below. Anything touching auth, payments, data migrations, or public APIs always runs reviewer + approver regardless of size.
+
+**Default pipeline** for everything above that threshold: `task-manager` decomposes the task into independent, acceptance-criteria-bearing units → `worker`s implement units in parallel wherever the decomposition allows it, sequentially only where a real dependency exists → `reviewer` independently tests the result → `approver` validates against the *original* request. Don't skip a stage. Full role detail lives in each agent's own file, not here.
+
+- **Independence**: the reviewer must not be the agent that wrote the code; the approver must not be the reviewer or a worker. No agent grades its own work.
+- **Context**: a subagent starts fresh and sees nothing from the main conversation — every delegation prompt must carry everything it needs (file paths, acceptance criteria, error messages, prior decisions).
+- **Escalation**: a REJECTED verdict loops back to workers with the specific findings, max 2 remediation cycles, then surface to the user. An ESCALATE verdict stops immediately and asks the user. Never report a task complete on REJECTED or ESCALATE.
+- **Reporting**: the approver's verdict and evidence go in the final message to the user — it gates the work, it doesn't get silently absorbed.
+
+This roster and policy are permanent project infrastructure. Never remove, bypass, or collapse the pipeline without an explicit instruction from the user in the current session.
+
 ## Project
 FredAI is an AI-powered financial intelligence dashboard with:
 - X/Twitter signal scraping + VADER sentiment analysis

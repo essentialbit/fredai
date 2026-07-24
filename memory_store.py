@@ -1778,6 +1778,29 @@ def get_calendar_events(days: int = 7) -> list[dict]:
         ).fetchall()]
 
 
+def get_calendar_events_window(symbol: str = None, event_type: str = None,
+                               days_back: int = 2, days_forward: int = 1) -> list[dict]:
+    """Calendar events in [today - days_back, today + days_forward], optionally
+    filtered by symbol and/or event_type. get_calendar_events() only looks
+    forward -- this exists for causal_attribution.py's backward-looking case
+    (did an earnings print or FOMC meeting fall in the window before a
+    flagged price move?)."""
+    from datetime import datetime, timedelta
+    start = (datetime.utcnow().date() - timedelta(days=days_back)).isoformat()
+    end = (datetime.utcnow().date() + timedelta(days=days_forward)).isoformat()
+    query = "SELECT * FROM calendar_events WHERE event_date BETWEEN ? AND ?"
+    params: list = [start, end]
+    if symbol:
+        query += " AND symbol = ?"
+        params.append(symbol.upper())
+    if event_type:
+        query += " AND event_type = ?"
+        params.append(event_type)
+    query += " ORDER BY event_date DESC, event_time DESC"
+    with get_conn() as conn:
+        return [dict(r) for r in conn.execute(query, params).fetchall()]
+
+
 # ── TECHNICAL ALERTS ─────────────────────────────────────────────────────────
 
 def get_tech_alerts(user_id: int) -> list[dict]:

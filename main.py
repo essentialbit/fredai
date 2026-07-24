@@ -174,6 +174,7 @@ from central_bank_client import refresh_central_bank_deltas
 from technical_alerts import run_technical_alerts, get_technicals
 from graph_engine import generate_assessment, _ai_assessment_cache
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves, get_ticker_network
+from causal_attribution import attribute_move
 from signal_density import compute_signal_density, invalidate as invalidate_density
 from asx_client import fetch_asx_quotes, fetch_au_news, ASX_TICKERS, ASX_SECTOR_COLORS, is_asx_ticker
 from correlation_engine import refresh_correlation_matrix
@@ -3251,8 +3252,21 @@ def api_cascade(symbol):
         "magnitude": magnitude,
         "event_type": event_type,
         "cascades": cascades,
+        "attribution": attribute_move(sym, event_type, magnitude, _quotes_cache),
         "generated_at": datetime.utcnow().isoformat(),
     })
+
+
+@app.route("/api/attribution/<symbol>")
+@login_required
+def api_attribution(symbol):
+    """Ranked candidate catalysts for a symbol's recent move -- standalone
+    endpoint (in addition to /api/cascade's embedded copy) so this can become
+    a Fred-chat tool once #106 (agentic tool-use chat) merges."""
+    sym = symbol.upper()
+    q = _quotes_cache.get(sym, {})
+    magnitude = float(request.args.get("magnitude", q.get("change_pct", 0)))
+    return jsonify(attribute_move(sym, "price_move", magnitude, _quotes_cache))
 
 
 @app.route("/api/signal-density")

@@ -22,6 +22,7 @@ import time
 from datetime import datetime
 from graph_engine import EDGES, SECTORS, SECTOR_COLORS, EDGE_COLORS
 from memory_store import get_latest_correlation_matrix, get_ticker_info, get_sentiment_snapshot
+from causal_attribution import attribute_move
 
 PRICE_MOVE_THRESHOLD = 3.0    # % move that triggers cascade
 NEWS_SENTIMENT_THRESHOLD = 0.7
@@ -207,7 +208,9 @@ def _build_reason(trigger: str, affected: str, rel: str, event_type: str,
 
 
 def detect_major_moves(quotes: dict) -> list[dict]:
-    """Return symbols with moves >= PRICE_MOVE_THRESHOLD."""
+    """Return symbols with moves >= PRICE_MOVE_THRESHOLD, each carrying a
+    ranked causal_attribution.py catalyst summary (see #145) -- never a
+    fabricated narrative, an honest "no clear catalyst" is a valid result."""
     events = []
     for sym, q in quotes.items():
         chg = q.get("change_pct", 0)
@@ -219,6 +222,7 @@ def detect_major_moves(quotes: dict) -> list[dict]:
                 "description": f"{sym} moved {chg:+.2f}%",
                 "severity": "HIGH" if abs(chg) > 5 else "MEDIUM",
                 "price": q.get("price", 0),
+                "attribution": attribute_move(sym, "price_move", chg, quotes),
             })
     return sorted(events, key=lambda x: abs(x["magnitude"]), reverse=True)
 

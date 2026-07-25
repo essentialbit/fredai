@@ -581,6 +581,24 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     except Exception:
         pass
 
+    # Divergence Radar -- DB-only read (never a live daily-close fetch here,
+    # same reasoning as get_cached_risk above: chat/briefing context must
+    # never block on network). Populated by the nightly job_divergence_radar_refresh.
+    divergence_block = ""
+    try:
+        from memory_store import get_active_divergence_events
+        from divergence_radar import PAIR_REGISTRY
+        active = get_active_divergence_events()
+        if active:
+            lines = [
+                f"  {PAIR_REGISTRY.get(e['pair'], {}).get('label', e['pair'])}: "
+                f"{e['direction']} divergence since {e['started_at']} (z={e['peak_z']:+.2f} peak)"
+                for e in active
+            ]
+            divergence_block = "\nACTIVE CROSS-ASSET DIVERGENCES:\n" + "\n".join(lines)
+    except Exception:
+        pass
+
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
 
@@ -670,7 +688,7 @@ ACTIVE ALERTS:
 
 LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
-{cot_block}
+{cot_block}{divergence_block}
 """
     return ctx
 
@@ -885,6 +903,7 @@ def generate_summary(signals: list[dict], quotes: dict,
     top_assets = _top_mentioned_assets(signals)
     track_record = _format_briefing_track_record()
     recall_block = _format_recall_for_briefing(top_assets)
+    counterfactual_line = _format_counterfactual_for_briefing()
 
     prompt = f"""You are FredAI. Generate a board-level financial intelligence briefing.
 
@@ -893,7 +912,7 @@ TOP ASSETS BY SIGNAL VOLUME: {json.dumps(top_assets)}
 
 MARKET DATA:
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:10]}, indent=2)}
-{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}{recall_block}
+{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}{f"\nCOUNTERFACTUAL P&L (honest, hypothetical -- include verbatim, do not alter the numbers): {counterfactual_line}\n" if counterfactual_line else ""}{recall_block}
 REPRESENTATIVE SIGNALS:
 {_format_signals(signals[:15])}
 
@@ -972,6 +991,25 @@ def _format_briefing_track_record() -> str:
         lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})"
                       f"{_reliability_weight_suffix(source)}")
     return " | ".join(lines)
+
+
+def _format_counterfactual_for_briefing() -> str:
+    """One honest line ('Fred's 90d counterfactual: +X% vs SPY +Y%, max DD
+    -Z%') from the aggregate source's latest persisted 90d run -- empty
+    string (never fabricated) until job_counterfactual_refresh has run at
+    least once. Uses 'aggregate' specifically since that's the actual
+    blended call Fred presents to users, not a single narrow source."""
+    try:
+        from memory_store import get_latest_counterfactual_results
+        stats = get_latest_counterfactual_results().get("aggregate", {}).get("90d")
+        if not stats or stats.get("total_return_pct") is None:
+            return ""
+        bench = stats.get("benchmark_return_pct")
+        bench_str = f" vs SPY {bench:+.1f}%" if bench is not None else ""
+        return (f"Fred's 90d counterfactual: {stats['total_return_pct']:+.1f}%"
+                f"{bench_str}, max DD {stats['max_drawdown_pct']:.1f}%")
+    except Exception:
+        return ""
 
 
 def _top_mentioned_assets(signals: list[dict]) -> dict:

@@ -480,6 +480,7 @@ html[data-tier="nano"] .hdr-sub { display:none }
 }
 #macro-strip::-webkit-scrollbar{display:none}
 .macro-item{display:inline-flex;align-items:center;gap:5px;padding:0 12px;border-right:1px solid var(--border);font-size:var(--font-xs);font-family:var(--mono)}
+.macro-item.macro-dim{opacity:.45}
 .macro-label{color:var(--t3)}.macro-val{color:var(--t1);font-weight:600}
 .macro-chg.up{color:var(--green)}.macro-chg.dn{color:var(--red)}.macro-chg.flat{color:var(--t3)}
 html[data-tier="nano"] #macro-strip { display:none }
@@ -1664,6 +1665,116 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- FRED'S MEMORY — search across Fred's own accumulated intelligence (Fred Recall) -->
+    <div class="panel" id="ov-recall" style="grid-column:1/-1">
+      <div class="ph">Ask Fred's Memory <span class="ptag">RECALL</span></div>
+      <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
+        <input id="recall-input" placeholder="Search Fred's history... (e.g. NVDA insider buying, Fed pivot)" oninput="onRecallInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();runRecallSearch();}" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;font-family:inherit">
+      </div>
+      <div class="scroll" id="recall-results" style="max-height:280px">
+        <div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Search signals, briefings, debates, filings, and vault notes Fred has accumulated.</div>
+      </div>
+    </div>
+
+    <!-- CALIBRATION — Brier-scored reliability weighting (FSI L4) -->
+    <div id="calibration-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◐</span>
+        <div class="ops-title">Fred's Calibration</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">When Fred says he's confident, is he actually more often right?</span>
+      </div>
+      <div style="display:flex;gap:16px;padding:12px 16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px;position:relative;height:180px">
+          <canvas id="calibration-chart"></canvas>
+        </div>
+        <div style="flex:1;min-width:260px;overflow-x:auto">
+          <table style="width:100%;font-size:10px;border-collapse:collapse">
+            <thead><tr style="color:var(--t3);text-align:left">
+              <th style="padding:3px 6px">Source</th><th style="padding:3px 6px">Brier</th><th style="padding:3px 6px">n</th><th style="padding:3px 6px">Weight</th>
+            </tr></thead>
+            <tbody id="calibration-tbody"><tr><td colspan="4" style="color:var(--t3);padding:6px">Loading...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- FRED'S ACCOUNTABILITY — honest counterfactual P&L simulation (FSI L3) -->
+    <div id="counterfactual-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◑</span>
+        <div class="ops-title">Fred's Accountability</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">If you had traded Fred's signals — the honest equity curve, drawdowns included</span>
+      </div>
+      <div style="padding:10px 16px;display:flex;gap:20px;flex-wrap:wrap" id="cf-headline">
+        <div style="color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+      <div style="padding:0 16px 12px;position:relative;height:200px">
+        <canvas id="counterfactual-chart"></canvas>
+      </div>
+      <div style="padding:0 16px 12px;overflow-x:auto">
+        <table style="width:100%;font-size:10px;border-collapse:collapse">
+          <thead><tr style="color:var(--t3);text-align:left">
+            <th style="padding:3px 6px">Source</th><th style="padding:3px 6px">Return (90d)</th><th style="padding:3px 6px">vs SPY</th><th style="padding:3px 6px">Max DD</th><th style="padding:3px 6px">Sharpe</th><th style="padding:3px 6px">Win Rate</th><th style="padding:3px 6px">Trades</th>
+          </tr></thead>
+          <tbody id="cf-tbody"><tr><td colspan="7" style="color:var(--t3);padding:6px">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div style="padding:8px 16px 12px;font-size:9px;color:var(--t3);border-top:1px solid var(--border)" id="cf-methodology"></div>
+    </div>
+
+    <!-- DIVERGENCE RADAR — cross-asset disagreement detection (FSI L2) -->
+    <div id="divergence-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◉</span>
+        <div class="ops-title">Divergence Radar</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">When markets that normally agree stop agreeing</span>
+      </div>
+      <div id="dv-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:12px 16px">
+        <div style="color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+    </div>
+
+    <!-- THESIS TRACKER — living, evidence-fed investment theses (FSI L4) -->
+    <div class="panel" id="ov-theses" style="grid-column:1/-1">
+      <div class="ph">Investment Theses <span class="ptag">LIVING</span>
+        <button class="btn btn-p" style="font-size:var(--font-xs);padding:3px 9px" onclick="toggleThesisComposer()">+ New Thesis</button>
+      </div>
+      <div id="thesis-composer" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
+        <input id="tc-title" placeholder="Thesis title (e.g. Long semis capex supercycle)" style="width:100%;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;margin-bottom:6px">
+        <textarea id="tc-statement" placeholder="Write the thesis in your own words..." rows="3" style="width:100%;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;margin-bottom:6px;resize:vertical"></textarea>
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <select id="tc-direction" style="background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;font-size:11px;padding:5px">
+            <option value="long">Long</option><option value="short">Short</option>
+          </select>
+          <input id="tc-tickers" placeholder="Tickers (comma-separated)" style="flex:1;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:5px 9px;font-size:11px">
+          <button class="btn btn-b" style="font-size:var(--font-xs)" onclick="decomposeThesis()">Decompose w/ Fred →</button>
+        </div>
+        <div id="tc-assumptions"></div>
+        <button class="btn btn-p" style="font-size:var(--font-xs);margin-top:6px" onclick="saveThesis()">Save Thesis</button>
+        <span id="tc-status" style="font-size:9px;color:var(--t3);margin-left:8px"></span>
+      </div>
+      <div class="scroll" id="theses-list" style="max-height:460px">
+        <div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+    </div>
+
+    <!-- SCENARIO LAB — interactive what-if engine (FSI L3) -->
+    <div class="panel" id="ov-scenario" style="grid-column:1/-1">
+      <div class="ph">Scenario Lab <span class="ptag">WHAT-IF</span></div>
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="sc-factor" style="background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:4px;font-size:11px;padding:6px">
+          <option value="">Loading factors...</option>
+        </select>
+        <input id="sc-magnitude" type="range" min="-50" max="50" value="10" step="1" style="flex:1;min-width:140px" oninput="g('sc-magnitude-val').textContent=this.value">
+        <span id="sc-magnitude-val" style="font-family:var(--mono);font-size:11px;min-width:36px;text-align:right">10</span>
+        <span id="sc-unit" style="font-size:9px;color:var(--t3)"></span>
+        <button class="btn btn-p" style="font-size:var(--font-xs);padding:5px 12px" onclick="runScenario()">Run Scenario →</button>
+      </div>
+      <div id="scenario-results" style="padding:10px 14px">
+        <div class="empty" style="color:var(--t3);font-size:10px">Pick a shock factor and magnitude, then run the scenario. Every result is a model estimate — see the assumptions block for what it does and doesn't account for.</div>
+      </div>
+    </div>
+
     <!-- OVERVIEW: Portfolio panel -->
     <div class="panel" id="ov-portfolio">
       <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
@@ -2325,9 +2436,13 @@ html[data-tier="micro"] #ov-globe-stage {
         <span>Autogenerating equity analyst report via Fred AI research stack...</span>
       </div>
       <div id="analyst-report-content" style="display:none"></div>
+      <div id="analyst-debate-content" style="display:none"></div>
+      <div id="filing-watch-content" style="display:none"></div>
     </div>
     <div class="analyst-footer">
       <button class="login-btn" id="btn-email-report" onclick="emailAnalystReport()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0 6px 0 0;display:none">Email Report</button>
+      <button class="login-btn" id="btn-toggle-debate" onclick="toggleMarketDebate()" style="background:#a78bfa;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Research Desk</button>
+      <button class="login-btn" id="btn-toggle-filings" onclick="toggleFilingWatch()" style="background:#f5a623;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Filing Watch</button>
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
     </div>
@@ -3028,6 +3143,11 @@ async function loadInitData() {
       setTimeout(loadRecommendations, 800);
       setTimeout(loadOpsPicture, 1200);
       setTimeout(loadTrackRecord, 1600);
+      setTimeout(loadCalibration, 1800);
+      setTimeout(loadCounterfactual, 1900);
+      setTimeout(loadDivergenceRadar, 1950);
+      setTimeout(loadTheses, 2000);
+      setTimeout(loadScenarioFactors, 2200);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -4361,15 +4481,19 @@ function updateIdxBar(q) {
 }
 
 // ── MACRO STRIP ───────────────────────────────────────────────────────────
-const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','normal':'var(--green)','elevated':'var(--yellow)','high_stress':'var(--red)','crisis':'var(--red)','complacent_tight':'var(--green)','weak':'var(--red)','strong':'var(--green)','hold':'var(--t3)','cut 25bp':'var(--green)','cut >25bp':'var(--green)','hike 25bp':'var(--red)','hike >25bp':'var(--red)','backwardation':'var(--red)','contango':'var(--green)','flat':'var(--t3)','stress':'var(--red)','spike':'var(--yellow)','inverted':'var(--red)','tightening':'var(--green)','loosening':'var(--red)','stable':'var(--t3)'};
+const _FG_COLOR={'extreme fear':'var(--red)','fear':'var(--red)','neutral':'var(--t3)','greed':'var(--green)','extreme greed':'var(--green)','normal':'var(--green)','elevated':'var(--yellow)','high_stress':'var(--red)','crisis':'var(--red)','complacent_tight':'var(--green)','weak':'var(--red)','strong':'var(--green)','hold':'var(--t3)','cut 25bp':'var(--green)','cut >25bp':'var(--green)','hike 25bp':'var(--red)','hike >25bp':'var(--red)','backwardation':'var(--red)','contango':'var(--green)','flat':'var(--t3)','widening':'var(--red)','narrowing':'var(--green)','stress':'var(--red)','spike':'var(--yellow)','crowded_long':'var(--green)','crowded_short':'var(--red)','inverted':'var(--red)','appreciating':'var(--green)','depreciating':'var(--red)','improving':'var(--green)','deteriorating':'var(--red)','stable':'var(--t3)','tightening':'var(--green)','loosening':'var(--red)'};
+const MACRO_DIM_FLOOR=0.15;
 function renderMacroStrip(macro) {
   if (!macro||!Object.keys(macro).length) return;
   const LBL={US_TREASURY_YIELD_10Y:'10Y UST',US_TREASURY_YIELD_2Y:'2Y UST',VIX:'VIX',GOLD:'Gold',OIL_WTI:'WTI',SP500_PE:'S&P P/E'};
-  const html=Object.entries(macro).map(([k,v])=>{
+  const html=Object.entries(macro)
+    .sort(([,a],[,b])=>(b?.severity??0)-(a?.severity??0))
+    .map(([k,v])=>{
     if(!v||v.value==null) return '';
     const lbl=v.label||LBL[k]||k,chg=v.change,cls=!chg?'flat':chg>0?'up':'dn';
+    const dim=(v.severity??0)<MACRO_DIM_FLOOR?' macro-dim':'';
     const rating=v.rating?`<span class="macro-chg" style="color:${_FG_COLOR[v.rating]||'var(--t3)'}">${esc(v.rating)}</span>`:'';
-    return `<span class="macro-item"><span class="macro-label">${esc(lbl)}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${rating||(chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:'')}</span>`;
+    return `<span class="macro-item${dim}"><span class="macro-label">${esc(lbl)}</span><span class="macro-val">${parseFloat(v.value).toFixed(2)}</span>${rating||(chg!=null?`<span class="macro-chg ${cls}">${chg>0?'+':''}${chg.toFixed(3)}</span>`:'')}</span>`;
   }).filter(Boolean).join('');
   g('macro-items').innerHTML=html||'<span style="color:var(--t3)">No macro data — add NASDAQ_API_KEY</span>';
 }
@@ -4836,7 +4960,11 @@ function buildSentData(tl){
 function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(tl);sentChart.update('none')}
 
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
-async function loadWatchlist(){const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[])}
+let volumeAnomalyCache={};
+async function loadWatchlist(){
+  const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[]);
+  fetch('/api/volume-anomalies').then(r=>r.json()).then(a=>{volumeAnomalyCache=a||{};renderWatchlist(d,[])}).catch(()=>{});
+}
 // FSI L5 job-listing hiring velocity (#228) -- only meaningful for a small
 // curated set of Greenhouse-listed tickers, lazily fetched per symbol (24h
 // server-side cache) and merged back in via a re-render rather than
@@ -4900,6 +5028,12 @@ function renderWatchlist(items,interests){
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
+    const anomaly=volumeAnomalyCache[sym];
+    const anomalyBadge=anomaly?`<span title="${esc(anomaly.count+' signal+news mentions today, z-score '+anomaly.z_score+' vs 30d baseline')}" style="font-size:7px;background:${anomaly.level==='anomalous'?'#3c1a1a':'#3c2f1a'};color:${anomaly.level==='anomalous'?'var(--red)':'#f5a623'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">▲VOL</span>`:'';
+    const onchain=w.onchain;
+    const onchainDir=onchain&&onchain.hash_rate?onchain.hash_rate.direction:null;
+    const onchainClr=onchainDir==='rising'?'#00ff88':onchainDir==='falling'?'#ff3b5c':'#3d5a73';
+    const onchainBadge=onchain?`<span title="${esc('Hash rate: '+onchainDir+' | Active addresses: '+(onchain.active_addresses?onchain.active_addresses.direction:'--'))}" style="font-size:7px;background:#1a2a1c;color:${onchainClr};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">⛓${onchainDir||'--'}</span>`:'';
     let jobBadge='';
     if(JOB_LISTINGS_TRACKED.includes(sym)){
       const jl=jobListingsCache[sym];
@@ -4938,7 +5072,7 @@ function renderWatchlist(items,interests){
         dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
       }
     }
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -5077,6 +5211,46 @@ function renderTrendBarChart(data){
     ]},
     options:{responsive:true,maintainAspectRatio:false,animation:{duration:300},plugins:{legend:{labels:{color:'#7a9bbf',font:{size:IS_ULTRA?12:9}}}},scales:{x:{stacked:true,ticks:{color:'#3d5a73',font:{size:IS_ULTRA?11:9}},grid:{color:'#162840'}},y:{stacked:true,ticks:{color:'#3d5a73',font:{size:9}},grid:{color:'#162840'},min:0,max:100}}}
   });
+}
+let _recallTimer=null;
+function onRecallInput(){
+  clearTimeout(_recallTimer);
+  _recallTimer=setTimeout(runRecallSearch,400);
+}
+async function runRecallSearch(){
+  const q=g('recall-input').value.trim();
+  const box=g('recall-results');
+  if(!q){box.innerHTML='<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Search signals, briefings, debates, filings, and vault notes Fred has accumulated.</div>';return}
+  box.innerHTML='<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Searching...</div>';
+  try{
+    const r=await fetch(`/api/recall?q=${encodeURIComponent(q)}`);
+    const d=await r.json();
+    renderRecallResults(d.results||[]);
+  }catch(e){
+    box.innerHTML='<div class="empty" style="padding:14px;color:var(--red);font-size:10px">Search failed.</div>';
+  }
+}
+function renderRecallResults(results){
+  const box=g('recall-results'); if(!box) return;
+  if(!results.length){box.innerHTML='<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">No matches.</div>';return}
+  box.innerHTML=results.map(r=>{
+    const date=(r.published_at||'').slice(0,10)||'undated';
+    // scheme-allowlisted + quote-stripped: esc() is a textContent round-trip
+    // that does NOT escape quotes, so it can't safely protect an href
+    // attribute on its own (see the onclick note elsewhere in this file) --
+    // r.url comes from external news RSS content, not just our own data.
+    const safeUrl=(r.url&&/^https?:\/\//i.test(r.url))?r.url.replace(/"/g,'%22'):'';
+    const link=safeUrl?`<a href="${safeUrl}" target="_blank" rel="noopener" style="color:var(--blue)">↗</a>`:'';
+    return `<div style="padding:8px 10px;border-bottom:1px solid var(--border);font-size:10px">
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
+        <span style="font-size:8px;background:rgba(0,180,255,.1);color:var(--blue);border-radius:2px;padding:1px 4px;text-transform:uppercase;letter-spacing:.5px">${esc(r.source_type)}</span>
+        <span style="color:var(--t3)">${esc(date)}</span>
+        <span style="color:var(--t2);font-weight:600">${esc(r.title||'')}</span>
+        ${link}
+      </div>
+      <div style="color:var(--t2)">${esc(r.content.slice(0,220))}${r.content.length>220?'…':''}</div>
+    </div>`;
+  }).join('');
 }
 function jumpToSymbol(asset){
   const sel=g('sym-sel');if([...sel.options].some(o=>o.value===asset))sel.value=asset;
@@ -5620,6 +5794,455 @@ async function loadTrackRecord() {
   } catch(e) { /* non-critical, silently skip */ }
 }
 
+let calibrationChart = null;
+async function loadCalibration() {
+  const tbody = g('calibration-tbody');
+  const canvas = g('calibration-chart');
+  if (!tbody || !canvas) return;
+  try {
+    const r = await fetch('/api/calibration');
+    const d = await r.json();
+    const sources = d.sources || [];
+    if (!sources.length) {
+      tbody.innerHTML = '<tr><td colspan="4" style="color:var(--t3);padding:6px">Not enough completed outcomes yet</td></tr>';
+      return;
+    }
+    tbody.innerHTML = sources.map(s => {
+      const wColor = s.reliability_weight > 1.05 ? 'var(--green)' : s.reliability_weight < 0.95 ? 'var(--red)' : 'var(--t3)';
+      const lowTag = s.low_sample ? '<span style="color:var(--t3);font-size:8px"> (low n)</span>' : '';
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:3px 6px">${esc(s.source)}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${s.brier!=null?s.brier.toFixed(3):'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${s.sample_n}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:${wColor}">x${s.reliability_weight.toFixed(2)}${lowTag}</td>
+      </tr>`;
+    }).join('');
+
+    const palette = ['#00b4ff','#00ff88','#ff3b5c','#f5a623','#9b59ff','#3d5a73'];
+    const points = [];
+    sources.forEach((s, i) => {
+      (s.curve || []).forEach(c => {
+        points.push({x: c.stated_midpoint, y: c.realized_frequency, source: s.source, n: c.sample_n, color: palette[i % palette.length]});
+      });
+    });
+
+    if (calibrationChart) { calibrationChart.destroy(); calibrationChart = null; }
+    calibrationChart = new Chart(canvas, {
+      data: {
+        datasets: [
+          {
+            type: 'line', label: 'Perfect calibration',
+            data: [{x:0.5,y:0.5},{x:1,y:1}],
+            borderColor: 'rgba(125,140,160,.4)', borderDash: [4,4], pointRadius: 0, fill: false,
+          },
+          {
+            type: 'scatter', label: 'Sources',
+            data: points,
+            pointBackgroundColor: points.map(p => p.color),
+            pointRadius: points.map(p => Math.min(10, 3 + Math.sqrt(p.n))),
+          },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+        scales: {
+          x: {min:0.4, max:1, title:{display:true, text:'Stated confidence', color:'#7a9bbf', font:{size:9}}, ticks:{color:'#3d5a73', font:{size:9}}, grid:{color:'#162840'}},
+          y: {min:0, max:1, title:{display:true, text:'Realized frequency', color:'#7a9bbf', font:{size:9}}, ticks:{color:'#3d5a73', font:{size:9}}, grid:{color:'#162840'}},
+        },
+        plugins: {
+          legend: {display:false},
+          tooltip: {callbacks: {label: (ctx) => {
+            const p = ctx.raw;
+            return p.source ? `${p.source}: stated ${(p.x*100).toFixed(0)}%, realized ${(p.y*100).toFixed(0)}% (n=${p.n})` : 'Perfect calibration';
+          }}},
+        },
+      },
+    });
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="4" style="color:var(--t3);padding:6px">Calibration data unavailable</td></tr>';
+    console.warn('Calibration failed:', e);
+  }
+}
+
+let counterfactualChart = null;
+async function loadCounterfactual() {
+  const headline = g('cf-headline'), tbody = g('cf-tbody'), canvas = g('counterfactual-chart'), methodEl = g('cf-methodology');
+  if (!headline || !tbody || !canvas) return;
+  try {
+    const r = await fetch('/api/counterfactual');
+    const d = await r.json();
+    if (methodEl) methodEl.textContent = d.methodology || '';
+
+    const agg90 = (d.sources && d.sources.aggregate && d.sources.aggregate['90d']) || null;
+    if (agg90 && agg90.total_return_pct != null) {
+      const retColor = agg90.total_return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+      headline.innerHTML = `
+        <div><div style="font-size:9px;color:var(--t3)">90d Return</div><div style="font-size:18px;font-weight:600;color:${retColor}">${agg90.total_return_pct>=0?'+':''}${agg90.total_return_pct.toFixed(1)}%</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">Max Drawdown</div><div style="font-size:18px;font-weight:600;color:var(--red)">${agg90.max_drawdown_pct.toFixed(1)}%</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">vs ${esc(d.benchmark||'SPY')}</div><div style="font-size:18px;font-weight:600;color:var(--t2)">${agg90.benchmark_return_pct!=null?(agg90.benchmark_return_pct>=0?'+':'')+agg90.benchmark_return_pct.toFixed(1)+'%':'--'}</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">Sharpe</div><div style="font-size:18px;font-weight:600;color:var(--t2)">${agg90.sharpe!=null?agg90.sharpe.toFixed(2):'--'}</div></div>
+      `;
+    } else {
+      headline.innerHTML = '<div style="color:var(--t3);font-size:10px">No completed simulation runs yet — first nightly cycle populates this.</div>';
+    }
+
+    const sources = d.sources || {};
+    const rows = Object.keys(sources).map(src => {
+      const w = sources[src]['90d'];
+      if (!w || w.total_return_pct == null) return '';
+      const retColor = w.total_return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:3px 6px">${esc(src)}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:${retColor}">${w.total_return_pct>=0?'+':''}${w.total_return_pct.toFixed(1)}%</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.benchmark_return_pct!=null?(w.benchmark_return_pct>=0?'+':'')+w.benchmark_return_pct.toFixed(1)+'%':'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:var(--red)">${w.max_drawdown_pct.toFixed(1)}%</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.sharpe!=null?w.sharpe.toFixed(2):'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.win_rate_pct!=null?w.win_rate_pct.toFixed(0)+'%':'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.trade_count}</td>
+      </tr>`;
+    }).filter(Boolean).join('');
+    tbody.innerHTML = rows || '<tr><td colspan="7" style="color:var(--t3);padding:6px">No completed simulation runs yet</td></tr>';
+
+    const curve = d.aggregate_equity_curve || [];
+    const bench = d.aggregate_benchmark_curve || [];
+    if (counterfactualChart) { counterfactualChart.destroy(); counterfactualChart = null; }
+    if (curve.length > 1) {
+      counterfactualChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: curve.map(p => p.date),
+          datasets: [
+            { label: "Fred's signals (aggregate)", data: curve.map(p => p.equity), borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,.08)', fill: true, pointRadius: 0, borderWidth: 1.5, tension: 0.1 },
+            { label: `${d.benchmark||'SPY'} buy-and-hold`, data: bench.map(p => p.equity), borderColor: '#7a9bbf', borderDash: [4,4], fill: false, pointRadius: 0, borderWidth: 1, tension: 0.1 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+          scales: {
+            x: { ticks: {color:'#3d5a73', font:{size:8}, maxTicksLimit: 8}, grid:{color:'#162840'} },
+            y: { title:{display:true, text:'Equity (start=100)', color:'#7a9bbf', font:{size:9}}, ticks:{color:'#3d5a73', font:{size:9}}, grid:{color:'#162840'} },
+          },
+          plugins: { legend: {display:true, labels:{color:'#7a9bbf', font:{size:9}, boxWidth:10}} },
+        },
+      });
+    }
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--t3);padding:6px">Accountability data unavailable</td></tr>';
+    console.warn('Counterfactual failed:', e);
+  }
+}
+
+let divergenceCharts = {};
+function toggleDivergenceDetail(key) {
+  const el = g('dv-detail-' + key);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+async function loadDivergenceRadar() {
+  const grid = g('dv-grid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/divergences');
+    const d = await r.json();
+    const pairs = d.pairs || {};
+    const keys = Object.keys(pairs);
+    if (!keys.length) { grid.innerHTML = '<div style="color:var(--t3);font-size:10px">No pair data yet</div>'; return; }
+
+    grid.innerHTML = keys.map(key => {
+      const p = pairs[key];
+      const active = (p.active_events || [])[0];
+      const stats = p.resolution_stats || {n:0};
+      const borderColor = p.stale ? 'var(--t3)' : (active ? 'var(--red)' : 'var(--border)');
+      const zVal = p.current_spread != null ? p.current_spread.toFixed(2) : '--';
+      const zColor = p.current_spread != null && Math.abs(p.current_spread) >= 2 ? 'var(--red)' : 'var(--t2)';
+      const baseRate = stats.n > 0
+        ? `Past ${stats.n} case${stats.n===1?'':'s'}: median ${stats.median_days_to_resolve}d to resolve, ${stats.broke_further_count||0} broke further first`
+        : 'No completed episodes yet (n=0)';
+      return `<div style="border:1px solid ${borderColor};border-radius:6px;padding:8px;background:var(--bg2)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;cursor:pointer" onclick="toggleDivergenceDetail('${key}')">
+          <div style="font-size:10px;font-weight:600;color:var(--t1)">${esc(p.label)}</div>
+          <div style="font-family:var(--mono);font-size:12px;font-weight:600;color:${zColor}">${zVal}</div>
+        </div>
+        ${p.stale ? '<div style="font-size:8px;color:var(--t3)">feed stale</div>' : ''}
+        ${active ? `<div style="font-size:8px;color:var(--red)">ACTIVE ${active.direction} divergence — ${active.days_active}d</div>` : ''}
+        <div style="height:50px;margin-top:4px"><canvas id="dv-chart-${key}"></canvas></div>
+        <div style="font-size:8px;color:var(--t3);margin-top:2px">${esc(baseRate)}</div>
+        <div id="dv-detail-${key}" style="display:none;font-size:8px;color:var(--t3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          <div>${esc(p.leg_a_name)} vs ${esc(p.leg_b_name)}</div>
+          <div style="margin-top:3px">${esc(p.rationale)}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    keys.forEach(key => {
+      const p = pairs[key];
+      const canvas = g('dv-chart-' + key);
+      if (!canvas || !p.spread_series || !p.spread_series.length) return;
+      if (divergenceCharts[key]) { divergenceCharts[key].destroy(); }
+      const labels = p.spread_series.map(pt => pt[0]);
+      const values = p.spread_series.map(pt => pt[1]);
+      divergenceCharts[key] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { data: values, borderColor: '#00b4ff', pointRadius: 0, borderWidth: 1, fill: false, tension: 0.1 },
+            { data: labels.map(()=>2), borderColor: 'rgba(255,59,92,.3)', borderDash:[3,3], pointRadius: 0, borderWidth: 1, fill: false },
+            { data: labels.map(()=>-2), borderColor: 'rgba(255,59,92,.3)', borderDash:[3,3], pointRadius: 0, borderWidth: 1, fill: false },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          scales: { x: {display:false}, y: {display:false} },
+          plugins: { legend:{display:false}, tooltip:{enabled:false} },
+        },
+      });
+    });
+  } catch(e) {
+    grid.innerHTML = '<div style="color:var(--t3);font-size:10px">Divergence data unavailable</div>';
+    console.warn('DivergenceRadar failed:', e);
+  }
+}
+
+async function loadTheses() {
+  const box = g('theses-list');
+  if (!box) return;
+  try {
+    const r = await fetch('/api/theses');
+    const list = await r.json();
+    if (!list.length) {
+      box.innerHTML = '<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">No theses yet — click "+ New Thesis" to start one.</div>';
+      return;
+    }
+    const details = await Promise.all(list.map(t => fetch(`/api/theses/${t.id}`).then(r => r.json())));
+    renderTheses(details);
+  } catch(e) {
+    box.innerHTML = '<div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Theses unavailable</div>';
+    console.warn('Theses failed:', e);
+  }
+}
+
+const THESIS_STATUS_COLOR = {active:'var(--blue)', proven:'var(--green)', broken:'var(--red)', closed:'var(--t3)'};
+const ASSUMPTION_STATUS_COLOR = {intact:'var(--green)', weakening:'var(--gold)', broken:'var(--red)'};
+
+function renderTheses(theses) {
+  const box = g('theses-list'); if (!box) return;
+  box.innerHTML = theses.map(t => {
+    const lights = (t.assumptions||[]).map(a =>
+      `<span title="${esc(a.text)} (${esc(a.status)})" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${ASSUMPTION_STATUS_COLOR[a.status]||'var(--t3)'};margin-right:3px"></span>`
+    ).join('');
+    const suggested = t.suggested_conviction;
+    const suggestedLine = suggested!=null && suggested !== t.conviction
+      ? `<span style="color:var(--t3)"> (Fred suggests ${suggested})</span>` : '';
+    const evidenceRows = (t.evidence||[]).slice(0,10).map(e => {
+      const stanceColor = e.stance==='supporting'?'var(--green)':e.stance==='contradicting'?'var(--red)':'var(--t3)';
+      const date = (e.created_at||'').slice(0,10);
+      const autoTag = e.auto ? '<span style="color:var(--t3)"> · auto</span>' : '';
+      return `<div style="font-size:9px;padding:3px 0;border-top:1px solid var(--border)">
+        <span style="color:${stanceColor};text-transform:uppercase;font-size:8px">${esc(e.stance)}</span>
+        <span style="color:var(--t3)"> · ${esc(date)}${autoTag}</span><br>
+        <span style="color:var(--t2)">${esc(e.note||'')}</span>
+      </div>`;
+    }).join('') || '<div style="font-size:9px;color:var(--t3);padding:4px 0">No evidence yet.</div>';
+
+    return `<div style="padding:10px 14px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-weight:700;font-size:12px">${esc(t.title)}</span>
+        <span class="ptag" style="background:rgba(0,180,255,.08)">${esc(t.direction)}</span>
+        <span style="font-size:9px;color:var(--t3)">${esc(t.tickers||'')}</span>
+        <select onchange="updateThesisStatus(${t.id},this.value)" style="margin-left:auto;background:var(--bg2);border:1px solid var(--border);color:${THESIS_STATUS_COLOR[t.status]||'var(--t1)'};border-radius:3px;font-size:9px;padding:2px 4px">
+          ${['active','proven','broken','closed'].map(s=>`<option value="${s}" ${s===t.status?'selected':''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div style="font-size:10px;color:var(--t2);margin:5px 0">${esc(t.statement)}</div>
+      <div style="font-size:9px;color:var(--t3);margin-bottom:5px">Conviction: <b style="color:var(--t1)">${t.conviction}</b>/100${suggestedLine}</div>
+      <div style="margin-bottom:6px">${lights}</div>
+      <details>
+        <summary style="cursor:pointer;font-size:9px;color:var(--blue)">Evidence (${(t.evidence||[]).length})</summary>
+        ${evidenceRows}
+        <div style="display:flex;gap:4px;margin-top:6px">
+          <select id="ev-stance-${t.id}" style="background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:3px;font-size:9px;padding:3px">
+            <option value="supporting">Supporting</option><option value="contradicting">Contradicting</option><option value="neutral">Neutral</option>
+          </select>
+          <input id="ev-note-${t.id}" placeholder="Add evidence note..." style="flex:1;background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:3px;font-size:9px;padding:3px 6px">
+          <button class="btn btn-b" style="font-size:8px;padding:2px 6px" onclick="addThesisEvidence(${t.id})">Add</button>
+        </div>
+      </details>
+    </div>`;
+  }).join('');
+}
+
+function toggleThesisComposer() {
+  const el = g('thesis-composer');
+  el.style.display = el.style.display==='none' ? 'block' : 'none';
+}
+
+async function decomposeThesis() {
+  const statement = g('tc-statement').value.trim();
+  const status = g('tc-status');
+  if (!statement) { status.textContent = 'Write a statement first.'; return; }
+  status.textContent = 'Asking Fred...';
+  try {
+    const r = await fetch('/api/theses/decompose', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({statement})});
+    const d = await r.json();
+    const assumptions = d.assumptions || [];
+    status.textContent = assumptions.length
+      ? `${assumptions.length} assumption(s) drafted — edit before saving.`
+      : "Fred couldn't decompose this — add assumptions manually below.";
+    renderComposerAssumptions(assumptions.length ? assumptions : ['']);
+  } catch(e) {
+    status.textContent = 'Decompose failed — add assumptions manually.';
+    renderComposerAssumptions(['']);
+  }
+}
+
+function renderComposerAssumptions(assumptions) {
+  const box = g('tc-assumptions');
+  box.innerHTML = assumptions.map((a,i) =>
+    `<input class="tc-assumption-input" value="${esc(a)}" placeholder="Assumption ${i+1}" style="width:100%;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:5px 8px;font-size:10px;margin-bottom:4px">`
+  ).join('') + `<button class="btn btn-b" style="font-size:8px" onclick="renderComposerAssumptions([...document.querySelectorAll('.tc-assumption-input')].map(i=>i.value).concat(['']))">+ Add assumption</button>`;
+}
+
+async function saveThesis() {
+  const title = g('tc-title').value.trim();
+  const statement = g('tc-statement').value.trim();
+  const direction = g('tc-direction').value;
+  const tickers = g('tc-tickers').value.trim();
+  const assumptions = [...document.querySelectorAll('.tc-assumption-input')].map(i=>i.value.trim()).filter(Boolean);
+  const status = g('tc-status');
+  if (!title || !statement || !assumptions.length) {
+    status.textContent = 'Title, statement, and at least one assumption required.';
+    return;
+  }
+  try {
+    const r = await fetch('/api/theses', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({title, statement, direction, tickers, assumptions})});
+    const d = await r.json();
+    if (d.error) { status.textContent = d.error; return; }
+    g('tc-title').value=''; g('tc-statement').value=''; g('tc-tickers').value=''; g('tc-assumptions').innerHTML=''; status.textContent='';
+    toggleThesisComposer();
+    loadTheses();
+  } catch(e) {
+    status.textContent = 'Save failed.';
+  }
+}
+
+async function updateThesisStatus(id, status) {
+  try {
+    await fetch(`/api/theses/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({status})});
+    loadTheses();
+  } catch(e) { console.warn('Thesis status update failed:', e); }
+}
+
+async function addThesisEvidence(id) {
+  const stance = g(`ev-stance-${id}`).value;
+  const note = g(`ev-note-${id}`).value.trim();
+  if (!note) return;
+  try {
+    await fetch(`/api/theses/${id}/evidence`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({stance, note})});
+    loadTheses();
+  } catch(e) { console.warn('Evidence add failed:', e); }
+}
+
+let scenarioFactorUnits = {};
+let scenarioChart = null;
+
+async function loadScenarioFactors() {
+  const sel = g('sc-factor');
+  if (!sel) return;
+  try {
+    const r = await fetch('/api/scenario');
+    const d = await r.json();
+    const factors = d.factors || [];
+    sel.innerHTML = factors.map(f => `<option value="${esc(f.key)}">${esc(f.label)}</option>`).join('');
+    scenarioFactorUnits = Object.fromEntries(factors.map(f => [f.key, f.unit]));
+    if (factors.length) g('sc-unit').textContent = scenarioFactorUnits[factors[0].key] || '';
+    sel.onchange = () => { g('sc-unit').textContent = scenarioFactorUnits[sel.value] || ''; };
+  } catch(e) {
+    sel.innerHTML = '<option value="">Scenario factors unavailable</option>';
+    console.warn('Scenario factors failed:', e);
+  }
+}
+
+async function runScenario() {
+  const factor = g('sc-factor').value;
+  const magnitude = parseFloat(g('sc-magnitude').value);
+  const box = g('scenario-results');
+  if (!factor) return;
+  box.innerHTML = '<div class="empty" style="color:var(--t3);font-size:10px">Running scenario...</div>';
+  try {
+    const r = await fetch('/api/scenario', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({factor, magnitude})});
+    const d = await r.json();
+    renderScenarioResults(d);
+  } catch(e) {
+    box.innerHTML = '<div class="warn">Network error running scenario.</div>';
+    console.warn('Scenario run failed:', e);
+  }
+}
+
+function renderScenarioResults(d) {
+  const box = g('scenario-results');
+  if (!box) return;
+  if (d.status === 'unmapped') {
+    box.innerHTML = `<div style="color:var(--t3);font-size:11px">Can't model that combination — supported factors: ${(d.supported_factors||[]).map(f=>esc(f.label)).join(', ')}</div>`;
+    return;
+  }
+  if (d.status !== 'ok') {
+    box.innerHTML = `<div class="warn">${esc(d.error || 'Scenario failed.')}</div>`;
+    return;
+  }
+
+  const impacts = (d.impacts || []).slice(0, 15);
+  const portfolioCard = d.portfolio ? `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:4px">Your Portfolio Impact (estimate)</div>
+      <div style="font-size:18px;font-weight:700;color:${d.portfolio.total_pnl_estimate>=0?'var(--green)':'var(--red)'}">${d.portfolio.total_pnl_estimate>=0?'+':''}$${d.portfolio.total_pnl_estimate.toLocaleString()}</div>
+      ${d.portfolio.worst_position?`<div style="font-size:10px;color:var(--t3)">Worst position: ${esc(d.portfolio.worst_position.symbol)} (${d.portfolio.worst_position.estimated_pnl>=0?'+':''}$${d.portfolio.worst_position.estimated_pnl.toLocaleString()})</div>`:''}
+      ${(d.portfolio.risk_breach_notes||[]).length?`<div style="font-size:10px;color:var(--red);margin-top:4px">⚠ ${d.portfolio.risk_breach_notes.map(esc).join('; ')}</div>`:''}
+      <div style="font-size:9px;color:var(--t3);margin-top:4px">${esc(d.portfolio.risk_threshold_note)}</div>
+    </div>` : (d.portfolio === null ? '<div style="font-size:10px;color:var(--t3);margin-bottom:10px">No portfolio positions to overlay.</div>' : '');
+
+  const assumptions = (d.assumptions || []).map(a => `<li style="margin-bottom:3px">${esc(a)}</li>`).join('');
+
+  box.innerHTML = `
+    <div style="margin-bottom:8px;font-size:11px;color:var(--t2)">Shock: <b>${esc(d.label)} ${d.magnitude>=0?'+':''}${d.magnitude}${esc(d.unit)}</b></div>
+    ${portfolioCard}
+    <div style="position:relative;height:220px;margin-bottom:10px"><canvas id="scenario-waterfall"></canvas></div>
+    <details>
+      <summary style="cursor:pointer;font-size:9px;color:var(--blue)">Model assumptions — read before trusting this</summary>
+      <ul style="font-size:10px;color:var(--t3);margin:6px 0 0;padding-left:16px">${assumptions}</ul>
+    </details>
+  `;
+
+  if (scenarioChart) { scenarioChart.destroy(); scenarioChart = null; }
+  const canvas = g('scenario-waterfall');
+  if (canvas && impacts.length) {
+    scenarioChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: impacts.map(i => i.symbol + (i.order === 2 ? ' (2nd)' : '')),
+        datasets: [{
+          data: impacts.map(i => i.impact_score),
+          backgroundColor: impacts.map(i => i.impact_score >= 0 ? 'rgba(0,255,136,.5)' : 'rgba(255,59,92,.5)'),
+          borderColor: impacts.map(i => i.impact_score >= 0 ? '#00ff88' : '#ff3b5c'),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+        plugins: { legend: {display:false},
+          tooltip: {callbacks: {label: (ctx) => {
+            const i = impacts[ctx.dataIndex];
+            return `${i.impact_score>=0?'+':''}${i.impact_score}% est. — ${i.data_source}`;
+          }}},
+        },
+        scales: {
+          x: {ticks:{color:'#3d5a73',font:{size:9}}, grid:{color:'#162840'}},
+          y: {ticks:{color:'#3d5a73',font:{size:9}}, grid:{color:'#162840'}, title:{display:true,text:'Est. % move',color:'#7a9bbf',font:{size:9}}},
+        },
+      },
+    });
+  }
+}
+
 function renderOpsPicture(d) {
   // Market status
   const ms = d.market_status || {};
@@ -6039,10 +6662,21 @@ async function openAnalystReport(ticker) {
   const title = g('analyst-modal-title');
   const loading = g('analyst-loading');
   const content = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
+  const filingContent = g('filing-watch-content');
 
   title.textContent = `EQUITY RESEARCH: ${ticker}`;
   loading.style.display = 'flex';
   content.style.display = 'none';
+  debateContent.style.display = 'none';
+  debateContent.innerHTML = '';
+  window._marketDebateLoaded = false;
+  const btnDebate = g('btn-toggle-debate');
+  if (btnDebate) btnDebate.textContent = 'Research Desk';
+  if (filingContent) { filingContent.style.display = 'none'; filingContent.innerHTML = ''; }
+  window._filingWatchLoaded = false;
+  const btnFilings = g('btn-toggle-filings');
+  if (btnFilings) btnFilings.textContent = 'Filing Watch';
   modal.classList.add('open');
 
   try {
@@ -6073,6 +6707,164 @@ function closeAnalystModal() {
   const btnEmail = g('btn-email-report');
   if (btnEmail) btnEmail.style.display = 'none';
   g('analyst-modal').classList.remove('open');
+}
+
+async function toggleMarketDebate() {
+  const ticker = window._activeAnalystTicker;
+  if (!ticker) return;
+
+  const reportContent = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
+  const btnDebate = g('btn-toggle-debate');
+  const loading = g('analyst-loading');
+
+  const showingDebate = debateContent.style.display !== 'none';
+  if (showingDebate) {
+    debateContent.style.display = 'none';
+    reportContent.style.display = 'block';
+    btnDebate.textContent = 'Research Desk';
+    return;
+  }
+
+  reportContent.style.display = 'none';
+  debateContent.style.display = 'block';
+  btnDebate.textContent = 'Back to Report';
+
+  if (window._marketDebateLoaded) return;
+  await loadResearchDesk(ticker, false);
+}
+
+async function loadResearchDesk(ticker, forceRefresh) {
+  const debateContent = g('analyst-debate-content');
+  const loading = g('analyst-loading');
+  loading.style.display = 'flex';
+  debateContent.innerHTML = '';
+  try {
+    const r = await fetch(`/api/market-debate/${ticker}${forceRefresh ? '?refresh=1' : ''}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+
+    if (r.ok && d.verdict) {
+      window._marketDebateLoaded = true;
+      const md = (t) => window.marked && window.marked.parse ? window.marked.parse(t || '') : esc(t || '');
+      const dirColor = d.direction === 'bullish' ? 'var(--green)' : d.direction === 'bearish' ? 'var(--red)' : 'var(--t3)';
+      const contestedBadge = d.contested ? `<span style="background:rgba(245,166,35,.15);color:var(--gold);border-radius:3px;padding:2px 8px;font-size:10px;letter-spacing:1px;text-transform:uppercase">⚠ Contested</span>` : '';
+      const scoreBadge = (label, score) => score != null ? `<span style="font-size:10px;color:var(--t3);font-weight:normal"> (${label} strength ${Math.round(score*100)}%)</span>` : '';
+      const riskCol = d.risk_case ? `
+        <div style="flex:1;min-width:220px">
+          <h3>🛡️ Risk Officer</h3>
+          <div>${md(d.risk_case)}</div>
+        </div>` : '';
+      const keyRisks = (d.key_risks || []).length ? `
+        <div style="margin-top:8px"><b>Key risks:</b>
+          <ul style="margin:4px 0 0 18px;font-size:12px">${d.key_risks.map(k => `<li>${esc(k)}</li>`).join('')}</ul>
+        </div>` : '';
+      const invalidation = d.invalidation_trigger ? `<div style="margin-top:8px;font-size:12px;color:var(--t2)"><b>Would flip on:</b> ${esc(d.invalidation_trigger)}</div>` : '';
+      const verdictCard = d.direction ? `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:14px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${dirColor}">${esc(d.direction)}</span>
+            <span style="font-size:12px;color:var(--t2)">Conviction <b>${d.conviction}</b>/100</span>
+            <span style="font-size:12px;color:var(--t3)">${esc(d.time_horizon || '')}</span>
+            ${contestedBadge}
+            <span style="margin-left:auto;font-size:10px;color:var(--t3)">${d.cached ? 'cached ' + esc(d.date) : 'fresh run'}${d.est_tokens ? ` · ~${d.est_tokens} tok` : ''}</span>
+          </div>
+          <div>${md(d.verdict)}</div>
+          ${keyRisks}${invalidation}
+        </div>` : `
+        <h3>⚖️ Verdict <span style="font-size:11px;color:var(--t3);font-weight:normal">(confidence ${Math.round((d.confidence||0)*100)}%${d.cached ? ', cached ' + esc(d.date) : ''} — degraded run, budget-constrained)</span></h3>
+        <div>${md(d.verdict)}</div>`;
+
+      debateContent.innerHTML = `
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <button class="btn btn-b" style="font-size:10px" onclick="loadResearchDesk('${ticker}', true)">↻ Force fresh committee run</button>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <h3>🐂 Bull Case${scoreBadge('bull', d.bull_score)}</h3>
+            <div>${md(d.bull_case)}</div>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <h3>🐻 Bear Case${scoreBadge('bear', d.bear_score)}</h3>
+            <div>${md(d.bear_case)}</div>
+          </div>
+          ${riskCol}
+        </div>
+        ${verdictCard}
+        <p style="font-size:11px;color:var(--t3);margin-top:16px">Not financial advice — a model estimate synthesized from Fred's own tracked signals (sentiment, insider filings, technicals, short interest, backtest accuracy) plus the committee's own track record.</p>
+      `;
+    } else if (r.status === 429) {
+      debateContent.innerHTML = `<div class="warn">${esc(d.error || 'Too many forced refreshes — try again later.')}</div>`;
+    } else {
+      debateContent.innerHTML = `<div class="warn">Error: ${esc(d.error || 'Failed to generate debate.')}</div>`;
+    }
+  } catch (e) {
+    loading.style.display = 'none';
+    debateContent.innerHTML = `<div class="warn">Network error requesting Fred AI Research Desk.</div>`;
+  }
+}
+
+async function toggleFilingWatch() {
+  const ticker = window._activeAnalystTicker;
+  if (!ticker) return;
+
+  const reportContent = g('analyst-report-content');
+  const debateContent = g('analyst-debate-content');
+  const filingContent = g('filing-watch-content');
+  const btnFilings = g('btn-toggle-filings');
+  const loading = g('analyst-loading');
+
+  const showingFilings = filingContent.style.display !== 'none';
+  if (showingFilings) {
+    filingContent.style.display = 'none';
+    reportContent.style.display = 'block';
+    btnFilings.textContent = 'Filing Watch';
+    return;
+  }
+
+  reportContent.style.display = 'none';
+  debateContent.style.display = 'none';
+  filingContent.style.display = 'block';
+  btnFilings.textContent = 'Back to Report';
+
+  if (window._filingWatchLoaded) return;
+
+  loading.style.display = 'flex';
+  filingContent.innerHTML = '';
+  try {
+    const r = await fetch(`/api/filing-watch/${ticker}`);
+    const d = await r.json();
+    loading.style.display = 'none';
+
+    if (r.ok) {
+      window._filingWatchLoaded = true;
+      if (!d.filings || !d.filings.length) {
+        filingContent.innerHTML = `<div style="color:var(--t3);font-size:12px">No 10-K/10-Q filing history tracked for ${esc(ticker)} yet.</div>`;
+      } else {
+        const filingsList = d.filings.map(f =>
+          `<span style="font-size:10px;color:var(--t3);margin-right:10px">${esc(f.form_type)} filed ${esc((f.filed_date||'').slice(0,10))}</span>`
+        ).join('');
+        const diffs = (d.top_diffs || []).slice(0, 15).map(diff => {
+          const typeColor = diff.change_type==='added'?'var(--green)':diff.change_type==='removed'?'var(--red)':'var(--gold)';
+          const terms = diff.high_signal_terms ? `<span style="color:var(--red);font-size:9px"> ⚠ ${esc(diff.high_signal_terms)}</span>` : '';
+          const before = diff.before_text ? `<div style="background:rgba(255,59,92,.08);border-left:2px solid var(--red);padding:6px 8px;margin:4px 0;font-size:11px;color:var(--t2)">${esc(diff.before_text.slice(0,400))}</div>` : '';
+          const after = diff.after_text ? `<div style="background:rgba(0,255,136,.08);border-left:2px solid var(--green);padding:6px 8px;margin:4px 0;font-size:11px;color:var(--t2)">${esc(diff.after_text.slice(0,400))}</div>` : '';
+          return `<div style="margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+            <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:${typeColor}">${esc(diff.section)} · ${esc(diff.change_type)} · ${esc(diff.comparison)}${terms}
+              <span style="color:var(--t3);float:right">materiality ${diff.materiality_score}</span>
+            </div>
+            ${before}${after}
+          </div>`;
+        }).join('') || '<div style="color:var(--t3);font-size:12px">No language changes detected yet.</div>';
+        filingContent.innerHTML = `<h3>📄 Filing Watch</h3><div style="margin-bottom:10px">${filingsList}</div>${diffs}`;
+      }
+    } else {
+      filingContent.innerHTML = `<div class="warn">Error: ${esc(d.error || 'Failed to load filings.')}</div>`;
+    }
+  } catch (e) {
+    loading.style.display = 'none';
+    filingContent.innerHTML = `<div class="warn">Network error requesting filing data.</div>`;
+  }
 }
 
 function printAnalystReport() {

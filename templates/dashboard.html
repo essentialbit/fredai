@@ -1722,6 +1722,18 @@ html[data-tier="micro"] #ov-globe-stage {
       <div style="padding:8px 16px 12px;font-size:9px;color:var(--t3);border-top:1px solid var(--border)" id="cf-methodology"></div>
     </div>
 
+    <!-- DIVERGENCE RADAR — cross-asset disagreement detection (FSI L2) -->
+    <div id="divergence-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◉</span>
+        <div class="ops-title">Divergence Radar</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">When markets that normally agree stop agreeing</span>
+      </div>
+      <div id="dv-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:12px 16px">
+        <div style="color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+    </div>
+
     <!-- THESIS TRACKER — living, evidence-fed investment theses (FSI L4) -->
     <div class="panel" id="ov-theses" style="grid-column:1/-1">
       <div class="ph">Investment Theses <span class="ptag">LIVING</span>
@@ -3133,6 +3145,7 @@ async function loadInitData() {
       setTimeout(loadTrackRecord, 1600);
       setTimeout(loadCalibration, 1800);
       setTimeout(loadCounterfactual, 1900);
+      setTimeout(loadDivergenceRadar, 1950);
       setTimeout(loadTheses, 2000);
       setTimeout(loadScenarioFactors, 2200);
       if (d.calendar) renderCalendar(d.calendar);
@@ -5916,6 +5929,77 @@ async function loadCounterfactual() {
   } catch(e) {
     tbody.innerHTML = '<tr><td colspan="7" style="color:var(--t3);padding:6px">Accountability data unavailable</td></tr>';
     console.warn('Counterfactual failed:', e);
+  }
+}
+
+let divergenceCharts = {};
+function toggleDivergenceDetail(key) {
+  const el = g('dv-detail-' + key);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+async function loadDivergenceRadar() {
+  const grid = g('dv-grid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/divergences');
+    const d = await r.json();
+    const pairs = d.pairs || {};
+    const keys = Object.keys(pairs);
+    if (!keys.length) { grid.innerHTML = '<div style="color:var(--t3);font-size:10px">No pair data yet</div>'; return; }
+
+    grid.innerHTML = keys.map(key => {
+      const p = pairs[key];
+      const active = (p.active_events || [])[0];
+      const stats = p.resolution_stats || {n:0};
+      const borderColor = p.stale ? 'var(--t3)' : (active ? 'var(--red)' : 'var(--border)');
+      const zVal = p.current_spread != null ? p.current_spread.toFixed(2) : '--';
+      const zColor = p.current_spread != null && Math.abs(p.current_spread) >= 2 ? 'var(--red)' : 'var(--t2)';
+      const baseRate = stats.n > 0
+        ? `Past ${stats.n} case${stats.n===1?'':'s'}: median ${stats.median_days_to_resolve}d to resolve, ${stats.broke_further_count||0} broke further first`
+        : 'No completed episodes yet (n=0)';
+      return `<div style="border:1px solid ${borderColor};border-radius:6px;padding:8px;background:var(--bg2)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;cursor:pointer" onclick="toggleDivergenceDetail('${key}')">
+          <div style="font-size:10px;font-weight:600;color:var(--t1)">${esc(p.label)}</div>
+          <div style="font-family:var(--mono);font-size:12px;font-weight:600;color:${zColor}">${zVal}</div>
+        </div>
+        ${p.stale ? '<div style="font-size:8px;color:var(--t3)">feed stale</div>' : ''}
+        ${active ? `<div style="font-size:8px;color:var(--red)">ACTIVE ${active.direction} divergence — ${active.days_active}d</div>` : ''}
+        <div style="height:50px;margin-top:4px"><canvas id="dv-chart-${key}"></canvas></div>
+        <div style="font-size:8px;color:var(--t3);margin-top:2px">${esc(baseRate)}</div>
+        <div id="dv-detail-${key}" style="display:none;font-size:8px;color:var(--t3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          <div>${esc(p.leg_a_name)} vs ${esc(p.leg_b_name)}</div>
+          <div style="margin-top:3px">${esc(p.rationale)}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    keys.forEach(key => {
+      const p = pairs[key];
+      const canvas = g('dv-chart-' + key);
+      if (!canvas || !p.spread_series || !p.spread_series.length) return;
+      if (divergenceCharts[key]) { divergenceCharts[key].destroy(); }
+      const labels = p.spread_series.map(pt => pt[0]);
+      const values = p.spread_series.map(pt => pt[1]);
+      divergenceCharts[key] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { data: values, borderColor: '#00b4ff', pointRadius: 0, borderWidth: 1, fill: false, tension: 0.1 },
+            { data: labels.map(()=>2), borderColor: 'rgba(255,59,92,.3)', borderDash:[3,3], pointRadius: 0, borderWidth: 1, fill: false },
+            { data: labels.map(()=>-2), borderColor: 'rgba(255,59,92,.3)', borderDash:[3,3], pointRadius: 0, borderWidth: 1, fill: false },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          scales: { x: {display:false}, y: {display:false} },
+          plugins: { legend:{display:false}, tooltip:{enabled:false} },
+        },
+      });
+    });
+  } catch(e) {
+    grid.innerHTML = '<div style="color:var(--t3);font-size:10px">Divergence data unavailable</div>';
+    console.warn('DivergenceRadar failed:', e);
   }
 }
 

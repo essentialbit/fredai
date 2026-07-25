@@ -209,6 +209,46 @@ def init_db():
             price_at_72h REAL
         );
 
+        CREATE TABLE IF NOT EXISTS calibration_scores (
+            source TEXT PRIMARY KEY,
+            window_days INTEGER NOT NULL,
+            brier REAL,
+            sample_n INTEGER NOT NULL DEFAULT 0,
+            reliability_weight REAL NOT NULL DEFAULT 1.0,
+            low_sample INTEGER NOT NULL DEFAULT 1,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS counterfactual_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            window TEXT NOT NULL,
+            methodology_version INTEGER NOT NULL,
+            total_return_pct REAL,
+            max_drawdown_pct REAL,
+            sharpe REAL,
+            win_rate_pct REAL,
+            benchmark_return_pct REAL,
+            trade_count INTEGER,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS divergence_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pair TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            initial_trigger_z REAL NOT NULL,
+            peak_z REAL NOT NULL,
+            peak_date TEXT NOT NULL,
+            resolved_at TEXT,
+            resolution_type TEXT,
+            resolved_by TEXT,
+            days_active INTEGER,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(pair, started_at)
+        );
+
         CREATE TABLE IF NOT EXISTS correlation_matrix (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             symbol_a TEXT NOT NULL,
@@ -223,6 +263,16 @@ def init_db():
             symbol TEXT NOT NULL,
             short_float_pct REAL,
             short_ratio REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS options_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            symbol TEXT NOT NULL,
+            expiration TEXT,
+            put_call_volume_ratio REAL,
+            put_call_oi_ratio REAL,
+            atm_iv_pct REAL,
             fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -281,6 +331,43 @@ def init_db():
             UNIQUE(ticker, owner_name, transaction_date, transaction_code, shares)
         );
 
+        CREATE TABLE IF NOT EXISTS volume_anomalies (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            date TEXT NOT NULL,
+            count INTEGER NOT NULL,
+            z_score REAL NOT NULL,
+            level TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, date)
+        );
+
+
+        CREATE TABLE IF NOT EXISTS onchain_metrics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            metric TEXT NOT NULL,
+            latest_value REAL,
+            baseline_mean REAL,
+            z_score REAL,
+            direction TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+
+        CREATE TABLE IF NOT EXISTS seasonality_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            period_type TEXT NOT NULL,
+            period_value INTEGER NOT NULL,
+            period_name TEXT,
+            sample_size INTEGER,
+            avg_return_pct REAL,
+            hit_rate_pct REAL,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, period_type, period_value)
+        );
+
+
         CREATE TABLE IF NOT EXISTS institutional_holdings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             manager TEXT NOT NULL,
@@ -304,6 +391,16 @@ def init_db():
             verdict TEXT,
             confidence REAL,
             signals_snapshot TEXT,
+            risk_case TEXT,
+            direction TEXT,
+            conviction INTEGER,
+            time_horizon TEXT,
+            key_risks TEXT,
+            invalidation_trigger TEXT,
+            bull_score REAL,
+            bear_score REAL,
+            contested INTEGER DEFAULT 0,
+            est_tokens INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(ticker, debate_date)
         );
@@ -355,6 +452,51 @@ def init_db():
             UNIQUE(accession_number)
         );
 
+        CREATE TABLE IF NOT EXISTS filings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            cik TEXT,
+            form_type TEXT NOT NULL,
+            accession_number TEXT NOT NULL,
+            filed_date TEXT,
+            fiscal_period TEXT,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(accession_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS filing_sections (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            filing_id INTEGER NOT NULL,
+            section TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(filing_id, section)
+        );
+
+        CREATE TABLE IF NOT EXISTS filing_diffs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            section TEXT NOT NULL,
+            comparison TEXT NOT NULL,
+            current_filing_id INTEGER NOT NULL,
+            prior_filing_id INTEGER,
+            change_type TEXT NOT NULL,
+            before_text TEXT,
+            after_text TEXT,
+            para_hash TEXT NOT NULL,
+            change_ratio REAL,
+            materiality_score REAL,
+            sentiment_delta REAL,
+            high_signal_terms TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(current_filing_id, prior_filing_id, section, para_hash)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_filings_ticker ON filings(ticker, form_type, filed_date);
+        CREATE INDEX IF NOT EXISTS idx_filing_sections_filing ON filing_sections(filing_id);
+        CREATE INDEX IF NOT EXISTS idx_filing_diffs_ticker ON filing_diffs(ticker, materiality_score);
+        CREATE INDEX IF NOT EXISTS idx_filing_diffs_current ON filing_diffs(current_filing_id);
+
         CREATE TABLE IF NOT EXISTS central_bank_statements (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             bank TEXT NOT NULL,
@@ -391,9 +533,55 @@ def init_db():
             UNIQUE(symbol, trade_date)
         );
 
+        CREATE TABLE IF NOT EXISTS beige_book_sentiment (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            release_date TEXT NOT NULL UNIQUE,
+            composite_score REAL NOT NULL,
+            prior_score REAL,
+            score_delta REAL,
+            fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS rag_chunks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            user_id INTEGER,
+            title TEXT,
+            content TEXT NOT NULL,
+            tickers TEXT DEFAULT '',
+            url TEXT,
+            published_at DATETIME,
+            embedding TEXT,
+            mtime REAL,
+            indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(source_type, source_id)
+        );
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS rag_fts USING fts5(
+            content, title, tickers, content='rag_chunks', content_rowid='id'
+        );
+
+        CREATE TRIGGER IF NOT EXISTS rag_chunks_ai AFTER INSERT ON rag_chunks BEGIN
+            INSERT INTO rag_fts(rowid, content, title, tickers) VALUES (new.id, new.content, new.title, new.tickers);
+        END;
+        CREATE TRIGGER IF NOT EXISTS rag_chunks_ad AFTER DELETE ON rag_chunks BEGIN
+            INSERT INTO rag_fts(rag_fts, rowid, content, title, tickers) VALUES ('delete', old.id, old.content, old.title, old.tickers);
+        END;
+        CREATE TRIGGER IF NOT EXISTS rag_chunks_au AFTER UPDATE ON rag_chunks BEGIN
+            INSERT INTO rag_fts(rag_fts, rowid, content, title, tickers) VALUES ('delete', old.id, old.content, old.title, old.tickers);
+            INSERT INTO rag_fts(rowid, content, title, tickers) VALUES (new.id, new.content, new.title, new.tickers);
+        END;
+
+        CREATE INDEX IF NOT EXISTS idx_rag_chunks_source ON rag_chunks(source_type, indexed_at);
+        CREATE INDEX IF NOT EXISTS idx_rag_chunks_user ON rag_chunks(user_id);
+        CREATE INDEX IF NOT EXISTS idx_rag_chunks_published ON rag_chunks(published_at);
+
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
+        CREATE INDEX IF NOT EXISTS idx_counterfactual_source_window ON counterfactual_runs(source, window, computed_at);
+        CREATE INDEX IF NOT EXISTS idx_divergence_pair ON divergence_events(pair, started_at);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
@@ -406,6 +594,9 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_correlation_window ON correlation_matrix(window_days, computed_at);
         CREATE INDEX IF NOT EXISTS idx_short_interest_symbol ON short_interest(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_insider_ticker ON insider_transactions(ticker, transaction_date);
+        CREATE INDEX IF NOT EXISTS idx_onchain_metric ON onchain_metrics(metric, fetched_at);
+        CREATE INDEX IF NOT EXISTS idx_seasonality_ticker ON seasonality_cache(ticker, period_type);
+        CREATE INDEX IF NOT EXISTS idx_options_symbol ON options_data(symbol, fetched_at);
         CREATE INDEX IF NOT EXISTS idx_institutional_ticker ON institutional_holdings(ticker, filing_period);
         CREATE INDEX IF NOT EXISTS idx_hypotheses_ticker ON hypotheses(ticker);
         CREATE INDEX IF NOT EXISTS idx_hypotheses_resolves_at ON hypotheses(resolves_at);
@@ -433,6 +624,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_ticker_debates_ticker ON ticker_debates(ticker, created_at);
         CREATE INDEX IF NOT EXISTS idx_vault_embeddings_path ON vault_embeddings(path);
         CREATE INDEX IF NOT EXISTS idx_optimized_params_ticker ON optimized_params(ticker);
+        CREATE INDEX IF NOT EXISTS idx_beige_book_release ON beige_book_sentiment(release_date);
 
         CREATE TABLE IF NOT EXISTS tracked_entities (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -469,6 +661,46 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_entity_links_from ON entity_links(from_entity_id);
         CREATE INDEX IF NOT EXISTS idx_entity_links_to ON entity_links(to_entity_id);
         CREATE INDEX IF NOT EXISTS idx_entity_evidence_entity ON entity_evidence(entity_id, created_at);
+
+        CREATE TABLE IF NOT EXISTS theses (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            statement TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            tickers TEXT DEFAULT '',
+            status TEXT DEFAULT 'active',
+            conviction INTEGER DEFAULT 50,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS thesis_assumptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thesis_id INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            status TEXT DEFAULT 'intact',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS thesis_evidence (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            thesis_id INTEGER NOT NULL,
+            assumption_id INTEGER,
+            rag_chunk_id INTEGER,
+            stance TEXT NOT NULL,
+            weight REAL DEFAULT 1.0,
+            note TEXT DEFAULT '',
+            auto INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(thesis_id, rag_chunk_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_theses_user ON theses(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_thesis_assumptions_thesis ON thesis_assumptions(thesis_id);
+        CREATE INDEX IF NOT EXISTS idx_thesis_evidence_thesis ON thesis_evidence(thesis_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_thesis_evidence_assumption ON thesis_evidence(assumption_id);
         """)
 
         # Lightweight migrations for columns added after initial release —
@@ -481,6 +713,21 @@ def init_db():
             "ALTER TABLE news_items ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
             "ALTER TABLE signal_outcomes ADD COLUMN source TEXT DEFAULT 'aggregate'",
             "ALTER TABLE signal_outcomes ADD COLUMN baseline_direction TEXT",
+            # Research Desk (FSI L4) -- extends the existing Bull/Bear/Arbiter
+            # market_debates table with a Risk Officer role + a structured PM
+            # verdict, rather than standing up parallel committee_runs/
+            # committee_verdicts tables (see scenario_engine.py-era decision to
+            # extend existing systems instead of parallel-building).
+            "ALTER TABLE market_debates ADD COLUMN risk_case TEXT",
+            "ALTER TABLE market_debates ADD COLUMN direction TEXT",
+            "ALTER TABLE market_debates ADD COLUMN conviction INTEGER",
+            "ALTER TABLE market_debates ADD COLUMN time_horizon TEXT",
+            "ALTER TABLE market_debates ADD COLUMN key_risks TEXT",
+            "ALTER TABLE market_debates ADD COLUMN invalidation_trigger TEXT",
+            "ALTER TABLE market_debates ADD COLUMN bull_score REAL",
+            "ALTER TABLE market_debates ADD COLUMN bear_score REAL",
+            "ALTER TABLE market_debates ADD COLUMN contested INTEGER DEFAULT 0",
+            "ALTER TABLE market_debates ADD COLUMN est_tokens INTEGER",
         ):
             try:
                 conn.execute(ddl)
@@ -699,10 +946,11 @@ def get_portfolio(user_id: int) -> list[dict]:
 # ── SIGNALS ───────────────────────────────────────────────────────────────────
 def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0, signal_type="neutral", sentiment_model="vader", metadata=None):
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO signals (source, asset, content, author, sentiment_score, signal_type, sentiment_model, metadata) VALUES (?,?,?,?,?,?,?,?)",
             (source, asset, content, author, sentiment_score, signal_type, sentiment_model, json.dumps(metadata or {}))
         )
+        return cur.lastrowid
 
 
 def get_signals(hours=4, asset=None, limit=200) -> list[dict]:
@@ -884,10 +1132,11 @@ def get_sentiment_timeline(hours=24, bucket_minutes=30) -> list[dict]:
 # ── SUMMARIES ─────────────────────────────────────────────────────────────────
 def insert_summary(period_start, period_end, content, key_signals, overall_sentiment, risk_level, signal_count):
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO summaries (period_start, period_end, content, key_signals, overall_sentiment, risk_level, signal_count) VALUES (?,?,?,?,?,?,?)",
             (period_start.isoformat(), period_end.isoformat(), content, json.dumps(key_signals), overall_sentiment, risk_level, signal_count)
         )
+        return cur.lastrowid
 
 
 def get_latest_summary() -> dict | None:
@@ -979,12 +1228,11 @@ def _score_rows(rows: list[dict], col: str, direction_field: str) -> dict | None
     return {"total": len(scored), "correct": correct, "accuracy_pct": round(correct / len(scored) * 100, 1)}
 
 
-def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict:
-    """Of outcomes completed at this checkpoint within the lookback window,
-    how often did Fred's predicted direction match the actual price move --
-    broken down per signal source, and compared against the naive momentum
-    baseline recorded alongside each prediction (MISSION.md Principle #4:
-    a source only proves its worth if it beats doing nothing clever)."""
+def get_outcome_rows_by_source(checkpoint: str, hours: int = 24 * 30) -> dict[str, list[dict]]:
+    """Completed signal_outcomes rows at this checkpoint within the lookback
+    window, grouped by source. Shared by get_backtest_accuracy (simple
+    hit-rate) and calibration_engine.py (Brier scoring) so both read the
+    exact same underlying rows/definition of 'completed'."""
     if checkpoint not in _OUTCOME_CHECKPOINTS:
         raise ValueError(f"checkpoint must be one of {_OUTCOME_CHECKPOINTS}")
     col = f"price_at_{checkpoint}"
@@ -999,6 +1247,17 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
     by_source: dict[str, list[dict]] = {}
     for r in rows:
         by_source.setdefault(r.get("source") or "aggregate", []).append(r)
+    return by_source
+
+
+def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict:
+    """Of outcomes completed at this checkpoint within the lookback window,
+    how often did Fred's predicted direction match the actual price move --
+    broken down per signal source, and compared against the naive momentum
+    baseline recorded alongside each prediction (MISSION.md Principle #4:
+    a source only proves its worth if it beats doing nothing clever)."""
+    col = f"price_at_{checkpoint}"
+    by_source = get_outcome_rows_by_source(checkpoint, hours)
 
     sources = {}
     for src, src_rows in by_source.items():
@@ -1028,6 +1287,146 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
     }
 
 
+# ── COUNTERFACTUAL P&L (honest simulated equity curve, FSI L3) ────────────────
+
+def get_signal_outcomes_for_simulation() -> dict[str, list[dict]]:
+    """Every signal_outcomes row (all-time -- the simulation itself windows
+    by predicted_at, not this query), grouped by source and ordered oldest
+    first within each group. Deliberately not filtered by checkpoint
+    completion (unlike get_outcome_rows_by_source): counterfactual_pnl.py
+    derives its own entry/exit prices from daily closes, it doesn't need
+    Fred's own 4h/24h/72h backtest checkpoints to have filled in yet."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT asset, predicted_direction, avg_sentiment, predicted_at, source
+               FROM signal_outcomes ORDER BY predicted_at ASC"""
+        ).fetchall()
+    by_source: dict[str, list[dict]] = {}
+    for r in rows:
+        d = dict(r)
+        by_source.setdefault(d.get("source") or "aggregate", []).append(d)
+    return by_source
+
+
+def insert_counterfactual_run(source: str, window: str, methodology_version: int,
+                               total_return_pct: float | None, max_drawdown_pct: float | None,
+                               sharpe: float | None, win_rate_pct: float | None,
+                               benchmark_return_pct: float | None, trade_count: int) -> None:
+    """Always INSERTs a new row, never UPDATEs -- history of the metric
+    itself must survive a future methodology change (each row carries its
+    own methodology_version), per the playbook's explicit no-silent-rewrite
+    constraint."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO counterfactual_runs
+               (source, window, methodology_version, total_return_pct, max_drawdown_pct,
+                sharpe, win_rate_pct, benchmark_return_pct, trade_count)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (source, window, methodology_version, total_return_pct, max_drawdown_pct,
+             sharpe, win_rate_pct, benchmark_return_pct, trade_count),
+        )
+
+
+def get_latest_counterfactual_results() -> dict[str, dict]:
+    """Most recent persisted run per (source, window) -- what GET
+    /api/counterfactual serves. Live recomputation belongs to the nightly
+    job only (run_simulation() re-fetches ~1y of daily closes per asset,
+    too expensive for a page-load path)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT r.* FROM counterfactual_runs r
+               INNER JOIN (
+                   SELECT source, window, MAX(computed_at) AS latest
+                   FROM counterfactual_runs GROUP BY source, window
+               ) m ON r.source = m.source AND r.window = m.window AND r.computed_at = m.latest"""
+        ).fetchall()
+    out: dict[str, dict] = {}
+    for r in rows:
+        d = dict(r)
+        out.setdefault(d["source"], {})[d["window"]] = d
+    return out
+
+
+# ── DIVERGENCE RADAR (cross-asset disagreement detection, FSI L2) ─────────────
+
+def upsert_divergence_event(pair: str, started_at: str, direction: str,
+                             initial_trigger_z: float, peak_z: float, peak_date: str,
+                             resolved_at: str | None, resolution_type: str | None,
+                             resolved_by: str | None, days_active: int | None) -> None:
+    """One row per (pair, started_at) -- an event's own started_at/resolved_at
+    IS its state (still-active vs resolved), so this legitimately UPDATEs a
+    still-open row in place as it resolves. Distinct from
+    counterfactual_runs' insert-only history-of-a-metric concern: there's
+    exactly one canonical row per real-world episode here, not a series of
+    independent point-in-time computations."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO divergence_events
+               (pair, started_at, direction, initial_trigger_z, peak_z, peak_date,
+                resolved_at, resolution_type, resolved_by, days_active, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?, CURRENT_TIMESTAMP)
+               ON CONFLICT(pair, started_at) DO UPDATE SET
+                   peak_z=excluded.peak_z, peak_date=excluded.peak_date,
+                   resolved_at=excluded.resolved_at, resolution_type=excluded.resolution_type,
+                   resolved_by=excluded.resolved_by, days_active=excluded.days_active,
+                   updated_at=CURRENT_TIMESTAMP""",
+            (pair, started_at, direction, initial_trigger_z, peak_z, peak_date,
+             resolved_at, resolution_type, resolved_by, days_active),
+        )
+
+
+def get_divergence_events(pair: str | None = None) -> list[dict]:
+    with get_conn() as conn:
+        if pair:
+            rows = conn.execute(
+                "SELECT * FROM divergence_events WHERE pair=? ORDER BY started_at", (pair,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM divergence_events ORDER BY pair, started_at").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_active_divergence_events() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM divergence_events WHERE resolved_at IS NULL ORDER BY started_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+# ── CALIBRATION (Brier scoring / reliability weights, FSI L4) ─────────────────
+
+def upsert_calibration_score(source: str, window_days: int, brier: float | None,
+                              sample_n: int, reliability_weight: float, low_sample: bool) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO calibration_scores (source, window_days, brier, sample_n, reliability_weight, low_sample, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+               ON CONFLICT(source) DO UPDATE SET
+                   window_days=excluded.window_days, brier=excluded.brier, sample_n=excluded.sample_n,
+                   reliability_weight=excluded.reliability_weight, low_sample=excluded.low_sample,
+                   updated_at=CURRENT_TIMESTAMP""",
+            (source, window_days, brier, sample_n, reliability_weight, int(low_sample)),
+        )
+
+
+def get_calibration_scores() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM calibration_scores ORDER BY source").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_calibration_weight(source: str) -> float:
+    """1.0 (neutral) if this source has no calibration row yet -- new
+    sources, or before the first nightly compute_calibration() run, must
+    never be silently dampened/amplified."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT reliability_weight FROM calibration_scores WHERE source=?", (source,)
+        ).fetchone()
+    return row["reliability_weight"] if row else 1.0
+
+
 # ── ALERTS ────────────────────────────────────────────────────────────────────
 def insert_alert(level, title, message, asset=None):
     with get_conn() as conn:
@@ -1035,6 +1434,50 @@ def insert_alert(level, title, message, asset=None):
             "INSERT INTO alerts (level, title, message, asset) VALUES (?,?,?,?)",
             (level, title, message, asset)
         )
+
+
+def _integrity_check_result(table: str, raw_count: int, read_count: int) -> dict:
+    if raw_count > 0 and read_count == 0:
+        return {
+            "check": table,
+            "status": "alert",
+            "detail": (
+                f"{raw_count} row(s) written to {table} in the last hour, but the "
+                f"app's own read path returned 0 for the same window -- a query "
+                f"filter is likely broken, not that the source stopped producing data."
+            ),
+        }
+    return {
+        "check": table,
+        "status": "ok",
+        "detail": f"{table}: {raw_count} written, {read_count} readable in the last hour.",
+    }
+
+
+def run_data_integrity_checks() -> list[dict]:
+    """Catch the write-succeeds-but-paired-read-returns-nothing failure mode
+    that hit signals/news_items twice already (see get_news's and get_signals'
+    own docstrings/history -- a CURRENT_TIMESTAMP-defaulted column compared
+    against a mismatched separator format silently matches zero rows, no
+    exception, no log line). Compares a raw COUNT(*) against each table's own
+    native timestamp column (ground truth) to its normal read function's row
+    count for the same 1h window. Deliberately narrow -- two tables already
+    bitten by this exact bug class, not a general observability framework."""
+    with get_conn() as conn:
+        raw_signals = conn.execute(
+            "SELECT COUNT(*) FROM signals WHERE timestamp > datetime('now', '-1 hour')"
+        ).fetchone()[0]
+        raw_news = conn.execute(
+            "SELECT COUNT(*) FROM news_items WHERE REPLACE(published_at, 'T', ' ') > datetime('now', '-1 hour')"
+        ).fetchone()[0]
+
+    read_signals = len(get_signals(hours=1, limit=100000))
+    read_news = len(get_news(hours=1, limit=100000))
+
+    return [
+        _integrity_check_result("signals", raw_signals, read_signals),
+        _integrity_check_result("news_items", raw_news, read_news),
+    ]
 
 
 # ── FEATURE BACKLOG ───────────────────────────────────────────────────────────
@@ -1600,6 +2043,28 @@ def get_short_interest_direction(symbol: str) -> str | None:
     return None
 
 
+# ── OPTIONS DATA (put/call ratio + ATM IV) ─────────────────────────────────────
+
+def insert_options_data(symbol: str, expiration: str | None, put_call_volume_ratio: float | None,
+                         put_call_oi_ratio: float | None, atm_iv_pct: float | None):
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO options_data
+               (symbol, expiration, put_call_volume_ratio, put_call_oi_ratio, atm_iv_pct)
+               VALUES (?, ?, ?, ?, ?)""",
+            (symbol, expiration, put_call_volume_ratio, put_call_oi_ratio, atm_iv_pct)
+        )
+
+
+def get_latest_options_data(symbol: str) -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM options_data WHERE symbol=? ORDER BY fetched_at DESC LIMIT 1",
+            (symbol,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
 # ── GOOGLE TRENDS SEARCH INTEREST ─────────────────────────────────────────────
 
 def insert_trends_interest(ticker: str, keyword: str, interest_score: float):
@@ -1647,6 +2112,27 @@ def get_short_volume_series(symbol: str, limit: int = 30) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def get_latest_beige_book_sentiment() -> dict | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM beige_book_sentiment ORDER BY release_date DESC LIMIT 1"
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def insert_beige_book_sentiment(release_date: str, composite_score: float, prior_score: float | None, score_delta: float | None):
+    """One row per release_date -- INSERT OR IGNORE keeps a same-release cache
+    refresh idempotent instead of duplicating rows (releases are infrequent,
+    ~8/year, so this only actually inserts when a genuinely new release is found)."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT OR IGNORE INTO beige_book_sentiment
+               (release_date, composite_score, prior_score, score_delta)
+               VALUES (?, ?, ?, ?)""",
+            (release_date, composite_score, prior_score, score_delta)
+        )
+
+
 def get_latest_short_volume(symbol: str) -> dict | None:
     with get_conn() as conn:
         row = conn.execute(
@@ -1654,6 +2140,20 @@ def get_latest_short_volume(symbol: str) -> dict | None:
             (symbol,)
         ).fetchone()
         return dict(row) if row else None
+
+
+def get_options_data_prior_pair(symbol: str) -> tuple[dict, dict] | None:
+    """Latest two options_data snapshots for a symbol, newest first. Returns
+    None if there's fewer than two -- shift detection needs a prior reading,
+    not just a static snapshot."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM options_data WHERE symbol=? ORDER BY fetched_at DESC LIMIT 2",
+            (symbol,)
+        ).fetchall()
+    if len(rows) < 2:
+        return None
+    return dict(rows[0]), dict(rows[1])
 
 
 def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
@@ -1684,13 +2184,14 @@ def get_search_interest_velocity(ticker: str, lookback: int = 7) -> dict | None:
 
 def insert_ticker_debate(ticker: str, bull: dict, bear: dict, verdict: dict):
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             """INSERT INTO ticker_debates
                (ticker, bull_json, bear_json, verdict_json, consensus, confidence)
                VALUES (?, ?, ?, ?, ?, ?)""",
             (ticker, json.dumps(bull), json.dumps(bear), json.dumps(verdict),
              verdict.get("consensus"), verdict.get("confidence"))
         )
+        return cur.lastrowid
 
 
 def get_latest_ticker_debate(ticker: str, max_age_s: float | None = None) -> dict | None:
@@ -1814,6 +2315,105 @@ def get_recent_insider_transactions(ticker: str, days: int = 90, signal_only: bo
         return [dict(r) for r in rows]
 
 
+def insert_volume_anomaly(ticker: str, date: str, count: int, z_score: float, level: str) -> bool:
+    """Idempotent per (ticker, date) -- returns False if today's row for
+    this ticker already exists (already recorded/alerted, nothing to do)."""
+    with get_conn() as conn:
+        existing = conn.execute(
+            "SELECT id FROM volume_anomalies WHERE ticker=? AND date=?", (ticker, date)
+        ).fetchone()
+        if existing:
+            return False
+        conn.execute(
+            "INSERT INTO volume_anomalies (ticker, date, count, z_score, level) VALUES (?,?,?,?,?)",
+            (ticker, date, count, z_score, level)
+        )
+        return True
+
+
+def get_recent_volume_anomalies(days: int = 7) -> list[dict]:
+    since = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM volume_anomalies WHERE date >= ? AND level != 'normal' ORDER BY date DESC",
+            (since,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+
+
+# ── BITCOIN ON-CHAIN METRICS ────────────────────────────────────────────────────
+
+def insert_onchain_metric(metric: str, trend: dict) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO onchain_metrics (metric, latest_value, baseline_mean, z_score, direction) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (metric, trend.get("latest"), trend.get("mean"), trend.get("z_score"), trend.get("direction"))
+        )
+
+
+def get_latest_onchain_metrics() -> dict:
+    """{"hash_rate": {...}, "active_addresses": {...}} -- most recent row per
+    metric, or {} if the daily refresh job hasn't populated anything yet."""
+    with get_conn() as conn:
+        rows = conn.execute("""
+            SELECT m.* FROM onchain_metrics m
+            INNER JOIN (
+                SELECT metric, MAX(fetched_at) AS max_fetched
+                FROM onchain_metrics GROUP BY metric
+            ) latest ON m.metric = latest.metric AND m.fetched_at = latest.max_fetched
+        """).fetchall()
+        return {r["metric"]: dict(r) for r in rows}
+
+
+# ── SEASONALITY ────────────────────────────────────────────────────────────────
+
+def save_seasonal_bias(ticker: str, bias: dict) -> None:
+    """Upserts every period in a seasonality_engine.compute_seasonal_bias()
+    result. Stores all 12 months + up to 7 weekdays so `/api/seasonality`
+    lookups are always cache-hits regardless of what day it is."""
+    if bias.get("status") != "ok":
+        return
+    rows = [("month", p) for p in bias.get("months", [])] + [("dow", p) for p in bias.get("weekdays", [])]
+    with get_conn() as conn:
+        conn.executemany("""
+            INSERT INTO seasonality_cache
+                (ticker, period_type, period_value, period_name, sample_size, avg_return_pct, hit_rate_pct, computed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(ticker, period_type, period_value) DO UPDATE SET
+                period_name=excluded.period_name,
+                sample_size=excluded.sample_size,
+                avg_return_pct=excluded.avg_return_pct,
+                hit_rate_pct=excluded.hit_rate_pct,
+                computed_at=CURRENT_TIMESTAMP
+        """, [
+            (ticker, period_type, p["period_value"], p["period_name"], p["sample_size"], p["avg_return_pct"], p["hit_rate_pct"])
+            for period_type, p in rows
+        ])
+
+
+def get_current_seasonality(ticker: str) -> dict:
+    """Cache-only: this calendar month's bias + today's day-of-week bias for
+    `ticker`. Never triggers a live fetch -- weekly refresh job keeps this warm."""
+    now = datetime.utcnow()
+    with get_conn() as conn:
+        month_row = conn.execute(
+            "SELECT * FROM seasonality_cache WHERE ticker=? AND period_type='month' AND period_value=?",
+            (ticker, now.month),
+        ).fetchone()
+        dow_row = conn.execute(
+            "SELECT * FROM seasonality_cache WHERE ticker=? AND period_type='dow' AND period_value=?",
+            (ticker, now.weekday()),
+        ).fetchone()
+    return {
+        "ticker": ticker,
+        "month": dict(month_row) if month_row else None,
+        "day_of_week": dict(dow_row) if dow_row else None,
+    }
+
+
 # ── INSTITUTIONAL HOLDINGS (SEC Form 13F-HR) ──────────────────────────────────
 
 def insert_institutional_holdings(holdings: list[dict]) -> int:
@@ -1857,16 +2457,28 @@ def get_market_debate(ticker: str, debate_date: str) -> dict | None:
 
 
 def save_market_debate(ticker: str, debate_date: str, bull_case: str, bear_case: str,
-                        verdict: str, confidence: float, signals_snapshot: str) -> None:
+                        verdict: str, confidence: float, signals_snapshot: str,
+                        risk_case: str = None, direction: str = None, conviction: int = None,
+                        time_horizon: str = None, key_risks: str = None, invalidation_trigger: str = None,
+                        bull_score: float = None, bear_score: float = None, contested: bool = False,
+                        est_tokens: int = None) -> None:
     with get_conn() as conn:
         conn.execute(
-            """INSERT INTO market_debates (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
-               VALUES (?,?,?,?,?,?,?)
+            """INSERT INTO market_debates (ticker, debate_date, bull_case, bear_case, verdict, confidence,
+                   signals_snapshot, risk_case, direction, conviction, time_horizon, key_risks,
+                   invalidation_trigger, bull_score, bear_score, contested, est_tokens)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(ticker, debate_date) DO UPDATE SET
                    bull_case=excluded.bull_case, bear_case=excluded.bear_case,
                    verdict=excluded.verdict, confidence=excluded.confidence,
-                   signals_snapshot=excluded.signals_snapshot""",
-            (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
+                   signals_snapshot=excluded.signals_snapshot,
+                   risk_case=excluded.risk_case, direction=excluded.direction, conviction=excluded.conviction,
+                   time_horizon=excluded.time_horizon, key_risks=excluded.key_risks,
+                   invalidation_trigger=excluded.invalidation_trigger, bull_score=excluded.bull_score,
+                   bear_score=excluded.bear_score, contested=excluded.contested, est_tokens=excluded.est_tokens""",
+            (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot,
+             risk_case, direction, conviction, time_horizon, key_risks, invalidation_trigger,
+             bull_score, bear_score, int(contested), est_tokens)
         )
 
 

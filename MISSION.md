@@ -30,19 +30,19 @@ Each level unlocks the next. No level is skipped.
 
 ---
 
-### L2 — Pattern Intelligence 🔄 (in progress)
+### L2 — Pattern Intelligence 🔄 (9/10 merged to main, 1/10 shipped-to-PR, re-verified 2026-07-25 against merged code)
 *Recognises recurring structures across signals, assets, and time.*
 
-- FinBERT sentiment (finance-domain NLP, replaces VADER)
-- Cross-asset correlation matrix (rolling, dynamic)
-- Options flow anomaly detection (unusual call/put activity)
-- SEC insider trading filings (Form 4 — who's buying their own stock?)
-- Fear & Greed Index integration (CNN Business API)
-- Reddit sentiment (r/wallstreetbets, r/investing)
-- Earnings calendar with pre/post signal analysis
-- Signal deduplication and influence weighting (high-follower accounts)
-- Short interest tracking (Finviz)
-- Bitcoin on-chain metrics (Glassnode free tier)
+- ~~FinBERT sentiment (finance-domain NLP, replaces VADER)~~ — `finbert_sentiment.py`
+- ~~Cross-asset correlation matrix (rolling, dynamic)~~ — `correlation_engine.py`
+- ~~Options flow anomaly detection (unusual call/put activity)~~ — `options_data_client.py`/`volume_anomaly.py`
+- ~~SEC insider trading filings (Form 4 — who's buying their own stock?)~~ — insider Form 4 feed wired in `main.py`
+- ~~Fear & Greed Index integration (CNN Business API)~~ — `fear_greed_client.py`
+- ~~Reddit sentiment (r/wallstreetbets, r/investing)~~ — `reddit_client.py`
+- ~~Earnings calendar with pre/post signal analysis~~ — `calendar_client.py` (PR #472 added post-earnings price-reaction backfill)
+- **Signal deduplication and influence weighting (high-follower accounts) — code-complete, not yet merged.** `twitter_client.py`'s `_influence_weight()` (follower-count-weighted) + near-duplicate retweet/quote-tweet collapsing sit on **PR #512** (open, CI-green, MERGEABLE). Real gap until merged, not an open agent-work item.
+- ~~Short interest tracking (Finviz)~~ — `finviz_client.py`
+- ~~Bitcoin on-chain metrics (Glassnode free tier)~~ — `bitcoin_onchain_client.py`
 
 **Unlocks:** Fred sees patterns. Now Fred needs to predict where patterns lead.
 
@@ -115,7 +115,7 @@ Each level unlocks the next. No level is skipped.
 
 ## Current Level Assessment
 
-**We are at: L1 complete, L2 complete, L3/L4/L5 near-complete (each has 0-1 genuine gaps, detailed above — mostly blocked on a user decision or a rejected-infeasible data source, not open agent work) → L6 is the real frontier.** Re-verified 2026-07-25 against actually-merged code (`git log origin/main`, `scripts/mission_coverage_check.py`), not issue-close counts, after a large batch-merge session landed dozens of previously-unmerged PRs.
+**We are at: L1 complete, L2 code-complete (9/10 merged, 1 item — signal dedup/influence weighting — shipped-to-PR #512 pending merge), L3/L4/L5 near-complete (each has 0-1 genuine gaps, detailed above — mostly blocked on a user decision or a rejected-infeasible data source, not open agent work) → L6 is the real frontier.** Re-verified 2026-07-25 against actually-merged code (`git log origin/main`, `scripts/mission_coverage_check.py`), not issue-close counts, after a large batch-merge session landed dozens of previously-unmerged PRs.
 
 ### L1 Completion checklist
 - [x] X/Twitter signal scraping

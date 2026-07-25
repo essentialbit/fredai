@@ -60,6 +60,7 @@ from empire_state_manufacturing_client import get_empire_state
 from payrolls import get_payrolls
 from ppi_client import get_ppi
 from jolts_quits_client import get_jolts_quits
+from hires_rate_client import get_hires_rate
 from job_listings_client import get_velocity_snapshot as get_job_listings_snapshot, TRACKED_BOARDS as JOB_LISTINGS_TRACKED
 from commercial_paper_client import get_commercial_paper
 from gasoline_price_client import get_gasoline_price
@@ -71,6 +72,7 @@ from natural_gas_client import get_natural_gas
 from household_debt_service_client import get_household_debt_service
 from federal_debt_gdp_client import get_federal_debt_gdp
 from federal_deficit_client import get_federal_deficit
+from foreign_treasury_holdings_client import get_foreign_treasury_holdings
 from credit_card_delinquency_client import get_credit_card_delinquency
 from t10y3m_spread_client import get_t10y3m_spread
 from labor_participation_client import get_labor_participation
@@ -129,6 +131,7 @@ from variance_risk_premium import get_variance_risk_premium
 from dollar_index_client import get_dollar_index
 from oss_velocity_client import get_velocity_snapshot, TRACKED_REPOS
 from crypto_fear_greed import get_crypto_fear_greed
+from crypto_conditions import get_crypto_conditions
 from market_breadth import get_market_breadth
 from epu_index import get_epu_index
 from fed_liquidity import get_liquidity_snapshot
@@ -149,7 +152,7 @@ from jobless_claims_client import get_jobless_claims
 from memory_store import (
     get_all_proposals, insert_feature_proposal,
     get_news, get_news_diverse, count_news, upsert_news_items, prune_stale_news,
-    get_calendar_events, upsert_calendar_events,
+    get_calendar_events, upsert_calendar_events, get_avg_earnings_reaction,
     get_tech_alerts, create_tech_alert, delete_tech_alert,
     get_ticker_info, upsert_ticker_info,
     insert_trend, get_trend_history,
@@ -1190,6 +1193,19 @@ def api_portfolio_risk():
     return jsonify(risk)
 
 
+@app.route("/api/portfolio/stress-test")
+@login_required
+def api_portfolio_stress_test():
+    from stress_test import get_cached_stress_test
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    result = get_cached_stress_test(
+        uid, portfolio.get("positions", []), portfolio.get("total_value")
+    )
+    return jsonify(result)
+
+
 @app.route("/api/scan", methods=["POST"])
 @login_required
 def api_manual_scan():
@@ -2029,6 +2045,138 @@ def api_get_user_keys_status():
     })
 
 
+def test_anthropic_key(key):
+    if not key:
+        return "missing"
+    try:
+        import requests
+        headers = {
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        payload = {
+            "model": "claude-3-haiku-20240307",
+            "max_tokens": 1,
+            "messages": [{"role": "user", "content": "Hello"}]
+        }
+        r = requests.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers, timeout=2.0)
+        if r.status_code == 200:
+            return "valid"
+        elif r.status_code in (401, 403):
+            return "invalid"
+        else:
+            return f"error_{r.status_code}"
+    except Exception:
+        return "network_error"
+
+
+def test_gemini_key(key):
+    if not key:
+        return "missing"
+    try:
+        import requests
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={key}"
+        payload = {
+            "contents": [{"parts": [{"text": "Hello"}]}],
+            "generationConfig": {"maxOutputTokens": 1}
+        }
+        r = requests.post(url, json=payload, timeout=2.0)
+        if r.status_code == 200:
+            return "valid"
+        elif r.status_code in (400, 401, 403):
+            try:
+                err_msg = r.json().get("error", {}).get("message", "")
+                if "depleted" in err_msg.lower() or "limit" in err_msg.lower() or "quota" in err_msg.lower():
+                    return "depleted"
+            except Exception:
+                pass
+            return "invalid"
+        else:
+            return f"error_{r.status_code}"
+    except Exception:
+        return "network_error"
+
+
+def check_ollama_status():
+    try:
+        import requests
+        from config import OLLAMA_URL
+        r = requests.get(f"{OLLAMA_URL}/api/tags", timeout=1.0)
+        return r.status_code == 200
+    except Exception:
+        return False
+
+
+@app.route("/api/user/keys-health", methods=["GET"])
+@login_required
+def api_get_keys_health():
+    from memory_store import get_user
+    from agent import _get_api_keys
+    import json
+    uid = session.get("user_id")
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+        
+    prefs = {}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        pass
+        
+    a_key, g_key = _get_api_keys()
+    
+    # Run tests
+    anthropic_status = test_anthropic_key(a_key)
+    gemini_status = test_gemini_key(g_key)
+    ollama_status = check_ollama_status()
+    
+    fallback_consent = prefs.get("fallback_consent", True)
+    
+    return jsonify({
+        "anthropic": {
+            "configured": bool(a_key),
+            "status": anthropic_status,
+            "source": "user" if prefs.get("user_anthropic_key") else "system"
+        },
+        "gemini": {
+            "configured": bool(g_key),
+            "status": gemini_status,
+            "source": "user" if prefs.get("user_gemini_key") else "system"
+        },
+        "ollama_available": ollama_status,
+        "fallback_consent": fallback_consent
+    })
+
+
+@app.route("/api/user/keys-health", methods=["POST"])
+@login_required
+def api_save_keys_health():
+    from memory_store import get_conn, get_user
+    import json
+    uid = session.get("user_id")
+    user = get_user(uid)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    data = request.json or {}
+    fallback_consent = data.get("fallback_consent", True)
+    
+    prefs = {}
+    try:
+        prefs = json.loads(user.get("preferences") or "{}")
+    except Exception:
+        pass
+        
+    prefs["fallback_consent"] = fallback_consent
+    
+    with get_conn() as conn:
+        conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), uid))
+        
+    return jsonify({"status": "ok", "fallback_consent": fallback_consent})
+
+
 @app.route("/api/news/globe-data")
 @login_required
 def api_news_globe_data():
@@ -2162,6 +2310,9 @@ def api_news():
 def api_calendar():
     days = min(max(int(request.args.get("days", 7)), 1), 90)
     events = get_calendar_events(days=days)
+    for ev in events:
+        if ev.get("event_type") == "earnings" and ev.get("symbol"):
+            ev["avg_reaction"] = get_avg_earnings_reaction(ev["symbol"])
     return jsonify({"events": events})
 
 
@@ -2254,10 +2405,10 @@ def api_ai_universe():
 @app.route("/api/correlation")
 @login_required
 def api_correlation():
-    """Latest 30-day/90-day rolling cross-asset correlation matrix (FSI L2)."""
+    """Latest 30-day/90-day/180-day rolling cross-asset correlation matrix (FSI L2)."""
     window = request.args.get("window", 30, type=int)
-    if window not in (30, 90):
-        return jsonify({"error": "window must be 30 or 90"}), 400
+    if window not in (30, 90, 180):
+        return jsonify({"error": "window must be 30, 90, or 180"}), 400
     pairs = get_latest_correlation_matrix(window)
     return jsonify({
         "window_days": window,
@@ -2434,6 +2585,12 @@ def api_jolts_quits_rate():
     """JOLTS Quits Rate (FRED JTSQUR) worker-confidence labor-market
     signal (FSI L2) -- cached 1h, see jolts_quits_client.py."""
     return jsonify(get_jolts_quits() or {})
+@app.route("/api/hires-rate")
+@login_required
+def api_hires_rate():
+    """JOLTS Hires Rate (FRED JTSHIR) employer-side hiring-flow
+    signal (FSI L2) -- cached 1h, see hires_rate_client.py."""
+    return jsonify(get_hires_rate() or {})
 @app.route("/api/job-listings/<ticker>")
 @login_required
 def api_job_listings(ticker):
@@ -2517,6 +2674,13 @@ def api_federal_deficit():
     """U.S. federal fiscal balance (FRED MTSDS133FMS), trailing-12mo rolling
     deficit run-rate (FSI L2) -- cached 6h, see federal_deficit_client.py."""
     return jsonify(get_federal_deficit() or {})
+@app.route("/api/foreign-treasury-holdings")
+@login_required
+def api_foreign_treasury_holdings():
+    """Foreign Holdings of US Treasury Debt (FRED FDHBFIN) -- geopolitical
+    capital-flow demand signal (FSI L2), distinct from the debt-burden and
+    deficit-run-rate badges. Cached 1h, see foreign_treasury_holdings_client.py."""
+    return jsonify(get_foreign_treasury_holdings() or {})
 @app.route("/api/credit-card-delinquency")
 @login_required
 def api_credit_card_delinquency():
@@ -2893,6 +3057,13 @@ def api_crypto_fear_greed():
     the equity CNN Fear & Greed badge and the BTC on-chain health metrics --
     cached 1h, see crypto_fear_greed.py."""
     return jsonify(get_crypto_fear_greed() or {})
+@app.route("/api/crypto-conditions")
+@login_required
+def api_crypto_conditions():
+    """Crypto Conditions Index (FSI L2) -- blends the Alternative.me
+    Fear & Greed value with BTC/ETH CoinGecko volume momentum into one
+    combined sentiment+volume read -- cached 1h, see crypto_conditions.py."""
+    return jsonify(get_crypto_conditions() or {})
 @app.route("/api/market-breadth")
 @login_required
 def api_market_breadth():
@@ -3811,6 +3982,15 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] jolts_quits error: {e}")
+        # JOLTS Hires Rate employer-side hiring-flow signal (cached 1h in hires_rate_client.py)
+        try:
+            hr = get_hires_rate()
+            if hr:
+                _macro_cache = {**_macro_cache, "HIRES_RATE": {
+                    "label": "Hires Rate", "value": hr["latest"], "rating": hr["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] hires_rate error: {e}")
         # Commercial paper outstanding funding-stress signal (cached 1h in commercial_paper_client.py)
         try:
             cp = get_commercial_paper()
@@ -3895,6 +4075,15 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] federal_debt_gdp error: {e}")
+        # Foreign Holdings of US Treasury Debt (geopolitical capital-flow demand signal, cached 1h in foreign_treasury_holdings_client.py)
+        try:
+            fth = get_foreign_treasury_holdings()
+            if fth:
+                _macro_cache = {**_macro_cache, "FOREIGN_UST_HOLDINGS": {
+                    "label": "Foreign UST Held", "value": fth["latest_trillions"], "rating": fth["regime"],
+                }}
+        except Exception as e:
+            print(f"[Job] foreign_treasury_holdings error: {e}")
         # Federal Surplus/Deficit fiscal-balance signal (cached 6h in federal_deficit_client.py)
         try:
             fd = get_federal_deficit()
@@ -4432,6 +4621,15 @@ def job_market_refresh():
                 }}
         except Exception as e:
             print(f"[Job] crypto_fear_greed error: {e}")
+        # Crypto Conditions Index: sentiment + BTC/ETH volume momentum (cached 1h in crypto_conditions.py)
+        try:
+            cci = get_crypto_conditions()
+            if cci:
+                _macro_cache = {**_macro_cache, "CRYPTO_CONDITIONS": {
+                    "label": "Crypto CCI", "value": cci["cci"], "rating": cci["classification"],
+                }}
+        except Exception as e:
+            print(f"[Job] crypto_conditions error: {e}")
         # Market breadth: RSP/SPY equal-weight vs cap-weight (cached 15min in market_breadth.py)
         try:
             mb = get_market_breadth()
@@ -4640,16 +4838,19 @@ def on_chat(data):
     # Pass portfolio for context — values anonymized per privacy settings in agent.py
     holdings = get_portfolio(user_id) if user_id else []
     portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    tool_log = []
     entities_context = format_context_summary(user_id) if user_id else ""
     response = chat(user_msg, history, quotes=_quotes_cache,
                     user_interests=interests, portfolio=portfolio,
-                    tracked_entities=entities_context, user_id=user_id or None)
+                    tracked_entities=entities_context, user_id=user_id or None,
+                    tool_log=tool_log)
 
     history.append({"role": "assistant", "content": response})
     if len(history) > 24:
         _chat_histories[user_id] = history[-20:]
 
-    emit("chat_response", {"message": response, "timestamp": datetime.utcnow().isoformat()})
+    emit("chat_response", {"message": response, "timestamp": datetime.utcnow().isoformat(),
+                           "sources": tool_log})
 
 
 @socketio.on("view_symbol")
@@ -5091,7 +5292,7 @@ if __name__ == "__main__":
             print(f"[Debate] Error: {e}")
 
     def job_correlation_refresh():
-        """Recompute 30d/90d rolling cross-asset correlation matrix every 6h (FSI L2)."""
+        """Recompute 30d/90d/180d rolling cross-asset correlation matrix every 6h (FSI L2)."""
         try:
             from memory_store import get_conn as _gc
             with _gc() as c:

@@ -130,14 +130,17 @@ Each level unlocks the next. No level is skipped.
 - [x] Community engagement system
 
 ### L2 Priority queue (next implementations)
-1. FinBERT sentiment (huggingface `ProsusAI/finbert`)
-2. Fear & Greed Index (CNN Business)
-3. SEC insider trading Form 4 feed (EDGAR)
-4. Cross-asset rolling correlation matrix
-5. Signal accuracy backtesting scaffold
-6. Reddit sentiment (PRAW or Pushshift)
-7. Options flow anomaly (Unusual Whales free API)
-8. Short interest (Finviz scrape)
+**All 8 shipped as of 2026-07-22 — re-verified via `scripts/mission_coverage_check.py` against actual merged code, not issue-close counts.**
+1. ~~FinBERT sentiment (huggingface `ProsusAI/finbert`)~~ — `finbert_sentiment.py`
+2. ~~Fear & Greed Index (CNN Business)~~ — `fear_greed_client.py`
+3. ~~SEC insider trading Form 4 feed (EDGAR)~~ — insider Form 4 feed wired in `main.py`
+4. ~~Cross-asset rolling correlation matrix~~ — `correlation_engine.py`
+5. ~~Signal accuracy backtesting scaffold~~ — `backtesting_engine.py`
+6. ~~Reddit sentiment (PRAW or Pushshift)~~ — `reddit_client.py`
+7. ~~Options flow anomaly (Unusual Whales free API)~~ — `options_data_client.py` / `volume_anomaly.py`
+8. ~~Short interest (Finviz scrape)~~ — `finviz_client.py`
+
+Next L2+ priority queue lives in `fredai.md` memory's standing-policy/open-items sections, not here — this list is intentionally left as a dated historical record rather than being replaced, since a fresh queue would just go stale the same way.
 
 ---
 
@@ -199,7 +202,10 @@ To capture both the institutional depth of top-tier quants (Goldman Sachs, Citad
 * **Democratised Deployment**: Runs on a $35 Raspberry Pi Zero/4 or low-cost cloud VM without requiring a cluster of expensive GPUs.
 
 ### 4. Next Implementation Steps (Q3 2026)
-1. **Adversarial Multi-Agent Debates (L4)**: Create dedicated Bull/Bear agent personas for the debate cycle to simulate quantitative peer review.
-2. **FinBERT / Llama-3 Sentiment Upgrade (L2)**: Migrate the current RSS and Twitter scraping pipelines to use finance-specific models.
-3. **Advanced Risk and Portfolio Sizing (L3/L4)**: Implement Kelly Criterion and Sharpe ratio tracking in the portfolio module.
-4. **SEC EDGAR Insider Trading Parser (L2/L4)**: Automate parsing of Form 4 filings for immediate ticker alerting.*
+**All 4 shipped as of 2026-07-22 — re-verified via `scripts/mission_coverage_check.py` against actual merged code, not issue-close counts.**
+1. ~~**Adversarial Multi-Agent Debates (L4)**: Create dedicated Bull/Bear agent personas for the debate cycle to simulate quantitative peer review.~~ — `market_debate.py`
+2. ~~**FinBERT / Llama-3 Sentiment Upgrade (L2)**: Migrate the current RSS and Twitter scraping pipelines to use finance-specific models.~~ — `finbert_sentiment.py`
+3. ~~**Advanced Risk and Portfolio Sizing (L3/L4)**: Implement Kelly Criterion and Sharpe ratio tracking in the portfolio module.~~ — `portfolio_risk.py`
+4. ~~**SEC EDGAR Insider Trading Parser (L2/L4)**: Automate parsing of Form 4 filings for immediate ticker alerting.~~ — insider Form 4 parsing wired in `main.py`
+
+See `fredai.md` memory's "FSI Mission-Progress Reality Check" for the current L1-L6 state — this doc's L1-L6 roadmap section above (lines 19-113) still uses its original 🔲/🔄 markers from early in the project and is due a fuller pass; not attempted in this cycle to keep this change docs-only and low-risk.

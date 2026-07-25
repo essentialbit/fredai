@@ -16,6 +16,12 @@ The hourly `com.essentialbit.fredai.sensor` launchd job, its watchdog script, st
 
 This roster and policy are permanent project infrastructure. Never remove, bypass, or collapse the pipeline without an explicit instruction from the user in the current session.
 
+**Known limitations (found running this live, 2026-07-25)**:
+- **Mid-session agent registration**: a session's available `subagent_type` roster is fixed at session start. If `.claude/agents/*.md` land on `main` *during* a running session (e.g. via `git pull`), that session can't dispatch `task-manager`/`worker`/`reviewer`/`approver` by name even though the files are on disk — it'll error "Agent type not found." Fall back to `subagent_type: general-purpose`, with a prompt telling the agent to `Read` the specific role file first and follow it exactly. This is a same-session-only limitation; a fresh session started after the merge picks up the real types normally.
+- **Fallback dispatch doesn't enforce tool restrictions**: `general-purpose` has full `Bash`/`Edit`/`Write` regardless of a prompt telling it to act read-only. The real `task-manager`/`reviewer`/`approver` types' independence guarantee (no edit tools, by design) only holds when dispatched natively. Under fallback, treat "acted read-only" as a claim to verify (check nothing was written), not a harness-enforced fact.
+- **Race against the hourly sensor**: `com.essentialbit.fredai.sensor`'s own autonomous cycles operate on this same repo/checkout independently of any interactive session's pipeline. A `worker` can be dispatched against a spec that's already stale by the time it starts. Re-check live state (`git status`, `gh pr view --json mergeable,mergeStateStatus`) immediately before dispatching a worker on a specific file/PR, not just once earlier in the task.
+- **Routing threshold doesn't clearly cover merge conflicts**: a conflict needing semantic reconciliation of two divergent edits to one file is single-file but not a "typo, rename, one-line fix." Treat it as above-threshold (route through the pipeline) whenever resolving it requires a judgment call about which side's intent to keep — even if it's only one file.
+
 ## Project
 FredAI is an AI-powered financial intelligence dashboard with:
 - X/Twitter signal scraping + VADER sentiment analysis

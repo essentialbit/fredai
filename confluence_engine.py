@@ -17,10 +17,18 @@ from memory_store import (
     get_sentiment_snapshot,
     get_recent_insider_transactions,
     get_short_interest_direction,
+    get_calibration_weight,
 )
 
 MIN_FACTORS_FOR_ALERT = 3  # "full confluence" alert threshold — 2 agreeing is common, 3+ is the rare high-signal case
 _CACHE_TTL = 6 * 3600  # matches the 6h scan/refresh cadence that produces the underlying factors
+
+# confluence factor name -> calibration_engine/backtesting_engine source
+# name. "sentiment" here is the broadest available sentiment snapshot
+# (get_sentiment_snapshot); the closest calibrated source is
+# backtesting_engine's "news_sentiment" (reads news_items directly) --
+# an imperfect but reasonable correspondence, not an exact same-query match.
+_CALIBRATION_SOURCE_MAP = {"sentiment": "news_sentiment"}
 
 _cache: dict[str, tuple[float, dict]] = {}
 
@@ -92,10 +100,25 @@ def compute_confluence(symbol: str, include_technical: bool = True) -> dict:
     if not factors:
         return {"status": "no_data", "symbol": symbol}
 
+    # Agreement/factor_count are always raw, unweighted counts -- "full
+    # confluence" is a structural fact (do the independent sources agree),
+    # not something calibration should change. Only the continuous `score`
+    # is reliability-weighted, and only behind the flag -- with it off,
+    # score is bit-identical to the pre-calibration formula.
     bullish = sum(1 for f in factors.values() if f["direction"] == "bullish")
     bearish = sum(1 for f in factors.values() if f["direction"] == "bearish")
     total = len(factors)
-    score = round((bullish - bearish) / total, 2)
+
+    from config import CALIBRATION_WEIGHTS_ENABLED
+    if CALIBRATION_WEIGHTS_ENABLED:
+        def _w(name):
+            return get_calibration_weight(_CALIBRATION_SOURCE_MAP.get(name, name))
+        w_bull = sum(_w(name) for name, f in factors.items() if f["direction"] == "bullish")
+        w_bear = sum(_w(name) for name, f in factors.items() if f["direction"] == "bearish")
+        w_total = sum(_w(name) for name in factors)
+        score = round((w_bull - w_bear) / w_total, 2) if w_total else 0.0
+    else:
+        score = round((bullish - bearish) / total, 2)
 
     if total >= 2 and (bullish == total or bearish == total):
         agreement = "full_confluence"

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "DIR=\"${CLAUDE_PROJECT_DIR:-.}/.claude/agents\"; for f in task-manager worker reviewer approver; do [ -f \"$DIR/$f.md\" ] || echo \"[orchestration] missing required agent file: $f.md (see CLAUDE.md Orchestration section)\" >&2; done; true",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

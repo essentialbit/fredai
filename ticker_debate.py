@@ -131,8 +131,27 @@ def run_ticker_debate(ticker: str) -> dict | None:
     if not verdict or verdict.get("consensus") not in _VALID_CONSENSUS or "confidence" not in verdict:
         return None
 
-    insert_ticker_debate(ticker, bull, bear, verdict)
+    debate_id = insert_ticker_debate(ticker, bull, bear, verdict)
+    _index_debate_for_recall(debate_id, ticker, bull, bear, verdict)
     return {"ticker": ticker, "bull": bull, "bear": bear, "verdict": verdict}
+
+
+def _index_debate_for_recall(debate_id: int, ticker: str, bull: dict, bear: dict, verdict: dict) -> None:
+    """Fred Recall write-time hook -- FTS-only (embed=False), the nightly
+    embed-backlog job picks up embeddings later. Never blocks/fails the
+    caller."""
+    try:
+        from rag_store import upsert_chunk
+        content = (
+            f"BULL: {bull.get('case', '')}\nBEAR: {bear.get('case', '')}\n"
+            f"VERDICT: {verdict.get('consensus', '')} (confidence {verdict.get('confidence', '')})"
+        )
+        upsert_chunk(
+            "debate", str(debate_id), content, title=f"{ticker} Bull/Bear debate",
+            tickers=ticker, embed=False,
+        )
+    except Exception:
+        pass
 
 
 def get_ticker_debate(ticker: str, force: bool = False) -> dict | None:

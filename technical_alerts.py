@@ -18,6 +18,26 @@ from memory_store import (
     get_all_tech_alerts_enabled,
     mark_tech_alert_triggered,
 )
+from regime_detector import get_regime
+
+# Alert types read as trend-confirmation (breakout-style) vs mean-reversion.
+# Weighted higher (level="warning") when the ticker's own regime agrees with
+# the alert's underlying assumption -- MA crosses are more actionable in a
+# trending regime, RSI overbought/oversold is more actionable range-bound.
+_TREND_ALERT_TYPES = {"ma_cross_above", "ma_cross_below"}
+_MEAN_REVERSION_ALERT_TYPES = {"rsi_above", "rsi_below"}
+
+
+def _regime_weighted_level(symbol: str, alert_type: str) -> str:
+    if alert_type not in _TREND_ALERT_TYPES and alert_type not in _MEAN_REVERSION_ALERT_TYPES:
+        return "info"
+    regime_data = get_regime(symbol)
+    regime = regime_data["regime"] if regime_data else "unknown"
+    if alert_type in _TREND_ALERT_TYPES and regime == "trending":
+        return "warning"
+    if alert_type in _MEAN_REVERSION_ALERT_TYPES and regime == "ranging":
+        return "warning"
+    return "info"
 
 def _insert_system_alert(title, message, level="info", asset=None):
     from memory_store import insert_alert
@@ -160,11 +180,12 @@ def run_technical_alerts() -> list[dict]:
                 triggered, msg = _check_alert(alert, data)
                 if triggered:
                     mark_tech_alert_triggered(alert["id"])
+                    level = _regime_weighted_level(symbol, alert["alert_type"])
                     try:
                         _insert_system_alert(
                             title=f"Technical Alert: {alert['symbol']}",
                             message=msg,
-                            level="info",
+                            level=level,
                             asset=alert["symbol"],
                         )
                     except Exception:

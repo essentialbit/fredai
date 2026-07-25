@@ -7,27 +7,14 @@
 <title>FredAI — Intelligence Feed</title>
 <link rel="icon" href="/static/icons/favicon.ico" sizes="any">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/tokens.css">
 <style>
-:root{
-  /* Colors - Rich, futuristic dark theme with high-contrast neon accents */
-  --bg:#020408;--bg1:#050a14;--bg2:#080f1e;--bg3:#0c162b;
-  --green:#00ffaa;--red:#ff3366;--blue:#00d2ff;--purple:#8338ec;
-  --gold:#ffb703;--cyan:#00e5cc;--pink:#ff6b9d;
-  --t1:#f8f9fa;--t2:#94a3b8;--t3:#475569;--t4:#1e293b;
-  --border:rgba(0, 180, 255, 0.08);--border2:rgba(0, 255, 170, 0.12);
-  --glow-b:0 0 15px rgba(0, 210, 255, 0.35);
-  --glow-g:0 0 15px rgba(0, 255, 170, 0.35);
-  --mono:'JetBrains Mono','Fira Code',monospace;
-  --sans:'Outfit','Inter',system-ui,sans-serif;
-  --radius:8px;
-  --glass-bg:rgba(8, 15, 30, 0.6);
-  --glass-border:rgba(0, 210, 255, 0.12);
-  --glass-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.45);
-}
+/* Shared design-role tokens (bg/text/accent/glow/glass/border/radius/font)
+   now live in /static/css/tokens.css — no page-specific tokens needed here. */
 *{box-sizing:border-box;margin:0;padding:0}
-html,body{height:100%;background:var(--bg);color:var(--t1);font-family:var(--sans);font-size:14px;overflow-x:hidden}
+html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--font-sans);font-size:14px;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
-button{font-family:var(--sans);cursor:pointer}
+button{font-family:var(--font-sans);cursor:pointer}
 ::-webkit-scrollbar{width:5px;height:5px}
 ::-webkit-scrollbar-track{background:rgba(0, 0, 0, 0.2);border-radius:4px}
 ::-webkit-scrollbar-thumb{background:rgba(0,210,255,0.2);border-radius:4px;transition:all 0.2s}
@@ -116,7 +103,7 @@ button{font-family:var(--sans);cursor:pointer}
 .time-pill.active,.time-pill:hover{border-color:var(--blue);color:var(--blue);background:rgba(0,210,255,.08)}
 #ticker-input{
   width:100%;padding:8px 10px;background:rgba(5,10,20,0.6);border:1px solid rgba(0,210,255,0.15);
-  border-radius:6px;color:var(--t1);font-size:11px;outline:none;font-family:var(--sans);
+  border-radius:6px;color:var(--t1);font-size:11px;outline:none;font-family:var(--font-sans);
   transition:all 0.2s ease-in-out;
 }
 #ticker-input:focus{border-color:var(--blue);box-shadow:0 0 10px rgba(0,210,255,0.25)}
@@ -139,7 +126,7 @@ button{font-family:var(--sans);cursor:pointer}
 #search-box{
   flex:1;min-width:0;padding:8px 14px;background:rgba(5,10,20,0.6);
   border:1px solid rgba(0,210,255,0.15);border-radius:6px;color:var(--t1);
-  font-size:12px;outline:none;font-family:var(--sans);
+  font-size:12px;outline:none;font-family:var(--font-sans);
   transition:all 0.2s ease-in-out;
 }
 #search-box:focus{border-color:var(--blue);box-shadow:0 0 10px rgba(0,210,255,0.25)}
@@ -171,7 +158,7 @@ button{font-family:var(--sans);cursor:pointer}
   padding:2px 8px;border-radius:20px;text-transform:uppercase;
 }
 .nc-cat.market{color:var(--blue);background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.15)}
-.nc-cat.central_bank{color:var(--gold);background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.15)}
+.nc-cat.central_bank{color:var(--gold);background:rgba(255,183,3,.1);border:1px solid rgba(255,183,3,.15)}
 .nc-cat.macro{color:var(--purple);background:rgba(155,89,255,.1);border:1px solid rgba(155,89,255,.15)}
 .nc-cat.geopolitical{color:var(--red);background:rgba(255,59,92,.1);border:1px solid rgba(255,59,92,.15)}
 .nc-cat.ai{color:var(--green);background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.15)}
@@ -194,7 +181,7 @@ button{font-family:var(--sans);cursor:pointer}
 .nc-sent-bar{width:3px;height:36px;border-radius:2px;
   background:linear-gradient(to top,var(--red),var(--t4),var(--green));position:relative}
 .nc-sent-dot{position:absolute;left:50%;transform:translateX(-50%);
-  width:7px;height:7px;border-radius:50%;border:1px solid var(--bg)}
+  width:7px;height:7px;border-radius:50%;border:1px solid var(--bg0)}
 #feed-loading{display:flex;align-items:center;justify-content:center;gap:10px;
   padding:60px;color:var(--t3);font-size:13px}
 .spin{width:16px;height:16px;border:2px solid rgba(0,180,255,.15);
@@ -231,8 +218,8 @@ button{font-family:var(--sans);cursor:pointer}
 .globe-filter-btn.ai.active,.globe-filter-btn.ai:hover{background:rgba(0,255,170,.12);transform:scale(1.02)}
 .globe-filter-btn.geopolitical{color:var(--red);border-color:rgba(255,51,102,.3)}
 .globe-filter-btn.geopolitical.active,.globe-filter-btn.geopolitical:hover{background:rgba(255,51,102,.12);transform:scale(1.02)}
-.globe-filter-btn.central_bank{color:var(--gold);border-color:rgba(245,166,35,.3)}
-.globe-filter-btn.central_bank.active,.globe-filter-btn.central_bank:hover{background:rgba(245,166,35,.12);transform:scale(1.02)}
+.globe-filter-btn.central_bank{color:var(--gold);border-color:rgba(255,183,3,.3)}
+.globe-filter-btn.central_bank.active,.globe-filter-btn.central_bank:hover{background:rgba(255,183,3,.12);transform:scale(1.02)}
 .globe-filter-btn.macro{color:var(--purple);border-color:rgba(131,56,236,.3)}
 .globe-filter-btn.macro.active,.globe-filter-btn.macro:hover{background:rgba(131,56,236,.12);transform:scale(1.02)}
 .globe-filter-btn.all{color:var(--t2);border-color:var(--t4)}
@@ -240,7 +227,7 @@ button{font-family:var(--sans);cursor:pointer}
 #globe-stats{font-size:10px;color:var(--t3);font-family:var(--mono);margin-left:auto}
 #globe-container{
   flex:1;position:relative;overflow:hidden;
-  background:var(--bg);margin:0 12px 12px 12px;
+  background:var(--bg0);margin:0 12px 12px 12px;
   border:1px solid var(--glass-border);border-radius:var(--radius);
   box-shadow:var(--glass-shadow);
 }
@@ -302,7 +289,7 @@ button{font-family:var(--sans);cursor:pointer}
 .thumb-title{font-size:11px;font-weight:500;color:var(--t1);line-height:1.4;flex:1;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .thumb-time{font-size:9px;color:var(--t3);margin-top:4px;font-family:var(--mono)}
-#player-embed{flex:1;background:var(--bg);overflow:hidden;position:relative}
+#player-embed{flex:1;background:var(--bg0);overflow:hidden;position:relative}
 #player-embed iframe{width:100%;height:100%;border:none}
 #player-empty{display:flex;align-items:center;justify-content:center;
   flex-direction:column;gap:12px;height:100%;color:var(--t3);font-size:13px;text-align:center;padding:30px}
@@ -323,8 +310,8 @@ button{font-family:var(--sans);cursor:pointer}
 
 /* ══ DISCLAIMER BAR ═════════════════════════════════════════════════════════ */
 #disc-bar{
-  padding:6px 20px;background:rgba(245,166,35,.04);
-  border-top:1px solid rgba(245,166,35,.12);
+  padding:6px 20px;background:rgba(255,183,3,.04);
+  border-top:1px solid rgba(255,183,3,.12);
   font-size:9px;color:var(--t3);text-align:center;flex-shrink:0;letter-spacing:.3px;
 }
 
@@ -609,7 +596,7 @@ function renderPagination(total, page, limit) {
 // ── SIGNAL GLOBE ─────────────────────────────────────────────────────────────
 const CAT_COLORS = {
   market: '#00b4ff', ai: '#00ff88', geopolitical: '#ff3b5c',
-  central_bank: '#f5a623', macro: '#9b59ff', ticker: '#8ba3b8',
+  central_bank: '#ffb703', macro: '#9b59ff', ticker: '#8ba3b8',
 };
 function catColor(cat) { return CAT_COLORS[cat] || '#8ba3b8'; }
 
@@ -677,7 +664,7 @@ function renderGlobePoints() {
 const CHANNEL_META = {
   'Bloomberg': { icon: '📊', color: '#00b4ff', desc: 'Bloomberg Markets & Finance' },
   'Yahoo Finance': { icon: '📈', color: '#7b68ee', desc: 'Yahoo Finance Live' },
-  'CNBC': { icon: '📡', color: '#f5a623', desc: 'CNBC Financial News' },
+  'CNBC': { icon: '📡', color: '#ffb703', desc: 'CNBC Financial News' },
 };
 
 async function loadVideoChannels() {

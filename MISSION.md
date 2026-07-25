@@ -48,58 +48,58 @@ Each level unlocks the next. No level is skipped.
 
 ---
 
-### L3 — Predictive Intelligence 🔲
+### L3 — Predictive Intelligence 🔄 (8/9 shipped, re-verified 2026-07-25 against merged code)
 *Anticipates market moves before they happen.*
 
-- Backtesting framework: did Fred's signals predict price? (ground truth loop)
-- Anomaly detection on signal volume spikes (ML-based)
-- Macro regime detection (risk-on/risk-off, inflation/deflation, rate cycles)
-- Earnings surprise prediction from pre-earnings signal patterns
-- Sentiment reversal early warning (bearish→bullish flip detection)
-- Google Trends financial keyword correlation
-- FRED API macro indicators (CPI, PMI, unemployment, yield curve)
-- Commodity futures curve analysis (contango/backwardation)
-- Seasonal pattern recognition (Santa rally, September effect, etc.)
+- ~~Backtesting framework: did Fred's signals predict price? (ground truth loop)~~ — `backtesting_engine.py`
+- ~~Anomaly detection on signal volume spikes (ML-based)~~ — `volume_anomaly.py`, wired in `main.py`. **Known limitation, not yet fixed**: its baseline is grouped off `news_items`, which is pruned on a rolling retention window (`memory_store.py`'s `DELETE FROM news_items WHERE ...`), so the trailing multi-day baseline this needs can structurally never accumulate past that window by waiting alone — a persisted daily-aggregate table is the real fix (tracked in `fredai.md` memory).
+- **Macro regime detection (risk-on/risk-off, inflation/deflation, rate cycles) — the one genuinely unshipped item.** Fully designed and mutually agreed by both agents (2026-07-09), blocked purely on required user `risk:high` go/no-go (issue #103). Nothing left to do on the agent side.
+- ~~Earnings surprise prediction from pre-earnings signal patterns~~ — `earnings_predictor.py`
+- ~~Sentiment reversal early warning (bearish→bullish flip detection)~~ — `reversal_detector.py`
+- ~~Google Trends financial keyword correlation~~ — `trends_client.py`
+- ~~FRED API macro indicators (CPI, PMI, unemployment, yield curve)~~ — 101 macro badges wired in `main.py` (`scripts/list_macro_badges.py`)
+- ~~Commodity futures curve analysis (contango/backwardation)~~ — `COMMODITY_CURVE` badge
+- ~~Seasonal pattern recognition (Santa rally, September effect, etc.)~~ — `seasonality_engine.py`
 
 **Unlocks:** Fred predicts. Now Fred needs to *reason* about why.
 
 ---
 
-### L4 — Reasoning Intelligence 🔲
+### L4 — Reasoning Intelligence 🔄 (near-complete, re-verified 2026-07-25 against merged code)
 *Understands causation, not just correlation.*
 
-- Multi-agent market debate (Bull Agent vs Bear Agent, synthesised by Arbiter)
-- Causal attribution ("BTC fell because: Fed minutes + CPI surprise, not crypto-native")
-- Hypothesis testing loop (Fred proposes thesis → tests against history → updates)
-- SEC 10-K / 10-Q deep analysis (EDGAR full-text, automated financial ratio extraction)
-- 13F institutional positioning (what are Berkshire, Renaissance, Bridgewater holding?)
-- Options chain visualisation (put/call ratio, IV surface, max pain)
-- Credit default swap spread monitoring
-- Central bank language semantic analysis (Fed/RBA/ECB statement deltas)
-- Portfolio VaR, Sharpe, max drawdown, Kelly criterion sizing
+- ~~Multi-agent market debate (Bull Agent vs Bear Agent, synthesised by Arbiter)~~ — `market_debate.py` (extended to a 4-role Bull/Bear/Risk Officer/PM committee, "Research Desk")
+- ~~Causal attribution ("BTC fell because: Fed minutes + CPI surprise, not crypto-native")~~ — `causal_attribution.py`
+- ~~Hypothesis testing loop (Fred proposes thesis → tests against history → updates)~~ — `thesis_tracker.py`
+- ~~SEC 10-K / 10-Q deep analysis (EDGAR full-text, automated financial ratio extraction)~~ — `filing_intel.py`
+- ~~13F institutional positioning (what are Berkshire, Renaissance, Bridgewater holding?)~~ — `sec_13f_client.py` (current-holdings fetch; see L5 note below on delta tracking specifically)
+- ~~Options chain visualisation (put/call ratio, IV surface, max pain)~~ — `options_data_client.py`
+- **Credit default swap spread monitoring — permanently rejected, not a gap to re-probe.** No free/keyless source exists (Bloomberg/Markit-gated), confirmed via feasibility probe.
+- ~~Central bank language semantic analysis (Fed/RBA/ECB statement deltas)~~ — `central_bank_client.py`
+- ~~Portfolio VaR, Sharpe, max drawdown, Kelly criterion sizing~~ — `portfolio_risk.py`
 
 **Unlocks:** Fred reasons. Now Fred needs a model of the whole world.
 
 ---
 
-### L5 — World Model Intelligence 🔲
+### L5 — World Model Intelligence 🔄 (near-complete, re-verified 2026-07-25 against merged code)
 *Maintains a living model of the global financial system.*
 
-- Cross-market contagion tracking (when EM debt moves, what follows?)
-- Alternative data: satellite imagery (shipping, retail carpark occupancy)
-- Alternative data: job listing trends (company hiring = growth signal)
-- Alternative data: patent filings, GitHub commit velocity
-- Private fine-tuned financial LLM (trained on signal history + outcomes)
-- Multi-agent swarm: specialised agents per sector (Tech, Energy, Financials, Macro)
-- Geopolitical risk scoring (news clustering by conflict zone, sanctions)
-- Supply chain stress indicators (Baltic Dry Index, container shipping rates)
-- Real-time 13F delta tracking (what changed vs last quarter)
+- ~~Cross-market contagion tracking (when EM debt moves, what follows?)~~ — `cross_market_contagion.py`
+- **Alternative data: satellite imagery — permanently rejected**, no free source.
+- ~~Alternative data: job listing trends (company hiring = growth signal)~~ — `job_listings_client.py`
+- **Alternative data: patent filings, GitHub commit velocity — rejected**, needs a registered/paid key, not currently pursued.
+- **Private fine-tuned financial LLM — out of scope by design** (compute/hosting requirements conflict with the "runs on a Raspberry Pi" mission principle).
+- ~~Multi-agent swarm: specialised agents per sector (Tech, Energy, Financials, Macro)~~ — `sector_specialist.py`
+- ~~Geopolitical risk scoring (news clustering by conflict zone, sanctions)~~ — `GEOPOLITICAL_RISK` badge
+- ~~Supply chain stress indicators (Baltic Dry Index, container shipping rates)~~ — `GSCPI`/`TSI_FREIGHT` badges
+- **Real-time 13F delta tracking (what changed vs last quarter) — partially shipped.** `sec_13f_client.py` fetches current-quarter holdings only; no diff-vs-prior-quarter logic exists yet. Genuine remaining gap, not just an unmerged dependency.
 
 **Unlocks:** Fred has a world model. Now Fred directs its own research.
 
 ---
 
-### L6 — Super Intelligence 🔲
+### L6 — Super Intelligence 🔲 (genuinely early — re-verified 2026-07-25)
 *Self-directing. Discovers edges before consensus forms.*
 
 - Autonomous research agenda: Fred decides what to study next without prompting
@@ -115,7 +115,7 @@ Each level unlocks the next. No level is skipped.
 
 ## Current Level Assessment
 
-**We are at: L1 complete → L2 in active development**
+**We are at: L1 complete, L2 complete, L3/L4/L5 near-complete (each has 0-1 genuine gaps, detailed above — mostly blocked on a user decision or a rejected-infeasible data source, not open agent work) → L6 is the real frontier.** Re-verified 2026-07-25 against actually-merged code (`git log origin/main`, `scripts/mission_coverage_check.py`), not issue-close counts, after a large batch-merge session landed dozens of previously-unmerged PRs.
 
 ### L1 Completion checklist
 - [x] X/Twitter signal scraping
@@ -208,4 +208,4 @@ To capture both the institutional depth of top-tier quants (Goldman Sachs, Citad
 3. ~~**Advanced Risk and Portfolio Sizing (L3/L4)**: Implement Kelly Criterion and Sharpe ratio tracking in the portfolio module.~~ — `portfolio_risk.py`
 4. ~~**SEC EDGAR Insider Trading Parser (L2/L4)**: Automate parsing of Form 4 filings for immediate ticker alerting.~~ — insider Form 4 parsing wired in `main.py`
 
-See `fredai.md` memory's "FSI Mission-Progress Reality Check" for the current L1-L6 state — this doc's L1-L6 roadmap section above (lines 19-113) still uses its original 🔲/🔄 markers from early in the project and is due a fuller pass; not attempted in this cycle to keep this change docs-only and low-risk.
+The L1-L6 roadmap section above (lines 19-113) had its markers and per-item checklists refreshed 2026-07-25 against actually-merged code (see each level's header for date + evidence). See `fredai.md` memory's "FSI Mission-Progress Reality Check" for narrative history of how this state was reached.

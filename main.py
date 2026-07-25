@@ -4902,6 +4902,15 @@ if __name__ == "__main__":
         finally:
             _rnd_lock.release()
 
+    def job_db_backup():
+        """Hourly sentinel.db snapshot — see db_backup.py docstring for the incident history this closes."""
+        from db_backup import backup_db
+        path = backup_db()
+        if path:
+            print(f"[DBBackup] Snapshot written: {path}")
+        else:
+            print("[DBBackup] Snapshot failed — see prior log line")
+
     def job_prune():
         """Data retention enforcement — GDPR Art.5 / APP 11.2 data minimisation."""
         from config import DATA_RETENTION_DAYS
@@ -5504,6 +5513,7 @@ if __name__ == "__main__":
     scheduler.add_job(job_rnd, "interval", hours=6, id="rnd")
     scheduler.add_job(job_gemini_rnd, "interval", hours=6, id="gemini_rnd", jitter=1800)
     scheduler.add_job(job_prune, "cron", hour=2, minute=0, id="prune")
+    scheduler.add_job(job_db_backup, "interval", hours=1, id="db_backup", jitter=60)
     scheduler.add_job(job_news_refresh, "interval", minutes=30, id="news")
     scheduler.add_job(job_calendar_refresh, "cron", hour=6, minute=0, id="calendar")
     scheduler.add_job(job_reddit_refresh, "interval", hours=1, id="reddit", jitter=120)

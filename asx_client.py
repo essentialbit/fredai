@@ -109,10 +109,20 @@ AU_NEWS_FEEDS = [
 ]
 
 
+# Hard wall-clock budget for a single fetch_asx_quotes() call. The scheduled
+# job runs every 120s (main.py's "asx" job) — staying well under that even
+# in the worst case (slow/rate-limited responses across ~40 tickers) keeps
+# the job from overrunning its own interval and getting skipped by
+# APScheduler ("maximum number of running instances reached").
+_FETCH_BUDGET_SECONDS = 90
+
+
 def fetch_asx_quotes(symbols: list[str] = None) -> dict:
     """
     Fetch live quotes for ASX tickers via Yahoo Finance v8 API.
-    Returns dict keyed by symbol, with 'currency': 'AUD'.
+    Returns dict keyed by symbol, with 'currency': 'AUD'. Stops early (partial
+    results) if the fetch is running long, rather than risking an overrun of
+    the scheduled job's own interval.
     """
     from market_data import _yf_is_blocked
     if _yf_is_blocked():
@@ -120,7 +130,13 @@ def fetch_asx_quotes(symbols: list[str] = None) -> dict:
         return {}
     symbols = symbols or list(ASX_TICKERS.keys())
     results = {}
-    for sym in symbols:
+    start = time.monotonic()
+    for i, sym in enumerate(symbols):
+        if time.monotonic() - start > _FETCH_BUDGET_SECONDS:
+            print(f"[ASX] Fetch budget ({_FETCH_BUDGET_SECONDS}s) exceeded — "
+                  f"stopping early with {len(results)}/{len(symbols)} quotes "
+                  f"({len(symbols) - i} skipped this cycle)")
+            break
         try:
             time.sleep(0.35)
             data = _yf_chart(sym)

@@ -301,11 +301,13 @@ def apply_update(restart: bool = True) -> dict:
 
 def status() -> dict:
     from config import PORT
+    from port_utils import current_port
+    port = current_port(PORT)
     return {
         "local_sha": _local_sha(),
         "last_remote_sha": _last_remote_sha,
         "last_check": _last_check.isoformat() if _last_check else None,
         "auto_update_mode": os.getenv("AUTO_UPDATE", "notify"),
         "repo_dir": str(REPO_DIR),
-        "reachable": _health_check(PORT, retries=1, delay=0),
+        "reachable": _health_check(port, retries=1, delay=0),
     }

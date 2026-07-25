@@ -27,7 +27,16 @@ STATIC_ICONS = BASE_DIR / "static" / "icons"
 # Bump whenever a generator function's launcher-script content changes in a way
 # that existing installs should pick up (e.g. the check-if-running/auto-start
 # logic added here) — see needs_install().
-INSTALLER_VERSION = "2"
+# v4: launcher scripts no longer hardcode the port (resolved fresh on every
+# launch from data/.runtime_port.json, written by main.py's dynamic
+# find_free_port() at startup, so a shortcut created today keeps working
+# after the server gets reassigned to a different port on some future run)
+# AND verify actual FredAI identity via the page title, not just port
+# occupancy (bumped again from "3", which PR #411 already used for the
+# identity-check-only fix -- this version also needs a re-install for
+# the port-resolution behavior, so it can't reuse the same number).
+INSTALLER_VERSION = "4"
+RUNTIME_PORT_FILE_NAME = "data/.runtime_port.json"
 
 
 # ── Result type ───────────────────────────────────────────────────────────────
@@ -145,7 +154,6 @@ def _icon(size: int, ext: str = "png") -> str | None:
 def _install_macos(port: int = 8080) -> InstallResult:
     actions: list[str] = []
     warnings: list[str] = []
-    url = f"http://localhost:{port}"
 
     app_path = Path("/Applications/FredAI.app")
     app_contents = app_path / "Contents"
@@ -165,17 +173,30 @@ def _install_macos(port: int = 8080) -> InstallResult:
         app_resources.mkdir(parents=True, exist_ok=True)
         warnings.append(f"No /Applications write access — installed to {app_path}")
 
-    # Executable shell script
+    # Executable shell script — resolves the live port fresh on every launch
+    # instead of trusting the port this shortcut happened to be created for.
     exe = app_macos / "fredai"
     exe.write_text(textwrap.dedent(f"""\
         #!/bin/bash
         # FREDAI_INSTALLER_VERSION={INSTALLER_VERSION}
-        if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
-            cd "{BASE_DIR}"
+        cd "{BASE_DIR}"
+        PORT_FILE="{BASE_DIR}/{RUNTIME_PORT_FILE_NAME}"
+        get_port() {{
+            python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['port'])" "$PORT_FILE" 2>/dev/null
+        }}
+        is_fredai() {{
+            curl -s -m 2 "http://localhost:$1/" 2>/dev/null | grep -q "<title>FredAI"
+        }}
+        LIVE_PORT="$(get_port)"
+        if [ -z "$LIVE_PORT" ] || ! is_fredai "$LIVE_PORT"; then
             ./venv/bin/python3 main.py >/dev/null 2>&1 &
-            sleep 3
+            for i in $(seq 1 30); do
+                sleep 1
+                LIVE_PORT="$(get_port)"
+                [ -n "$LIVE_PORT" ] && is_fredai "$LIVE_PORT" && break
+            done
         fi
-        open "{url}"
+        open "http://localhost:${{LIVE_PORT:-{port}}}"
     """))
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
@@ -257,23 +278,38 @@ def _install_macos(port: int = 8080) -> InstallResult:
 def _install_windows(port: int = 8080) -> InstallResult:
     actions: list[str] = []
     warnings: list[str] = []
-    url = f"http://localhost:{port}"
 
     startup_script = BASE_DIR / "FredAI-Start.bat"
     icon_path = _icon(256) or str(ICONS_DIR / "windows-256.ico")
+    port_file = BASE_DIR / RUNTIME_PORT_FILE_NAME
 
     try:
-        # Write FredAI-Start.bat
+        # Write FredAI-Start.bat — resolves the live port fresh on every
+        # launch from data/.runtime_port.json instead of the port this
+        # shortcut happened to be created for.
         startup_script.write_text(textwrap.dedent(f"""\
             @echo off
+            setlocal enabledelayedexpansion
             rem FREDAI_INSTALLER_VERSION={INSTALLER_VERSION}
             cd /d "{BASE_DIR}"
-            netstat -ano | findstr LISTENING | findstr :{port} >nul
-            if %errorlevel% neq 0 (
-                start "" "venv\\Scripts\\python.exe" main.py
-                timeout /t 3 >nul
+            set "PORT_FILE={port_file}"
+            set "PYEXE=venv\\Scripts\\python.exe"
+            for /f "usebackq delims=" %%P in (`"%PYEXE%" -c "import json;print(json.load(open(r'%PORT_FILE%'))['port'])" 2^>nul`) do set "LIVE_PORT=%%P"
+            if not defined LIVE_PORT set "LIVE_PORT={port}"
+            curl -s -m 2 "http://localhost:!LIVE_PORT!/" 2>nul | findstr /C:"<title>FredAI" >nul
+            if errorlevel 1 (
+                start "" "%PYEXE%" main.py
+                for /l %%i in (1,1,20) do (
+                    timeout /t 1 >nul
+                    set "LIVE_PORT="
+                    for /f "usebackq delims=" %%P in (`"%PYEXE%" -c "import json;print(json.load(open(r'%PORT_FILE%'))['port'])" 2^>nul`) do set "LIVE_PORT=%%P"
+                    if defined LIVE_PORT (
+                        curl -s -m 2 "http://localhost:!LIVE_PORT!/" 2>nul | findstr /C:"<title>FredAI" >nul && goto :ready
+                    )
+                )
+                :ready
             )
-            start "" "{url}"
+            start "" "http://localhost:!LIVE_PORT!"
         """))
         actions.append(f"Created/updated startup script: {startup_script}")
     except Exception as e:
@@ -334,21 +370,35 @@ def _install_windows(port: int = 8080) -> InstallResult:
 def _install_linux(device: dict, port: int = 8080) -> InstallResult:
     actions: list[str] = []
     warnings: list[str] = []
-    url = f"http://localhost:{port}"
 
     icon_path = _icon(256) or _icon(128) or _icon(512) or str(ASSETS_DIR / "fredai-icon.svg")
 
     launcher_path = BASE_DIR / "fredai-launcher.sh"
     try:
+        # Resolves the live port fresh on every launch from
+        # data/.runtime_port.json instead of the port this shortcut happened
+        # to be created for.
         launcher_path.write_text(textwrap.dedent(f"""\
             #!/bin/bash
             # FREDAI_INSTALLER_VERSION={INSTALLER_VERSION}
-            if ! nc -z 127.0.0.1 {port} >/dev/null 2>&1; then
-                cd "{BASE_DIR}"
+            cd "{BASE_DIR}"
+            PORT_FILE="{BASE_DIR}/{RUNTIME_PORT_FILE_NAME}"
+            get_port() {{
+                python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['port'])" "$PORT_FILE" 2>/dev/null
+            }}
+            is_fredai() {{
+                curl -s -m 2 "http://localhost:$1/" 2>/dev/null | grep -q "<title>FredAI"
+            }}
+            LIVE_PORT="$(get_port)"
+            if [ -z "$LIVE_PORT" ] || ! is_fredai "$LIVE_PORT"; then
                 ./venv/bin/python3 main.py >/dev/null 2>&1 &
-                sleep 3
+                for i in $(seq 1 30); do
+                    sleep 1
+                    LIVE_PORT="$(get_port)"
+                    [ -n "$LIVE_PORT" ] && is_fredai "$LIVE_PORT" && break
+                done
             fi
-            xdg-open "{url}"
+            xdg-open "http://localhost:${{LIVE_PORT:-{port}}}"
         """))
         launcher_path.chmod(launcher_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
         actions.append(f"Created Linux launcher script: {launcher_path}")

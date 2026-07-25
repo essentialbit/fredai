@@ -148,6 +148,37 @@ def _beta(port: list[float], bench: list[float]) -> float | None:
     return cov / var_b
 
 
+def kelly_fraction(returns: list[float]) -> dict | None:
+    """Classic Kelly fraction f* = W - (1-W)/R, W = historical win rate,
+    R = avg-win/avg-loss size ratio, both derived from the same per-position
+    daily-return sample used for VaR/Sharpe above. Half-Kelly is the number
+    worth acting on (full Kelly is well-known to be too aggressive for real
+    capital) but both are returned — never hide the fuller number (Principle
+    #7). Returns None below MIN_DAYS, or when the sample has no realized win
+    or loss at all, rather than fabricate a sizing number off too few points.
+    """
+    if len(returns) < MIN_DAYS:
+        return None
+    wins = [r for r in returns if r > 0]
+    losses = [r for r in returns if r < 0]
+    if not wins or not losses:
+        return None
+    win_rate = len(wins) / len(returns)
+    avg_win = _mean(wins)
+    avg_loss = abs(_mean(losses))
+    if avg_loss == 0:
+        return None
+    ratio = avg_win / avg_loss
+    full = win_rate - (1.0 - win_rate) / ratio
+    return {
+        "full_kelly_pct": round(full * 100, 2),
+        "half_kelly_pct": round(full * 50, 2),
+        "win_rate_pct": round(win_rate * 100, 1),
+        "win_loss_ratio": round(ratio, 2),
+        "sample_size": len(returns),
+    }
+
+
 def compute_portfolio_risk(positions: list[dict], total_value: float | None = None) -> dict:
     """positions: [{symbol, value, ...}] as produced by calculate_portfolio_value.
 
@@ -216,6 +247,10 @@ def compute_portfolio_risk(positions: list[dict], total_value: float | None = No
             _beta(port_returns, bench_returns)
         ),
         "benchmark": BENCHMARK,
+        "positions": [
+            {"symbol": sym, "kelly": kelly_fraction(per_symbol[sym])}
+            for sym in per_symbol
+        ],
     }
 
     key = tuple(sorted((p["symbol"], round(p["value"], 2)) for p in positions))

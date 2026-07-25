@@ -24,23 +24,22 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.67
-- fix: insider cluster detection counted raw transactions, not distinct insiders
+### FredAI v1.3.108
+- feat: Median Sales Price of Houses Sold macro badge (closes #464) (#465)
+- docs: sync README changelog to v1.3.107 (#467)
 
-### FredAI v1.3.66
-- fix: same-day timestamp comparison bug in 7 memory_store query functions
-- docs: sync README changelog to v1.3.65 (#241)
+### FredAI v1.3.107
+- fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
+- docs: sync README changelog to v1.3.106 (#463)
 
-### FredAI v1.3.65
-- docs: sync README changelog to v1.3.63 (#196)
-- feat: sector rotation / relative-strength ranking (closes #159)
+### FredAI v1.3.106
+- feat: Durable Goods New Orders (FRED DGORDER) macro badge (#289)
 
-### FredAI v1.3.64
-- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
+### FredAI v1.3.105
+- feat: Moody's Baa/10Y credit spread (BAA10Y) macro badge (#286)
 
-### FredAI v1.3.63
-- feat: pro chart workspace -- Cmd+K palette, comparison overlays, saved layouts (closes #109)
-- feat: Copper/Gold ratio "Dr. Copper" cross-asset regime signal (closes #176)
+### FredAI v1.3.104
+- feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
 
 <!-- CHANGELOG_END -->
 
@@ -701,6 +700,7 @@ Fred chat is in the bottom-right of every page. Fred knows:
 - Your watchlist and interests
 - The latest signals and market briefing
 - Real-time prices
+- His own history — past signals, briefings, debates, filings, and vault notes, retrieved and cited via **Fred Recall** (see below)
 
 **Questions that work well:**
 - *"What's happening with NVDA today?"*
@@ -712,6 +712,41 @@ Fred chat is in the bottom-right of every page. Fred knows:
 - *"Summarise the last 24 hours of market news"*
 
 Fred remembers your preferences and portfolio within a session. The more you tell him about your investing style, the better his answers become.
+
+---
+
+### Fred Recall (RAG)
+
+Fred grounds his own answers in his accumulated intelligence — not just live prices and today's signals, but every past signal, briefing, adversarial debate, insider filing, and vault note he's ever collected.
+
+**How it works:**
+```
+news / signals / briefings / debates / insider filings / vault notes
+                          │  (indexed at write time — FTS5 always,
+                          │   embedding happens async, never on a
+                          │   hot path)
+                          ▼
+                    rag_chunks (SQLite + FTS5 rag_fts)
+                          │
+        ┌─────────────────┴─────────────────┐
+        │ BM25 full-text search              │ cosine similarity over
+        │ (always available)                 │ local embeddings (Ollama
+        │                                     │ nomic-embed-text, optional)
+        └─────────────────┬─────────────────┘
+                Reciprocal Rank Fusion
+              + recency decay + ticker boost
+                          │
+                          ▼
+        chat() / generate_summary() context,
+        GET /api/recall?q=, dashboard "Ask
+        Fred's Memory" panel — every result
+        cited as [source · title · date]
+```
+
+- **SQLite-only** — no external vector database. Embeddings, when available, are stored as JSON inside `sentinel.db`.
+- **Graceful degradation** — no local Ollama running → retrieval falls back to full-text search only; empty index → chat and briefings behave exactly as before Fred Recall existed. Retrieval never blocks or fails a chat response.
+- **Privacy** — retrieval is scoped per user: global content (news, market-wide signals, debates) plus *only that user's own* rows (personal thesis notes, entity evidence). Enforced at the storage layer, not left to callers.
+- **Where it shows up**: every chat answer and 4-hour briefing that references Fred's own history cites it inline; the dashboard's "Ask Fred's Memory" panel lets you search it directly.
 
 ---
 

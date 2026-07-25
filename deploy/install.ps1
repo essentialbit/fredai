@@ -221,7 +221,7 @@ $startupScript = "$InstallDir\FredAI-Start.bat"
 @"
 @echo off
 cd /d "$InstallDir"
-netstat -ano | findstr LISTENING | findstr :$Port >nul
+curl -s -m 2 "http://localhost:$Port/" 2>nul | findstr /C:"<title>FredAI" >nul
 if %errorlevel% neq 0 (
     start "" "$VenvDir\Scripts\python.exe" main.py
     timeout /t 3 >nul

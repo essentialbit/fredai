@@ -24,22 +24,20 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.108
-- feat: Median Sales Price of Houses Sold macro badge (closes #464) (#465)
-- docs: sync README changelog to v1.3.107 (#467)
+### FredAI v1.3.212
+- chore: add multi-agent orchestration layer (#502)
 
-### FredAI v1.3.107
-- fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
-- docs: sync README changelog to v1.3.106 (#463)
+### FredAI v1.3.211
+- feat: divergence radar — cross-asset disagreement detection with honest historical base rates (#499)
 
-### FredAI v1.3.106
-- feat: Durable Goods New Orders (FRED DGORDER) macro badge (#289)
+### FredAI v1.3.210
+- feat: counterfactual P&L — honest simulated equity curve of Fred's signals incl. drawdowns, costs, and per-source attribution (#498)
 
-### FredAI v1.3.105
-- feat: Moody's Baa/10Y credit spread (BAA10Y) macro badge (#286)
+### FredAI v1.3.209
+- fix: resolve api_credit_spread route collision crashing app on startup (#497)
 
-### FredAI v1.3.104
-- feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
+### FredAI v1.3.208
+- feat: adversarial research desk — Bull/Bear/Risk/PM committee with conviction-rated, track-record-accountable verdicts
 
 <!-- CHANGELOG_END -->
 

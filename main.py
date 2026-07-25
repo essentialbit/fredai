@@ -107,7 +107,7 @@ from continuing_claims_client import get_continuing_claims
 from jolts_openings_client import get_jolts_openings
 from retail_sales_client import get_retail_sales
 from durable_goods_client import get_durable_goods_orders
-from credit_spread_client import get_credit_spread
+from credit_spread_client import get_baa10y_credit_spread
 from core_pce_client import get_core_pce
 from industrial_production_client import get_industrial_production
 from fed_funds_futures_client import get_fed_funds_expectations
@@ -1232,14 +1232,81 @@ def api_calibration():
     return jsonify(get_calibration_report())
 
 
+@app.route("/api/counterfactual")
+@login_required
+def api_counterfactual():
+    """Fred's Accountability (FSI L3): honest simulated equity curve of
+    'what if you had traded on Fred's signals', per source, drawdowns and
+    costs included. Hypothetical simulation, not advice -- see
+    counterfactual_pnl.py's always-visible methodology disclosure."""
+    from counterfactual_pnl import get_counterfactual_report
+    return jsonify(get_counterfactual_report())
+
+
+@app.route("/api/divergences")
+@login_required
+def api_divergences():
+    """Divergence Radar (FSI L2): current per-pair spread + active/past
+    episodes with honest historical resolution stats (n included, even when
+    small). See divergence_radar.py's curated pair registry and rationale
+    per pair."""
+    from divergence_radar import (
+        PAIR_REGISTRY, compute_pair_spread, historical_resolution_stats,
+    )
+    from memory_store import get_divergence_events
+
+    pairs = {}
+    for key, pair in PAIR_REGISTRY.items():
+        spread_result = compute_pair_spread(key)
+        events = get_divergence_events(key)
+        pairs[key] = {
+            "label": pair["label"],
+            "rationale": pair["rationale"],
+            "leg_a_name": pair["leg_a"][0], "leg_b_name": pair["leg_b"][0],
+            "current_spread": (list(spread_result["spread"].items())[-1][1]
+                                if spread_result and spread_result["spread"] else None),
+            "spread_series": (sorted(spread_result["spread"].items())[-90:]
+                               if spread_result else []),
+            "stale": spread_result["stale"] if spread_result else True,
+            "active_events": [e for e in events if e["resolved_at"] is None],
+            "resolution_stats": historical_resolution_stats(key),
+        }
+    return jsonify({"pairs": pairs})
+
+
+_desk_refresh_attempts: dict = {}   # user_id -> [timestamps]
+_DESK_REFRESH_WINDOW = 3600          # 1-hour rolling window
+_DESK_REFRESH_MAX = 5                # max force-refresh committee runs per user per window
+
+
+def _check_desk_refresh_rate_limit(user_id: int) -> bool:
+    """Same sliding-window pattern as _check_rate_limit (login), keyed on
+    user_id instead of IP -- gates the EXPENSIVE path only (force_refresh),
+    since normal cached reads already cost nothing extra. Cost control is a
+    first-class requirement for the Research Desk committee (4 LLM calls
+    per run), not an afterthought."""
+    now = _time.time()
+    attempts = [t for t in _desk_refresh_attempts.get(user_id, []) if now - t < _DESK_REFRESH_WINDOW]
+    if len(attempts) >= _DESK_REFRESH_MAX:
+        _desk_refresh_attempts[user_id] = attempts
+        return False
+    attempts.append(now)
+    _desk_refresh_attempts[user_id] = attempts
+    return True
+
+
 @app.route("/api/market-debate/<ticker>")
 @login_required
 def api_market_debate(ticker):
-    """Bull/Bear/Arbiter thesis synthesis (FSI L4) over a single asset's
-    already-computed signals -- cached per ticker/day. ?refresh=1 forces
-    a fresh debate instead of serving today's cached one."""
+    """Bull/Bear/Risk Officer/PM Research Desk committee (FSI L4) over a
+    single asset's already-computed signals -- cached per ticker/day.
+    ?refresh=1 forces a fresh committee run instead of serving today's
+    cached one, rate-limited per user (see _check_desk_refresh_rate_limit)
+    since a forced run costs real LLM tokens across 4 roles."""
     from market_debate import get_market_debate_for
     force_refresh = request.args.get("refresh") == "1"
+    if force_refresh and not _check_desk_refresh_rate_limit(session["user_id"]):
+        return jsonify({"error": "Too many forced Research Desk refreshes this hour — try again later, or view the cached result."}), 429
     result = get_market_debate_for(ticker.upper(), force_refresh=force_refresh)
     return jsonify(result)
 
@@ -2682,12 +2749,12 @@ def api_durable_goods():
     """Durable Goods New Orders (FRED DGORDER) -- forward-looking business
     capex signal (FSI L2) -- cached 1h, see durable_goods_client.py."""
     return jsonify(get_durable_goods_orders() or {})
-@app.route("/api/credit-spread")
+@app.route("/api/credit-spread-baa10y")
 @login_required
-def api_credit_spread():
+def api_credit_spread_baa10y():
     """Moody's Baa Corporate Yield Spread (BAA10Y) -- investment-grade
     credit stress gauge (FSI L3) -- cached 1h, see credit_spread_client.py."""
-    return jsonify(get_credit_spread() or {})
+    return jsonify(get_baa10y_credit_spread() or {})
 @app.route("/api/core-pce")
 @login_required
 def api_core_pce():
@@ -4160,13 +4227,13 @@ def job_market_refresh():
             print(f"[Job] durable_goods_client error: {e}")
         # Moody's Baa/10Y credit spread -- investment-grade credit stress (cached 1h in credit_spread_client.py)
         try:
-            cs = get_credit_spread()
+            cs = get_baa10y_credit_spread()
             if cs:
-                _macro_cache = {**_macro_cache, "CREDIT_SPREAD": {
+                _macro_cache = {**_macro_cache, "BAA10Y_SPREAD": {
                     "label": "Baa-10Y", "value": cs["latest"], "rating": cs["regime"],
                 }}
         except Exception as e:
-            print(f"[Job] credit_spread error: {e}")
+            print(f"[Job] credit_spread_client error: {e}")
         # Core PCE Price Index -- Fed's actual inflation-target gauge (cached 1h in core_pce_client.py)
         try:
             pce = get_core_pce()
@@ -5084,6 +5151,72 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"[Calibration] Refresh error: {e}")
 
+    def job_counterfactual_refresh():
+        """Nightly honest equity-curve simulation of Fred's own signals
+        (FSI L3 accountability) -- see counterfactual_pnl.py's methodology
+        disclosure. Re-fetches ~1y of daily closes per traded asset (cached
+        12h by portfolio_risk._daily_closes), so this belongs on the
+        scheduler, not a page-load path."""
+        try:
+            from counterfactual_pnl import job_counterfactual_refresh as _run
+            _run()
+            print("[Counterfactual] Refreshed")
+        except Exception as e:
+            print(f"[Counterfactual] Refresh error: {e}")
+
+    def job_divergence_radar_refresh():
+        """Daily cross-asset disagreement scan (FSI L2) -- see
+        divergence_radar.py's curated pair registry. Newly triggered/resolved
+        episodes become trackable signals(source='divergence') and push
+        through the existing alert pipeline; a stale/dead feed degrades that
+        one pair only, never the whole run (hard constraint)."""
+        try:
+            from divergence_radar import run_daily_divergence_scan, PAIR_REGISTRY
+            from memory_store import insert_signal
+            result = run_daily_divergence_scan()
+            for e in result["triggered"]:
+                label = PAIR_REGISTRY[e["pair"]]["label"]
+                msg = (f"{label}: {e['direction']} divergence, z={e['initial_trigger_z']:.2f}, "
+                       f"started {e['started_at']}")
+                insert_signal(source="divergence", asset=e["pair"], content=msg,
+                               signal_type="neutral", metadata={"direction": e["direction"],
+                                                                 "z": e["initial_trigger_z"]})
+                insert_alert("warning", f"Divergence: {label}", msg)
+                socketio.emit("alert", {"level": "warning", "title": f"Divergence: {label}",
+                                         "message": msg, "timestamp": datetime.utcnow().isoformat()})
+            for e in result["resolved"]:
+                label = PAIR_REGISTRY[e["pair"]]["label"]
+                msg = (f"{label}: divergence resolved ({e['resolution_type']}, "
+                       f"{e['days_active']}d, resolved by {e['resolved_by']})")
+                insert_alert("info", f"Divergence resolved: {label}", msg)
+                socketio.emit("alert", {"level": "info", "title": f"Divergence resolved: {label}",
+                                         "message": msg, "timestamp": datetime.utcnow().isoformat()})
+            print(f"[DivergenceRadar] Refreshed — {len(result['triggered'])} triggered, "
+                  f"{len(result['resolved'])} resolved, stale: {result['stale_pairs'] or 'none'}")
+        except Exception as e:
+            print(f"[DivergenceRadar] Refresh error: {e}")
+
+    def job_research_desk_top_movers():
+        """Daily Research Desk committee run for the top 2 conviction
+        movers by signal volume (FSI L4) -- the HARD CONSTRAINT's own cost
+        ceiling for automatic (non-user-triggered) committee runs. Respects
+        the existing per-ticker/day cache: a ticker already debated today
+        (e.g. by a user manually opening its Research Desk tab) costs
+        nothing extra here."""
+        try:
+            from market_debate import get_market_debate_for
+            trending = get_trending_assets(hours=24, limit=2)
+            for t in trending:
+                ticker = t.get("asset")
+                if not ticker:
+                    continue
+                result = get_market_debate_for(ticker)
+                print(f"[ResearchDesk] Top-mover run for {ticker} — "
+                      f"direction={result.get('direction')}, conviction={result.get('conviction')}, "
+                      f"cached={result.get('cached')}")
+        except Exception as e:
+            print(f"[ResearchDesk] Top-movers job error: {e}")
+
     def job_thesis_auto_evidence():
         """Nightly Fred Recall auto-evidence loop for every active thesis
         (FSI L4 thesis tracker) -- retrieves fresh candidate evidence,
@@ -5179,7 +5312,10 @@ if __name__ == "__main__":
     scheduler.add_job(job_agent_debate, "interval", hours=6, id="agent_debate", jitter=900)
     scheduler.add_job(job_backtest_check, "interval", minutes=30, id="backtest_check")
     scheduler.add_job(job_calibration_refresh, "cron", hour=3, minute=30, id="calibration_refresh")
+    scheduler.add_job(job_counterfactual_refresh, "cron", hour=3, minute=45, id="counterfactual_refresh")
     scheduler.add_job(job_thesis_auto_evidence, "cron", hour=4, minute=0, id="thesis_auto_evidence")
+    scheduler.add_job(job_divergence_radar_refresh, "cron", hour=4, minute=15, id="divergence_radar")
+    scheduler.add_job(job_research_desk_top_movers, "cron", hour=6, minute=0, id="research_desk_top_movers")
     scheduler.add_job(job_filing_intel_refresh, "cron", hour=5, minute=0, id="filing_intel")
     scheduler.add_job(job_correlation_refresh, "interval", hours=6, id="correlation", jitter=1200)
     scheduler.add_job(job_confluence_refresh, "interval", hours=6, id="confluence", jitter=1500)

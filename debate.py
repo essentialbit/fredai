@@ -19,7 +19,14 @@ load_dotenv()  # Ensure .env is parsed into os.environ before community.py loads
 
 from community import _gh_get, _gh_post, GITHUB_REPO
 from github_sync import get_open_proposal_issues, _ensure_label
-from memory_store import get_track_record
+from memory_store import (
+    get_track_record,
+    is_provider_backed_off,
+    record_provider_failure,
+    record_provider_success,
+)
+
+_BACKOFF_WINDOW_MINUTES = 60
 
 
 _STANCE_MARKER = re.compile(r"<!--fredai:stance:(claude|gemini)-->")
@@ -77,6 +84,9 @@ def _parse_stance(text: str) -> dict | None:
 
 
 def _get_stance_claude(body: str) -> dict | None:
+    if is_provider_backed_off("claude", _BACKOFF_WINDOW_MINUTES):
+        return None
+
     import anthropic
     from config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL_SUMMARY
     if ANTHROPIC_API_KEY and not ANTHROPIC_API_KEY.startswith("your_"):
@@ -88,6 +98,7 @@ def _get_stance_claude(body: str) -> dict | None:
             )
             parsed = _parse_stance(resp.content[0].text)
             if parsed:
+                record_provider_success("claude")
                 return parsed
         except Exception as e:
             print(f"[Debate] Claude stance API error: {e}")
@@ -108,13 +119,19 @@ def _get_stance_claude(body: str) -> dict | None:
             parsed = _parse_stance(text)
             if parsed:
                 print(f"[Debate] Claude stance generated via Ollama fallback ({OLLAMA_MODEL})")
+                record_provider_success("claude")
                 return parsed
     except Exception as ollama_err:
         print(f"[Debate] Claude stance Ollama fallback error: {ollama_err}")
+
+    record_provider_failure("claude", "cloud + Ollama fallback both failed")
     return None
 
 
 def _get_stance_gemini(body: str) -> dict | None:
+    if is_provider_backed_off("gemini", _BACKOFF_WINDOW_MINUTES):
+        return None
+
     import requests
     from config import GEMINI_API_KEY, GEMINI_MODEL_SUMMARY
     if GEMINI_API_KEY and not GEMINI_API_KEY.startswith("your_"):
@@ -126,6 +143,7 @@ def _get_stance_gemini(body: str) -> dict | None:
                 text = r.json()["candidates"][0]["content"]["parts"][0]["text"]
                 parsed = _parse_stance(text)
                 if parsed:
+                    record_provider_success("gemini")
                     return parsed
             else:
                 print(f"[Debate] Gemini stance API error: {r.status_code} {r.text[:200]}")
@@ -147,9 +165,12 @@ def _get_stance_gemini(body: str) -> dict | None:
             parsed = _parse_stance(text)
             if parsed:
                 print(f"[Debate] Gemini stance generated via Ollama fallback ({OLLAMA_MODEL})")
+                record_provider_success("gemini")
                 return parsed
     except Exception as ollama_err:
         print(f"[Debate] Gemini stance Ollama fallback error: {ollama_err}")
+
+    record_provider_failure("gemini", "cloud + Ollama fallback both failed")
     return None
 
 
@@ -176,7 +197,7 @@ def compute_consensus(proposer: str, reviewer: str, impact_score: float, reviewe
 
 
 def run_debate_cycle() -> dict:
-    summary = {"issues_checked": 0, "stances_posted": 0, "errors": 0}
+    summary = {"issues_checked": 0, "stances_posted": 0, "errors": 0, "skipped_backoff": 0}
     issues = get_open_proposal_issues()
     summary["issues_checked"] = len(issues)
 
@@ -191,6 +212,10 @@ def run_debate_cycle() -> dict:
 
         comments = _gh_get(f"repos/{GITHUB_REPO}/issues/{issue['number']}/comments") or []
         if _already_reviewed_by(comments, reviewer):
+            continue
+
+        if is_provider_backed_off(reviewer, _BACKOFF_WINDOW_MINUTES):
+            summary["skipped_backoff"] += 1
             continue
 
         body = issue.get("body", "") or ""

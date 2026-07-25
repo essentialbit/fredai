@@ -581,6 +581,24 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     except Exception:
         pass
 
+    # Divergence Radar -- DB-only read (never a live daily-close fetch here,
+    # same reasoning as get_cached_risk above: chat/briefing context must
+    # never block on network). Populated by the nightly job_divergence_radar_refresh.
+    divergence_block = ""
+    try:
+        from memory_store import get_active_divergence_events
+        from divergence_radar import PAIR_REGISTRY
+        active = get_active_divergence_events()
+        if active:
+            lines = [
+                f"  {PAIR_REGISTRY.get(e['pair'], {}).get('label', e['pair'])}: "
+                f"{e['direction']} divergence since {e['started_at']} (z={e['peak_z']:+.2f} peak)"
+                for e in active
+            ]
+            divergence_block = "\nACTIVE CROSS-ASSET DIVERGENCES:\n" + "\n".join(lines)
+    except Exception:
+        pass
+
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
 
@@ -670,7 +688,7 @@ ACTIVE ALERTS:
 
 LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
-{cot_block}
+{cot_block}{divergence_block}
 """
     return ctx
 
@@ -774,6 +792,83 @@ def chat(user_message: str, history: list[dict], quotes: dict = None,
             context = f"{context}\n\nFRED'S MEMORY (retrieved, cite as [source · date]):\n{recalled}"
     except Exception:
         pass  # Fred Recall unavailable (FTS5/Ollama down, etc.) -- chat degrades gracefully without it
+
+    if re.search(r"\bwhat\s+if\b|\bwhat\s+would\s+happen\s+if\b|\bscenario\b", user_message, re.IGNORECASE):
+        try:
+            from scenario_engine import parse_scenario, run_scenario_for_portfolio
+            parsed = parse_scenario(user_message)
+            if parsed["status"] == "ok":
+                positions, baseline_risk = None, None
+                if user_id:
+                    from memory_store import get_portfolio
+                    holdings = get_portfolio(user_id)
+                    if holdings:
+                        from market_data import calculate_portfolio_value
+                        from portfolio_risk import compute_portfolio_risk
+                        port = calculate_portfolio_value(holdings, quotes or {})
+                        positions = port["positions"]
+                        baseline_risk = compute_portfolio_risk(positions, port["total_value"])
+                result = run_scenario_for_portfolio(parsed["factor"], parsed["magnitude"], positions, baseline_risk)
+                if result["status"] == "ok":
+                    top_impacts = "\n".join(
+                        f"  {i['symbol']}: {i['impact_score']:+.2f}% (order {i['order']}, {i['data_source']})"
+                        for i in result["impacts"][:8]
+                    ) or "  (no impacts cleared the significance floor)"
+                    scenario_block = (
+                        f"\n\nSCENARIO SIMULATION (model estimate -- narrate this plainly, make clear it's "
+                        f"an estimate not a prediction, close with the standard disclaimer):\n"
+                        f"Shock: {result['label']} {result['magnitude']:+.1f}{result['unit']}\n"
+                        f"Estimated impacts:\n{top_impacts}\n"
+                        f"Assumptions: {' '.join(result['assumptions'])}"
+                    )
+                    if result.get("portfolio"):
+                        p = result["portfolio"]
+                        scenario_block += (
+                            f"\nUser's portfolio: estimated P&L {p['total_pnl_estimate']:+.2f}, "
+                            f"worst position {p['worst_position']}. {p['risk_threshold_note']}"
+                            + (f" BREACH: {'; '.join(p['risk_breach_notes'])}" if p["risk_breach_notes"] else "")
+                        )
+                    context = f"{context}{scenario_block}"
+                elif result["status"] == "unmapped":
+                    factors = ", ".join(f["label"] for f in result["supported_factors"])
+                    context = (f"{context}\n\nSCENARIO SIMULATION: the user's question didn't map to a "
+                               f"supported shock factor. Tell them plainly you can't model that yet, and "
+                               f"list what you CAN model: {factors}.")
+        except Exception:
+            pass  # scenario simulator unavailable -- chat degrades gracefully without it
+
+    if re.search(r"\brun\s+the\s+desk\b|\bresearch\s+desk\b|\bcommittee\s+(view|verdict)\b", user_message, re.IGNORECASE):
+        try:
+            from rag_retriever import parse_query
+            from market_debate import get_market_debate_for
+            tickers = parse_query(user_message)["tickers"]
+            if tickers:
+                desk = get_market_debate_for(tickers[0])
+                if desk.get("direction") and desk.get("time_horizon"):
+                    key_risks = "; ".join(desk.get("key_risks") or [])
+                    contested_note = " | CONTESTED (bull and bear cases both strong)" if desk.get("contested") else ""
+                    desk_block = (
+                        f"\n\nRESEARCH DESK COMMITTEE VERDICT for {tickers[0]} (model estimate -- narrate "
+                        f"plainly, close with the standard disclaimer):\n"
+                        f"Direction: {desk['direction']} | Conviction: {desk['conviction']}/100 | "
+                        f"Horizon: {desk['time_horizon']}{contested_note}\n"
+                        f"Bull case: {desk['bull_case']}\nBear case: {desk['bear_case']}\n"
+                        + (f"Risk Officer: {desk['risk_case']}\n" if desk.get("risk_case") else "")
+                        + (f"Key risks: {key_risks}\n" if key_risks else "")
+                        + (f"Would flip on: {desk['invalidation_trigger']}\n" if desk.get("invalidation_trigger") else "")
+                    )
+                else:
+                    desk_block = (
+                        f"\n\nRESEARCH DESK for {tickers[0]} degraded to a simpler Bull/Bear verdict this "
+                        f"run (budget-constrained or a parse issue): {desk['verdict']}\n"
+                    )
+                context = f"{context}{desk_block}"
+            else:
+                context = (f"{context}\n\nRESEARCH DESK: the user asked to run the desk but didn't name "
+                           f"a ticker Fred recognizes. Ask them which one.")
+        except Exception:
+            pass  # research desk unavailable -- chat degrades gracefully without it
+
     messages = []
     # Copy previous history items and retain image payloads
     for h in history[:-1][-7:]:
@@ -808,6 +903,7 @@ def generate_summary(signals: list[dict], quotes: dict,
     top_assets = _top_mentioned_assets(signals)
     track_record = _format_briefing_track_record()
     recall_block = _format_recall_for_briefing(top_assets)
+    counterfactual_line = _format_counterfactual_for_briefing()
 
     prompt = f"""You are FredAI. Generate a board-level financial intelligence briefing.
 
@@ -816,7 +912,7 @@ TOP ASSETS BY SIGNAL VOLUME: {json.dumps(top_assets)}
 
 MARKET DATA:
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:10]}, indent=2)}
-{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}{recall_block}
+{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}{f"\nCOUNTERFACTUAL P&L (honest, hypothetical -- include verbatim, do not alter the numbers): {counterfactual_line}\n" if counterfactual_line else ""}{recall_block}
 REPRESENTATIVE SIGNALS:
 {_format_signals(signals[:15])}
 
@@ -895,6 +991,25 @@ def _format_briefing_track_record() -> str:
         lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})"
                       f"{_reliability_weight_suffix(source)}")
     return " | ".join(lines)
+
+
+def _format_counterfactual_for_briefing() -> str:
+    """One honest line ('Fred's 90d counterfactual: +X% vs SPY +Y%, max DD
+    -Z%') from the aggregate source's latest persisted 90d run -- empty
+    string (never fabricated) until job_counterfactual_refresh has run at
+    least once. Uses 'aggregate' specifically since that's the actual
+    blended call Fred presents to users, not a single narrow source."""
+    try:
+        from memory_store import get_latest_counterfactual_results
+        stats = get_latest_counterfactual_results().get("aggregate", {}).get("90d")
+        if not stats or stats.get("total_return_pct") is None:
+            return ""
+        bench = stats.get("benchmark_return_pct")
+        bench_str = f" vs SPY {bench:+.1f}%" if bench is not None else ""
+        return (f"Fred's 90d counterfactual: {stats['total_return_pct']:+.1f}%"
+                f"{bench_str}, max DD {stats['max_drawdown_pct']:.1f}%")
+    except Exception:
+        return ""
 
 
 def _top_mentioned_assets(signals: list[dict]) -> dict:

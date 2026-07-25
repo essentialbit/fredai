@@ -219,6 +219,36 @@ def init_db():
             updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS counterfactual_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            window TEXT NOT NULL,
+            methodology_version INTEGER NOT NULL,
+            total_return_pct REAL,
+            max_drawdown_pct REAL,
+            sharpe REAL,
+            win_rate_pct REAL,
+            benchmark_return_pct REAL,
+            trade_count INTEGER,
+            computed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS divergence_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            pair TEXT NOT NULL,
+            started_at TEXT NOT NULL,
+            direction TEXT NOT NULL,
+            initial_trigger_z REAL NOT NULL,
+            peak_z REAL NOT NULL,
+            peak_date TEXT NOT NULL,
+            resolved_at TEXT,
+            resolution_type TEXT,
+            resolved_by TEXT,
+            days_active INTEGER,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(pair, started_at)
+        );
+
         CREATE TABLE IF NOT EXISTS correlation_matrix (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             symbol_a TEXT NOT NULL,
@@ -361,6 +391,16 @@ def init_db():
             verdict TEXT,
             confidence REAL,
             signals_snapshot TEXT,
+            risk_case TEXT,
+            direction TEXT,
+            conviction INTEGER,
+            time_horizon TEXT,
+            key_risks TEXT,
+            invalidation_trigger TEXT,
+            bull_score REAL,
+            bear_score REAL,
+            contested INTEGER DEFAULT 0,
+            est_tokens INTEGER,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(ticker, debate_date)
         );
@@ -540,6 +580,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON signals(timestamp);
         CREATE INDEX IF NOT EXISTS idx_outcomes_asset ON signal_outcomes(asset);
         CREATE INDEX IF NOT EXISTS idx_outcomes_predicted_at ON signal_outcomes(predicted_at);
+        CREATE INDEX IF NOT EXISTS idx_counterfactual_source_window ON counterfactual_runs(source, window, computed_at);
+        CREATE INDEX IF NOT EXISTS idx_divergence_pair ON divergence_events(pair, started_at);
         CREATE INDEX IF NOT EXISTS idx_signals_asset ON signals(asset);
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
@@ -671,6 +713,21 @@ def init_db():
             "ALTER TABLE news_items ADD COLUMN sentiment_model TEXT DEFAULT 'vader'",
             "ALTER TABLE signal_outcomes ADD COLUMN source TEXT DEFAULT 'aggregate'",
             "ALTER TABLE signal_outcomes ADD COLUMN baseline_direction TEXT",
+            # Research Desk (FSI L4) -- extends the existing Bull/Bear/Arbiter
+            # market_debates table with a Risk Officer role + a structured PM
+            # verdict, rather than standing up parallel committee_runs/
+            # committee_verdicts tables (see scenario_engine.py-era decision to
+            # extend existing systems instead of parallel-building).
+            "ALTER TABLE market_debates ADD COLUMN risk_case TEXT",
+            "ALTER TABLE market_debates ADD COLUMN direction TEXT",
+            "ALTER TABLE market_debates ADD COLUMN conviction INTEGER",
+            "ALTER TABLE market_debates ADD COLUMN time_horizon TEXT",
+            "ALTER TABLE market_debates ADD COLUMN key_risks TEXT",
+            "ALTER TABLE market_debates ADD COLUMN invalidation_trigger TEXT",
+            "ALTER TABLE market_debates ADD COLUMN bull_score REAL",
+            "ALTER TABLE market_debates ADD COLUMN bear_score REAL",
+            "ALTER TABLE market_debates ADD COLUMN contested INTEGER DEFAULT 0",
+            "ALTER TABLE market_debates ADD COLUMN est_tokens INTEGER",
         ):
             try:
                 conn.execute(ddl)
@@ -1228,6 +1285,113 @@ def get_backtest_accuracy(checkpoint: str = "24h", hours: int = 24 * 30) -> dict
         "baseline_delta_pct": aggregate.get("baseline_delta_pct"),
         "sources": sources,
     }
+
+
+# ── COUNTERFACTUAL P&L (honest simulated equity curve, FSI L3) ────────────────
+
+def get_signal_outcomes_for_simulation() -> dict[str, list[dict]]:
+    """Every signal_outcomes row (all-time -- the simulation itself windows
+    by predicted_at, not this query), grouped by source and ordered oldest
+    first within each group. Deliberately not filtered by checkpoint
+    completion (unlike get_outcome_rows_by_source): counterfactual_pnl.py
+    derives its own entry/exit prices from daily closes, it doesn't need
+    Fred's own 4h/24h/72h backtest checkpoints to have filled in yet."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT asset, predicted_direction, avg_sentiment, predicted_at, source
+               FROM signal_outcomes ORDER BY predicted_at ASC"""
+        ).fetchall()
+    by_source: dict[str, list[dict]] = {}
+    for r in rows:
+        d = dict(r)
+        by_source.setdefault(d.get("source") or "aggregate", []).append(d)
+    return by_source
+
+
+def insert_counterfactual_run(source: str, window: str, methodology_version: int,
+                               total_return_pct: float | None, max_drawdown_pct: float | None,
+                               sharpe: float | None, win_rate_pct: float | None,
+                               benchmark_return_pct: float | None, trade_count: int) -> None:
+    """Always INSERTs a new row, never UPDATEs -- history of the metric
+    itself must survive a future methodology change (each row carries its
+    own methodology_version), per the playbook's explicit no-silent-rewrite
+    constraint."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO counterfactual_runs
+               (source, window, methodology_version, total_return_pct, max_drawdown_pct,
+                sharpe, win_rate_pct, benchmark_return_pct, trade_count)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            (source, window, methodology_version, total_return_pct, max_drawdown_pct,
+             sharpe, win_rate_pct, benchmark_return_pct, trade_count),
+        )
+
+
+def get_latest_counterfactual_results() -> dict[str, dict]:
+    """Most recent persisted run per (source, window) -- what GET
+    /api/counterfactual serves. Live recomputation belongs to the nightly
+    job only (run_simulation() re-fetches ~1y of daily closes per asset,
+    too expensive for a page-load path)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """SELECT r.* FROM counterfactual_runs r
+               INNER JOIN (
+                   SELECT source, window, MAX(computed_at) AS latest
+                   FROM counterfactual_runs GROUP BY source, window
+               ) m ON r.source = m.source AND r.window = m.window AND r.computed_at = m.latest"""
+        ).fetchall()
+    out: dict[str, dict] = {}
+    for r in rows:
+        d = dict(r)
+        out.setdefault(d["source"], {})[d["window"]] = d
+    return out
+
+
+# ── DIVERGENCE RADAR (cross-asset disagreement detection, FSI L2) ─────────────
+
+def upsert_divergence_event(pair: str, started_at: str, direction: str,
+                             initial_trigger_z: float, peak_z: float, peak_date: str,
+                             resolved_at: str | None, resolution_type: str | None,
+                             resolved_by: str | None, days_active: int | None) -> None:
+    """One row per (pair, started_at) -- an event's own started_at/resolved_at
+    IS its state (still-active vs resolved), so this legitimately UPDATEs a
+    still-open row in place as it resolves. Distinct from
+    counterfactual_runs' insert-only history-of-a-metric concern: there's
+    exactly one canonical row per real-world episode here, not a series of
+    independent point-in-time computations."""
+    with get_conn() as conn:
+        conn.execute(
+            """INSERT INTO divergence_events
+               (pair, started_at, direction, initial_trigger_z, peak_z, peak_date,
+                resolved_at, resolution_type, resolved_by, days_active, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?, CURRENT_TIMESTAMP)
+               ON CONFLICT(pair, started_at) DO UPDATE SET
+                   peak_z=excluded.peak_z, peak_date=excluded.peak_date,
+                   resolved_at=excluded.resolved_at, resolution_type=excluded.resolution_type,
+                   resolved_by=excluded.resolved_by, days_active=excluded.days_active,
+                   updated_at=CURRENT_TIMESTAMP""",
+            (pair, started_at, direction, initial_trigger_z, peak_z, peak_date,
+             resolved_at, resolution_type, resolved_by, days_active),
+        )
+
+
+def get_divergence_events(pair: str | None = None) -> list[dict]:
+    with get_conn() as conn:
+        if pair:
+            rows = conn.execute(
+                "SELECT * FROM divergence_events WHERE pair=? ORDER BY started_at", (pair,)
+            ).fetchall()
+        else:
+            rows = conn.execute("SELECT * FROM divergence_events ORDER BY pair, started_at").fetchall()
+    return [dict(r) for r in rows]
+
+
+def get_active_divergence_events() -> list[dict]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM divergence_events WHERE resolved_at IS NULL ORDER BY started_at DESC"
+        ).fetchall()
+    return [dict(r) for r in rows]
 
 
 # ── CALIBRATION (Brier scoring / reliability weights, FSI L4) ─────────────────
@@ -2293,16 +2457,28 @@ def get_market_debate(ticker: str, debate_date: str) -> dict | None:
 
 
 def save_market_debate(ticker: str, debate_date: str, bull_case: str, bear_case: str,
-                        verdict: str, confidence: float, signals_snapshot: str) -> None:
+                        verdict: str, confidence: float, signals_snapshot: str,
+                        risk_case: str = None, direction: str = None, conviction: int = None,
+                        time_horizon: str = None, key_risks: str = None, invalidation_trigger: str = None,
+                        bull_score: float = None, bear_score: float = None, contested: bool = False,
+                        est_tokens: int = None) -> None:
     with get_conn() as conn:
         conn.execute(
-            """INSERT INTO market_debates (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
-               VALUES (?,?,?,?,?,?,?)
+            """INSERT INTO market_debates (ticker, debate_date, bull_case, bear_case, verdict, confidence,
+                   signals_snapshot, risk_case, direction, conviction, time_horizon, key_risks,
+                   invalidation_trigger, bull_score, bear_score, contested, est_tokens)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(ticker, debate_date) DO UPDATE SET
                    bull_case=excluded.bull_case, bear_case=excluded.bear_case,
                    verdict=excluded.verdict, confidence=excluded.confidence,
-                   signals_snapshot=excluded.signals_snapshot""",
-            (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot)
+                   signals_snapshot=excluded.signals_snapshot,
+                   risk_case=excluded.risk_case, direction=excluded.direction, conviction=excluded.conviction,
+                   time_horizon=excluded.time_horizon, key_risks=excluded.key_risks,
+                   invalidation_trigger=excluded.invalidation_trigger, bull_score=excluded.bull_score,
+                   bear_score=excluded.bear_score, contested=excluded.contested, est_tokens=excluded.est_tokens""",
+            (ticker, debate_date, bull_case, bear_case, verdict, confidence, signals_snapshot,
+             risk_case, direction, conviction, time_horizon, key_risks, invalidation_trigger,
+             bull_score, bear_score, int(contested), est_tokens)
         )
 
 

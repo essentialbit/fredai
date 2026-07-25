@@ -1698,6 +1698,42 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
     </div>
 
+    <!-- FRED'S ACCOUNTABILITY — honest counterfactual P&L simulation (FSI L3) -->
+    <div id="counterfactual-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◑</span>
+        <div class="ops-title">Fred's Accountability</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">If you had traded Fred's signals — the honest equity curve, drawdowns included</span>
+      </div>
+      <div style="padding:10px 16px;display:flex;gap:20px;flex-wrap:wrap" id="cf-headline">
+        <div style="color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+      <div style="padding:0 16px 12px;position:relative;height:200px">
+        <canvas id="counterfactual-chart"></canvas>
+      </div>
+      <div style="padding:0 16px 12px;overflow-x:auto">
+        <table style="width:100%;font-size:10px;border-collapse:collapse">
+          <thead><tr style="color:var(--t3);text-align:left">
+            <th style="padding:3px 6px">Source</th><th style="padding:3px 6px">Return (90d)</th><th style="padding:3px 6px">vs SPY</th><th style="padding:3px 6px">Max DD</th><th style="padding:3px 6px">Sharpe</th><th style="padding:3px 6px">Win Rate</th><th style="padding:3px 6px">Trades</th>
+          </tr></thead>
+          <tbody id="cf-tbody"><tr><td colspan="7" style="color:var(--t3);padding:6px">Loading...</td></tr></tbody>
+        </table>
+      </div>
+      <div style="padding:8px 16px 12px;font-size:9px;color:var(--t3);border-top:1px solid var(--border)" id="cf-methodology"></div>
+    </div>
+
+    <!-- DIVERGENCE RADAR — cross-asset disagreement detection (FSI L2) -->
+    <div id="divergence-panel">
+      <div id="ops-header">
+        <span style="font-size:14px">◉</span>
+        <div class="ops-title">Divergence Radar</div>
+        <span style="font-size:9px;color:var(--t3);margin-left:auto">When markets that normally agree stop agreeing</span>
+      </div>
+      <div id="dv-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:12px 16px">
+        <div style="color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+    </div>
+
     <!-- THESIS TRACKER — living, evidence-fed investment theses (FSI L4) -->
     <div class="panel" id="ov-theses" style="grid-column:1/-1">
       <div class="ph">Investment Theses <span class="ptag">LIVING</span>
@@ -1719,6 +1755,23 @@ html[data-tier="micro"] #ov-globe-stage {
       </div>
       <div class="scroll" id="theses-list" style="max-height:460px">
         <div class="empty" style="padding:14px;color:var(--t3);font-size:10px">Loading...</div>
+      </div>
+    </div>
+
+    <!-- SCENARIO LAB — interactive what-if engine (FSI L3) -->
+    <div class="panel" id="ov-scenario" style="grid-column:1/-1">
+      <div class="ph">Scenario Lab <span class="ptag">WHAT-IF</span></div>
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="sc-factor" style="background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:4px;font-size:11px;padding:6px">
+          <option value="">Loading factors...</option>
+        </select>
+        <input id="sc-magnitude" type="range" min="-50" max="50" value="10" step="1" style="flex:1;min-width:140px" oninput="g('sc-magnitude-val').textContent=this.value">
+        <span id="sc-magnitude-val" style="font-family:var(--mono);font-size:11px;min-width:36px;text-align:right">10</span>
+        <span id="sc-unit" style="font-size:9px;color:var(--t3)"></span>
+        <button class="btn btn-p" style="font-size:var(--font-xs);padding:5px 12px" onclick="runScenario()">Run Scenario →</button>
+      </div>
+      <div id="scenario-results" style="padding:10px 14px">
+        <div class="empty" style="color:var(--t3);font-size:10px">Pick a shock factor and magnitude, then run the scenario. Every result is a model estimate — see the assumptions block for what it does and doesn't account for.</div>
       </div>
     </div>
 
@@ -2388,7 +2441,7 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
     <div class="analyst-footer">
       <button class="login-btn" id="btn-email-report" onclick="emailAnalystReport()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0 6px 0 0;display:none">Email Report</button>
-      <button class="login-btn" id="btn-toggle-debate" onclick="toggleMarketDebate()" style="background:#a78bfa;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Bull/Bear Debate</button>
+      <button class="login-btn" id="btn-toggle-debate" onclick="toggleMarketDebate()" style="background:#a78bfa;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Research Desk</button>
       <button class="login-btn" id="btn-toggle-filings" onclick="toggleFilingWatch()" style="background:#f5a623;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Filing Watch</button>
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
@@ -3091,7 +3144,10 @@ async function loadInitData() {
       setTimeout(loadOpsPicture, 1200);
       setTimeout(loadTrackRecord, 1600);
       setTimeout(loadCalibration, 1800);
+      setTimeout(loadCounterfactual, 1900);
+      setTimeout(loadDivergenceRadar, 1950);
       setTimeout(loadTheses, 2000);
+      setTimeout(loadScenarioFactors, 2200);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -5808,6 +5864,145 @@ async function loadCalibration() {
   }
 }
 
+let counterfactualChart = null;
+async function loadCounterfactual() {
+  const headline = g('cf-headline'), tbody = g('cf-tbody'), canvas = g('counterfactual-chart'), methodEl = g('cf-methodology');
+  if (!headline || !tbody || !canvas) return;
+  try {
+    const r = await fetch('/api/counterfactual');
+    const d = await r.json();
+    if (methodEl) methodEl.textContent = d.methodology || '';
+
+    const agg90 = (d.sources && d.sources.aggregate && d.sources.aggregate['90d']) || null;
+    if (agg90 && agg90.total_return_pct != null) {
+      const retColor = agg90.total_return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+      headline.innerHTML = `
+        <div><div style="font-size:9px;color:var(--t3)">90d Return</div><div style="font-size:18px;font-weight:600;color:${retColor}">${agg90.total_return_pct>=0?'+':''}${agg90.total_return_pct.toFixed(1)}%</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">Max Drawdown</div><div style="font-size:18px;font-weight:600;color:var(--red)">${agg90.max_drawdown_pct.toFixed(1)}%</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">vs ${esc(d.benchmark||'SPY')}</div><div style="font-size:18px;font-weight:600;color:var(--t2)">${agg90.benchmark_return_pct!=null?(agg90.benchmark_return_pct>=0?'+':'')+agg90.benchmark_return_pct.toFixed(1)+'%':'--'}</div></div>
+        <div><div style="font-size:9px;color:var(--t3)">Sharpe</div><div style="font-size:18px;font-weight:600;color:var(--t2)">${agg90.sharpe!=null?agg90.sharpe.toFixed(2):'--'}</div></div>
+      `;
+    } else {
+      headline.innerHTML = '<div style="color:var(--t3);font-size:10px">No completed simulation runs yet — first nightly cycle populates this.</div>';
+    }
+
+    const sources = d.sources || {};
+    const rows = Object.keys(sources).map(src => {
+      const w = sources[src]['90d'];
+      if (!w || w.total_return_pct == null) return '';
+      const retColor = w.total_return_pct >= 0 ? 'var(--green)' : 'var(--red)';
+      return `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:3px 6px">${esc(src)}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:${retColor}">${w.total_return_pct>=0?'+':''}${w.total_return_pct.toFixed(1)}%</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.benchmark_return_pct!=null?(w.benchmark_return_pct>=0?'+':'')+w.benchmark_return_pct.toFixed(1)+'%':'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono);color:var(--red)">${w.max_drawdown_pct.toFixed(1)}%</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.sharpe!=null?w.sharpe.toFixed(2):'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.win_rate_pct!=null?w.win_rate_pct.toFixed(0)+'%':'--'}</td>
+        <td style="padding:3px 6px;font-family:var(--mono)">${w.trade_count}</td>
+      </tr>`;
+    }).filter(Boolean).join('');
+    tbody.innerHTML = rows || '<tr><td colspan="7" style="color:var(--t3);padding:6px">No completed simulation runs yet</td></tr>';
+
+    const curve = d.aggregate_equity_curve || [];
+    const bench = d.aggregate_benchmark_curve || [];
+    if (counterfactualChart) { counterfactualChart.destroy(); counterfactualChart = null; }
+    if (curve.length > 1) {
+      counterfactualChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: curve.map(p => p.date),
+          datasets: [
+            { label: "Fred's signals (aggregate)", data: curve.map(p => p.equity), borderColor: '#00ff88', backgroundColor: 'rgba(0,255,136,.08)', fill: true, pointRadius: 0, borderWidth: 1.5, tension: 0.1 },
+            { label: `${d.benchmark||'SPY'} buy-and-hold`, data: bench.map(p => p.equity), borderColor: '#7a9bbf', borderDash: [4,4], fill: false, pointRadius: 0, borderWidth: 1, tension: 0.1 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+          scales: {
+            x: { ticks: {color:'#3d5a73', font:{size:8}, maxTicksLimit: 8}, grid:{color:'#162840'} },
+            y: { title:{display:true, text:'Equity (start=100)', color:'#7a9bbf', font:{size:9}}, ticks:{color:'#3d5a73', font:{size:9}}, grid:{color:'#162840'} },
+          },
+          plugins: { legend: {display:true, labels:{color:'#7a9bbf', font:{size:9}, boxWidth:10}} },
+        },
+      });
+    }
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="7" style="color:var(--t3);padding:6px">Accountability data unavailable</td></tr>';
+    console.warn('Counterfactual failed:', e);
+  }
+}
+
+let divergenceCharts = {};
+function toggleDivergenceDetail(key) {
+  const el = g('dv-detail-' + key);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+async function loadDivergenceRadar() {
+  const grid = g('dv-grid');
+  if (!grid) return;
+  try {
+    const r = await fetch('/api/divergences');
+    const d = await r.json();
+    const pairs = d.pairs || {};
+    const keys = Object.keys(pairs);
+    if (!keys.length) { grid.innerHTML = '<div style="color:var(--t3);font-size:10px">No pair data yet</div>'; return; }
+
+    grid.innerHTML = keys.map(key => {
+      const p = pairs[key];
+      const active = (p.active_events || [])[0];
+      const stats = p.resolution_stats || {n:0};
+      const borderColor = p.stale ? 'var(--t3)' : (active ? 'var(--red)' : 'var(--border)');
+      const zVal = p.current_spread != null ? p.current_spread.toFixed(2) : '--';
+      const zColor = p.current_spread != null && Math.abs(p.current_spread) >= 2 ? 'var(--red)' : 'var(--t2)';
+      const baseRate = stats.n > 0
+        ? `Past ${stats.n} case${stats.n===1?'':'s'}: median ${stats.median_days_to_resolve}d to resolve, ${stats.broke_further_count||0} broke further first`
+        : 'No completed episodes yet (n=0)';
+      return `<div style="border:1px solid ${borderColor};border-radius:6px;padding:8px;background:var(--bg2)">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;cursor:pointer" onclick="toggleDivergenceDetail('${key}')">
+          <div style="font-size:10px;font-weight:600;color:var(--t1)">${esc(p.label)}</div>
+          <div style="font-family:var(--mono);font-size:12px;font-weight:600;color:${zColor}">${zVal}</div>
+        </div>
+        ${p.stale ? '<div style="font-size:8px;color:var(--t3)">feed stale</div>' : ''}
+        ${active ? `<div style="font-size:8px;color:var(--red)">ACTIVE ${active.direction} divergence — ${active.days_active}d</div>` : ''}
+        <div style="height:50px;margin-top:4px"><canvas id="dv-chart-${key}"></canvas></div>
+        <div style="font-size:8px;color:var(--t3);margin-top:2px">${esc(baseRate)}</div>
+        <div id="dv-detail-${key}" style="display:none;font-size:8px;color:var(--t3);margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          <div>${esc(p.leg_a_name)} vs ${esc(p.leg_b_name)}</div>
+          <div style="margin-top:3px">${esc(p.rationale)}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    keys.forEach(key => {
+      const p = pairs[key];
+      const canvas = g('dv-chart-' + key);
+      if (!canvas || !p.spread_series || !p.spread_series.length) return;
+      if (divergenceCharts[key]) { divergenceCharts[key].destroy(); }
+      const labels = p.spread_series.map(pt => pt[0]);
+      const values = p.spread_series.map(pt => pt[1]);
+      divergenceCharts[key] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            { data: values, borderColor: '#00b4ff', pointRadius: 0, borderWidth: 1, fill: false, tension: 0.1 },
+            { data: labels.map(()=>2), borderColor: 'rgba(255,59,92,.3)', borderDash:[3,3], pointRadius: 0, borderWidth: 1, fill: false },
+            { data: labels.map(()=>-2), borderColor: 'rgba(255,59,92,.3)', borderDash:[3,3], pointRadius: 0, borderWidth: 1, fill: false },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false, animation: false,
+          scales: { x: {display:false}, y: {display:false} },
+          plugins: { legend:{display:false}, tooltip:{enabled:false} },
+        },
+      });
+    });
+  } catch(e) {
+    grid.innerHTML = '<div style="color:var(--t3);font-size:10px">Divergence data unavailable</div>';
+    console.warn('DivergenceRadar failed:', e);
+  }
+}
+
 async function loadTheses() {
   const box = g('theses-list');
   if (!box) return;
@@ -5945,6 +6140,107 @@ async function addThesisEvidence(id) {
     await fetch(`/api/theses/${id}/evidence`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({stance, note})});
     loadTheses();
   } catch(e) { console.warn('Evidence add failed:', e); }
+}
+
+let scenarioFactorUnits = {};
+let scenarioChart = null;
+
+async function loadScenarioFactors() {
+  const sel = g('sc-factor');
+  if (!sel) return;
+  try {
+    const r = await fetch('/api/scenario');
+    const d = await r.json();
+    const factors = d.factors || [];
+    sel.innerHTML = factors.map(f => `<option value="${esc(f.key)}">${esc(f.label)}</option>`).join('');
+    scenarioFactorUnits = Object.fromEntries(factors.map(f => [f.key, f.unit]));
+    if (factors.length) g('sc-unit').textContent = scenarioFactorUnits[factors[0].key] || '';
+    sel.onchange = () => { g('sc-unit').textContent = scenarioFactorUnits[sel.value] || ''; };
+  } catch(e) {
+    sel.innerHTML = '<option value="">Scenario factors unavailable</option>';
+    console.warn('Scenario factors failed:', e);
+  }
+}
+
+async function runScenario() {
+  const factor = g('sc-factor').value;
+  const magnitude = parseFloat(g('sc-magnitude').value);
+  const box = g('scenario-results');
+  if (!factor) return;
+  box.innerHTML = '<div class="empty" style="color:var(--t3);font-size:10px">Running scenario...</div>';
+  try {
+    const r = await fetch('/api/scenario', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({factor, magnitude})});
+    const d = await r.json();
+    renderScenarioResults(d);
+  } catch(e) {
+    box.innerHTML = '<div class="warn">Network error running scenario.</div>';
+    console.warn('Scenario run failed:', e);
+  }
+}
+
+function renderScenarioResults(d) {
+  const box = g('scenario-results');
+  if (!box) return;
+  if (d.status === 'unmapped') {
+    box.innerHTML = `<div style="color:var(--t3);font-size:11px">Can't model that combination — supported factors: ${(d.supported_factors||[]).map(f=>esc(f.label)).join(', ')}</div>`;
+    return;
+  }
+  if (d.status !== 'ok') {
+    box.innerHTML = `<div class="warn">${esc(d.error || 'Scenario failed.')}</div>`;
+    return;
+  }
+
+  const impacts = (d.impacts || []).slice(0, 15);
+  const portfolioCard = d.portfolio ? `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:4px">Your Portfolio Impact (estimate)</div>
+      <div style="font-size:18px;font-weight:700;color:${d.portfolio.total_pnl_estimate>=0?'var(--green)':'var(--red)'}">${d.portfolio.total_pnl_estimate>=0?'+':''}$${d.portfolio.total_pnl_estimate.toLocaleString()}</div>
+      ${d.portfolio.worst_position?`<div style="font-size:10px;color:var(--t3)">Worst position: ${esc(d.portfolio.worst_position.symbol)} (${d.portfolio.worst_position.estimated_pnl>=0?'+':''}$${d.portfolio.worst_position.estimated_pnl.toLocaleString()})</div>`:''}
+      ${(d.portfolio.risk_breach_notes||[]).length?`<div style="font-size:10px;color:var(--red);margin-top:4px">⚠ ${d.portfolio.risk_breach_notes.map(esc).join('; ')}</div>`:''}
+      <div style="font-size:9px;color:var(--t3);margin-top:4px">${esc(d.portfolio.risk_threshold_note)}</div>
+    </div>` : (d.portfolio === null ? '<div style="font-size:10px;color:var(--t3);margin-bottom:10px">No portfolio positions to overlay.</div>' : '');
+
+  const assumptions = (d.assumptions || []).map(a => `<li style="margin-bottom:3px">${esc(a)}</li>`).join('');
+
+  box.innerHTML = `
+    <div style="margin-bottom:8px;font-size:11px;color:var(--t2)">Shock: <b>${esc(d.label)} ${d.magnitude>=0?'+':''}${d.magnitude}${esc(d.unit)}</b></div>
+    ${portfolioCard}
+    <div style="position:relative;height:220px;margin-bottom:10px"><canvas id="scenario-waterfall"></canvas></div>
+    <details>
+      <summary style="cursor:pointer;font-size:9px;color:var(--blue)">Model assumptions — read before trusting this</summary>
+      <ul style="font-size:10px;color:var(--t3);margin:6px 0 0;padding-left:16px">${assumptions}</ul>
+    </details>
+  `;
+
+  if (scenarioChart) { scenarioChart.destroy(); scenarioChart = null; }
+  const canvas = g('scenario-waterfall');
+  if (canvas && impacts.length) {
+    scenarioChart = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: impacts.map(i => i.symbol + (i.order === 2 ? ' (2nd)' : '')),
+        datasets: [{
+          data: impacts.map(i => i.impact_score),
+          backgroundColor: impacts.map(i => i.impact_score >= 0 ? 'rgba(0,255,136,.5)' : 'rgba(255,59,92,.5)'),
+          borderColor: impacts.map(i => i.impact_score >= 0 ? '#00ff88' : '#ff3b5c'),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, animation: {duration: 300},
+        plugins: { legend: {display:false},
+          tooltip: {callbacks: {label: (ctx) => {
+            const i = impacts[ctx.dataIndex];
+            return `${i.impact_score>=0?'+':''}${i.impact_score}% est. — ${i.data_source}`;
+          }}},
+        },
+        scales: {
+          x: {ticks:{color:'#3d5a73',font:{size:9}}, grid:{color:'#162840'}},
+          y: {ticks:{color:'#3d5a73',font:{size:9}}, grid:{color:'#162840'}, title:{display:true,text:'Est. % move',color:'#7a9bbf',font:{size:9}}},
+        },
+      },
+    });
+  }
 }
 
 function renderOpsPicture(d) {
@@ -6376,7 +6672,7 @@ async function openAnalystReport(ticker) {
   debateContent.innerHTML = '';
   window._marketDebateLoaded = false;
   const btnDebate = g('btn-toggle-debate');
-  if (btnDebate) btnDebate.textContent = 'Bull/Bear Debate';
+  if (btnDebate) btnDebate.textContent = 'Research Desk';
   if (filingContent) { filingContent.style.display = 'none'; filingContent.innerHTML = ''; }
   window._filingWatchLoaded = false;
   const btnFilings = g('btn-toggle-filings');
@@ -6426,7 +6722,7 @@ async function toggleMarketDebate() {
   if (showingDebate) {
     debateContent.style.display = 'none';
     reportContent.style.display = 'block';
-    btnDebate.textContent = 'Bull/Bear Debate';
+    btnDebate.textContent = 'Research Desk';
     return;
   }
 
@@ -6435,33 +6731,76 @@ async function toggleMarketDebate() {
   btnDebate.textContent = 'Back to Report';
 
   if (window._marketDebateLoaded) return;
+  await loadResearchDesk(ticker, false);
+}
 
+async function loadResearchDesk(ticker, forceRefresh) {
+  const debateContent = g('analyst-debate-content');
+  const loading = g('analyst-loading');
   loading.style.display = 'flex';
   debateContent.innerHTML = '';
   try {
-    const r = await fetch(`/api/market-debate/${ticker}`);
+    const r = await fetch(`/api/market-debate/${ticker}${forceRefresh ? '?refresh=1' : ''}`);
     const d = await r.json();
     loading.style.display = 'none';
 
     if (r.ok && d.verdict) {
       window._marketDebateLoaded = true;
-      const conf = Math.round((d.confidence || 0) * 100);
-      const html = `
-        <h3>🐂 Bull Case</h3>
-        <div>${window.marked && window.marked.parse ? window.marked.parse(d.bull_case || '') : esc(d.bull_case || '')}</div>
-        <h3>🐻 Bear Case</h3>
-        <div>${window.marked && window.marked.parse ? window.marked.parse(d.bear_case || '') : esc(d.bear_case || '')}</div>
-        <h3>⚖️ Arbiter Verdict <span style="font-size:11px;color:var(--t3);font-weight:normal">(confidence ${conf}%${d.cached ? ', cached ' + esc(d.date) : ''})</span></h3>
-        <div>${window.marked && window.marked.parse ? window.marked.parse(d.verdict) : esc(d.verdict)}</div>
-        <p style="font-size:11px;color:var(--t3);margin-top:16px">Not financial advice — synthesized from Fred's own tracked signals (sentiment, insider filings, technicals, short interest, backtest accuracy).</p>
+      const md = (t) => window.marked && window.marked.parse ? window.marked.parse(t || '') : esc(t || '');
+      const dirColor = d.direction === 'bullish' ? 'var(--green)' : d.direction === 'bearish' ? 'var(--red)' : 'var(--t3)';
+      const contestedBadge = d.contested ? `<span style="background:rgba(245,166,35,.15);color:var(--gold);border-radius:3px;padding:2px 8px;font-size:10px;letter-spacing:1px;text-transform:uppercase">⚠ Contested</span>` : '';
+      const scoreBadge = (label, score) => score != null ? `<span style="font-size:10px;color:var(--t3);font-weight:normal"> (${label} strength ${Math.round(score*100)}%)</span>` : '';
+      const riskCol = d.risk_case ? `
+        <div style="flex:1;min-width:220px">
+          <h3>🛡️ Risk Officer</h3>
+          <div>${md(d.risk_case)}</div>
+        </div>` : '';
+      const keyRisks = (d.key_risks || []).length ? `
+        <div style="margin-top:8px"><b>Key risks:</b>
+          <ul style="margin:4px 0 0 18px;font-size:12px">${d.key_risks.map(k => `<li>${esc(k)}</li>`).join('')}</ul>
+        </div>` : '';
+      const invalidation = d.invalidation_trigger ? `<div style="margin-top:8px;font-size:12px;color:var(--t2)"><b>Would flip on:</b> ${esc(d.invalidation_trigger)}</div>` : '';
+      const verdictCard = d.direction ? `
+        <div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:14px">
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px">
+            <span style="font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:${dirColor}">${esc(d.direction)}</span>
+            <span style="font-size:12px;color:var(--t2)">Conviction <b>${d.conviction}</b>/100</span>
+            <span style="font-size:12px;color:var(--t3)">${esc(d.time_horizon || '')}</span>
+            ${contestedBadge}
+            <span style="margin-left:auto;font-size:10px;color:var(--t3)">${d.cached ? 'cached ' + esc(d.date) : 'fresh run'}${d.est_tokens ? ` · ~${d.est_tokens} tok` : ''}</span>
+          </div>
+          <div>${md(d.verdict)}</div>
+          ${keyRisks}${invalidation}
+        </div>` : `
+        <h3>⚖️ Verdict <span style="font-size:11px;color:var(--t3);font-weight:normal">(confidence ${Math.round((d.confidence||0)*100)}%${d.cached ? ', cached ' + esc(d.date) : ''} — degraded run, budget-constrained)</span></h3>
+        <div>${md(d.verdict)}</div>`;
+
+      debateContent.innerHTML = `
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+          <button class="btn btn-b" style="font-size:10px" onclick="loadResearchDesk('${ticker}', true)">↻ Force fresh committee run</button>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:220px">
+            <h3>🐂 Bull Case${scoreBadge('bull', d.bull_score)}</h3>
+            <div>${md(d.bull_case)}</div>
+          </div>
+          <div style="flex:1;min-width:220px">
+            <h3>🐻 Bear Case${scoreBadge('bear', d.bear_score)}</h3>
+            <div>${md(d.bear_case)}</div>
+          </div>
+          ${riskCol}
+        </div>
+        ${verdictCard}
+        <p style="font-size:11px;color:var(--t3);margin-top:16px">Not financial advice — a model estimate synthesized from Fred's own tracked signals (sentiment, insider filings, technicals, short interest, backtest accuracy) plus the committee's own track record.</p>
       `;
-      debateContent.innerHTML = html;
+    } else if (r.status === 429) {
+      debateContent.innerHTML = `<div class="warn">${esc(d.error || 'Too many forced refreshes — try again later.')}</div>`;
     } else {
       debateContent.innerHTML = `<div class="warn">Error: ${esc(d.error || 'Failed to generate debate.')}</div>`;
     }
   } catch (e) {
     loading.style.display = 'none';
-    debateContent.innerHTML = `<div class="warn">Network error requesting Fred AI debate.</div>`;
+    debateContent.innerHTML = `<div class="warn">Network error requesting Fred AI Research Desk.</div>`;
   }
 }
 

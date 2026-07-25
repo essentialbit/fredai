@@ -71,7 +71,7 @@ def _fetch_series() -> list[tuple[str, float]] | None:
     return out or None
 
 
-def compute_credit_spread() -> dict | None:
+def compute_baa10y_credit_spread() -> dict | None:
     """{"latest": float, "date": str, "change_20d_bps": float,
     "trend_20d": {...}, "regime": "widening"/"narrowing"/"stable"} or None
     if the feed can't be fetched or has too little history."""
@@ -97,11 +97,11 @@ def compute_credit_spread() -> dict | None:
     }
 
 
-def get_credit_spread(force: bool = False) -> dict | None:
+def get_baa10y_credit_spread(force: bool = False) -> dict | None:
     """Cached accessor -- recomputes at most once per _CACHE_TTL_S."""
     now = time.time()
     if force or _cache["data"] is None or now - _cache["computed_at"] > _CACHE_TTL_S:
-        data = compute_credit_spread()
+        data = compute_baa10y_credit_spread()
         if data:
             _cache["data"] = data
             _cache["computed_at"] = now

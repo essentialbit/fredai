@@ -514,8 +514,10 @@ current.
   explicitly: "I don't have current price data for X right now" — do NOT invent a plausible-sounding
   price, historical high, or trend to fill the gap.
 - NEVER invent analyst ratings, firm names, or specific corporate actions (e.g. "Goldman Sachs
-  downgraded to Sell") — this codebase has no analyst-rating data source at all. If asked about analyst
-  sentiment, say you don't have that data source, don't fabricate one.
+  downgraded to Sell") unless they appear verbatim in the LIVE CONTEXT block. Real analyst consensus
+  targets and recent upgrade/downgrade actions ARE available for symbols with coverage (via
+  /api/analyst-ratings/<ticker> and the equity-report generator) — cite them exactly when present, but
+  a symbol with no cached rating data still has none: say so, don't fabricate one.
 - Inventing financial data is a worse failure than admitting uncertainty. A confident wrong answer is
   never acceptable here, even when the "Character" guidance below asks for directness.
 
@@ -526,6 +528,14 @@ current.
 - Patience lens. Hold through noise. Exit on conviction achieved, not news cycles.
 - 10-year thesis required for any long-term observation: clear growth story to 2035+.
 - Ignore: meme momentum, short-term pumps, assets without multi-year thesis.
+
+## Fred's Memory (Fred Recall)
+When a "FRED'S MEMORY (retrieved, cite as [source · date])" block is present in the context, it is
+Fred's own accumulated history (past signals, briefings, debates, filings, notes) — retrieved because
+it may be relevant to this conversation, not guaranteed to be. Cite it inline as [source · date] when
+you use it. If a user asks something that sounds like it needs Fred's history and no relevant memory
+was retrieved, say plainly "I don't have history on that" — never invent a past signal, briefing, or
+note that wasn't actually retrieved.
 
 ## Character
 - Direct and data-anchored. Every claim uses actual numbers FROM THE PROVIDED CONTEXT (see above — never invented).
@@ -550,13 +560,44 @@ current.
 # ── CONTEXT BLOCK ─────────────────────────────────────────────────────────────
 
 def build_context_block(quotes: dict = None, user_interests: list = None,
-                        portfolio: dict = None, tracked_entities: str = "") -> str:
+                        portfolio: dict = None, tracked_entities: str = "",
+                        active_theses: str = "") -> str:
     signals = get_signals(hours=4, limit=50)
     summary = get_latest_summary()
     alerts = get_recent_alerts(limit=8)
     trending = get_trending_assets(hours=4, limit=10)
     quotes = quotes or {}
     track_record = _format_track_record()
+
+    # CFTC COT positioning -- cache-only (12h internal cache), only surface
+    # contracts crowded enough to be an actionable contrarian signal.
+    cot_block = ""
+    try:
+        from cot_client import fetch_all_cot_positioning
+        crowded = [r for r in fetch_all_cot_positioning().values() if abs(r["z_score"]) >= 1.5]
+        if crowded:
+            lines = [f"  {r['contract']}: {r['classification']} (z={r['z_score']:+.2f})" for r in crowded]
+            cot_block = "\nSPECULATOR POSITIONING CROWDING (CFTC COT, contrarian signal):\n" + "\n".join(lines)
+    except Exception:
+        pass
+
+    # Divergence Radar -- DB-only read (never a live daily-close fetch here,
+    # same reasoning as get_cached_risk above: chat/briefing context must
+    # never block on network). Populated by the nightly job_divergence_radar_refresh.
+    divergence_block = ""
+    try:
+        from memory_store import get_active_divergence_events
+        from divergence_radar import PAIR_REGISTRY
+        active = get_active_divergence_events()
+        if active:
+            lines = [
+                f"  {PAIR_REGISTRY.get(e['pair'], {}).get('label', e['pair'])}: "
+                f"{e['direction']} divergence since {e['started_at']} (z={e['peak_z']:+.2f} peak)"
+                for e in active
+            ]
+            divergence_block = "\nACTIVE CROSS-ASSET DIVERGENCES:\n" + "\n".join(lines)
+    except Exception:
+        pass
 
     bullish = [s for s in signals if s.get("signal_type") == "bullish"]
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
@@ -567,6 +608,7 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         interest_block = f"\nUSER'S TOP INTERESTS: {', '.join(top)}"
 
     entities_block = f"\n{tracked_entities}" if tracked_entities else ""
+    theses_block = f"\n{active_theses}" if active_theses else ""
 
     # Portfolio context — strip exact values if privacy mode active
     port_block = ""
@@ -600,24 +642,43 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
     except Exception:
         pass
 
+    # Cache-only on purpose: chat must never block on live pytrends calls.
+    # Populated by the daily job_trends_refresh scan; surfaces only tickers
+    # with a real velocity reading (skipped silently otherwise).
+    trends_block = ""
+    if quotes:
+        from memory_store import get_search_interest_velocity
+        movers = []
+        for sym in list(quotes.keys())[:12]:
+            v = get_search_interest_velocity(sym)
+            if v and abs(v["velocity_pct"]) >= 15:
+                movers.append(f"{sym} {v['velocity_pct']:+.0f}%")
+        if movers:
+            trends_block = f"\nSEARCH-INTEREST VELOCITY (Google Trends, vs 7d avg): {', '.join(movers)}"
+
     market_snapshot_warning = (
         "\n(NOTE: no live market data is currently available — the price fetch may be delayed, "
         "rate-limited, or the app just started. Do not invent prices, historical highs, or figures "
         "for any asset; say plainly that current data isn't available yet.)\n" if not quotes else ""
     )
 
+    onchain_block = ""
+    if "BTC-USD" in quotes:
+        onchain_block = f"\n\nBTC NETWORK HEALTH (on-chain, cache-only):\n{_format_onchain()}"
+
     ctx = f"""=== LIVE CONTEXT ({datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}) ===
 {_build_privacy_notice()}
-{interest_block}{port_block}{entities_block}
+{interest_block}{port_block}{entities_block}{theses_block}
 
 MARKET SNAPSHOT:{market_snapshot_warning}{macro_block}
-{json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}
+{json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:12]}, indent=2)}{onchain_block}
 
 SIGNAL SUMMARY (last 4h):
 - Total: {len(signals)} | Bullish: {len(bullish)} ({len(bullish)/max(len(signals),1)*100:.0f}%) | Bearish: {len(bearish)} ({len(bearish)/max(len(signals),1)*100:.0f}%)
 
 TRENDING ASSETS (by signal volume):
 {json.dumps([{"asset": t["asset"], "signals": t["signal_count"], "bullish_pct": round(t.get("bullish_pct",0),1)} for t in trending[:6]], indent=2)}
+{trends_block}
 {f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
 TOP RECENT SIGNALS:
 {_format_signals(signals[:8])}
@@ -627,14 +688,49 @@ ACTIVE ALERTS:
 
 LAST 4H SUMMARY:
 {summary['content'][:600] if summary else 'No summary yet — first scan pending.'}
+{cot_block}{divergence_block}
 """
     return ctx
+
+
+def _format_onchain() -> str:
+    """Cache-only (DB read, no live blockchain.info call) so chat never blocks
+    on a network fetch -- data is populated by main.py's daily onchain_metrics
+    job. Empty means the job hasn't run yet, not that BTC has no activity."""
+    from memory_store import get_latest_onchain_metrics
+    metrics = get_latest_onchain_metrics()
+    if not metrics:
+        return "  No on-chain data cached yet."
+    lines = []
+    for name, m in metrics.items():
+        if m.get("z_score") is not None:
+            lines.append(f"  {name}: {m['latest_value']:.0f} ({m['direction']}, z={m['z_score']:.2f})")
+        else:
+            lines.append(f"  {name}: {m['latest_value']:.0f}")
+    return "\n".join(lines)
+
+
+def _reliability_weight_suffix(source: str) -> str:
+    """' (reliability x1.3)' when a source's calibration weight is
+    meaningfully off-neutral, else '' -- avoids cluttering every line with
+    a redundant 'x1.0' for sources with no/low-sample calibration data yet."""
+    try:
+        from memory_store import get_calibration_weight
+        w = get_calibration_weight(source)
+        if abs(w - 1.0) < 0.05:
+            return ""
+        return f" (reliability x{w:.2f})"
+    except Exception:
+        return ""
 
 
 def _format_track_record() -> str:
     """One line per signal source with a large-enough 24h sample, so Fred can
     lean into sources that are actually proving predictive value and hedge on
-    ones that aren't, instead of treating every source as equally credible."""
+    ones that aren't, instead of treating every source as equally credible.
+    Includes the calibration-engine reliability weight (FSI L4) when it's
+    meaningfully off-neutral, so Fred can hedge on HOW confidently he cites
+    a source, not just whether to cite it."""
     report = get_accuracy_report().get("24h", {})
     lines = []
     for source, stats in report.get("sources", {}).items():
@@ -644,7 +740,8 @@ def _format_track_record() -> str:
         if delta is None:
             continue
         verdict = "proving value" if stats.get("proving_value") else "not proving value"
-        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})")
+        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})"
+                      f"{_reliability_weight_suffix(source)}")
     return " | ".join(lines)
 
 
@@ -679,15 +776,99 @@ def _needs_disclaimer(user_msg: str, response: str) -> bool:
 
 def chat(user_message: str, history: list[dict], quotes: dict = None,
          user_interests: list = None, portfolio: dict = None,
-         tracked_entities: str = "") -> str:
-    context = build_context_block(quotes, user_interests, portfolio, tracked_entities)
+         tracked_entities: str = "", user_id: int | None = None) -> str:
+    active_theses = ""
+    if user_id:
+        try:
+            from thesis_tracker import format_context_summary
+            active_theses = format_context_summary(user_id)
+        except Exception:
+            pass  # thesis tracker unavailable -- chat degrades gracefully without it
+    context = build_context_block(quotes, user_interests, portfolio, tracked_entities, active_theses)
     try:
-        from vault_semantic_search import get_vault_context
-        vault_context = get_vault_context(user_message)
-        if vault_context:
-            context = f"{context}\n\n{vault_context}"
+        from rag_retriever import retrieve, format_context
+        recalled = format_context(retrieve(user_message, user_id))
+        if recalled:
+            context = f"{context}\n\nFRED'S MEMORY (retrieved, cite as [source · date]):\n{recalled}"
     except Exception:
-        pass  # local Ollama embeddings unavailable -- chat degrades gracefully without vault context
+        pass  # Fred Recall unavailable (FTS5/Ollama down, etc.) -- chat degrades gracefully without it
+
+    if re.search(r"\bwhat\s+if\b|\bwhat\s+would\s+happen\s+if\b|\bscenario\b", user_message, re.IGNORECASE):
+        try:
+            from scenario_engine import parse_scenario, run_scenario_for_portfolio
+            parsed = parse_scenario(user_message)
+            if parsed["status"] == "ok":
+                positions, baseline_risk = None, None
+                if user_id:
+                    from memory_store import get_portfolio
+                    holdings = get_portfolio(user_id)
+                    if holdings:
+                        from market_data import calculate_portfolio_value
+                        from portfolio_risk import compute_portfolio_risk
+                        port = calculate_portfolio_value(holdings, quotes or {})
+                        positions = port["positions"]
+                        baseline_risk = compute_portfolio_risk(positions, port["total_value"])
+                result = run_scenario_for_portfolio(parsed["factor"], parsed["magnitude"], positions, baseline_risk)
+                if result["status"] == "ok":
+                    top_impacts = "\n".join(
+                        f"  {i['symbol']}: {i['impact_score']:+.2f}% (order {i['order']}, {i['data_source']})"
+                        for i in result["impacts"][:8]
+                    ) or "  (no impacts cleared the significance floor)"
+                    scenario_block = (
+                        f"\n\nSCENARIO SIMULATION (model estimate -- narrate this plainly, make clear it's "
+                        f"an estimate not a prediction, close with the standard disclaimer):\n"
+                        f"Shock: {result['label']} {result['magnitude']:+.1f}{result['unit']}\n"
+                        f"Estimated impacts:\n{top_impacts}\n"
+                        f"Assumptions: {' '.join(result['assumptions'])}"
+                    )
+                    if result.get("portfolio"):
+                        p = result["portfolio"]
+                        scenario_block += (
+                            f"\nUser's portfolio: estimated P&L {p['total_pnl_estimate']:+.2f}, "
+                            f"worst position {p['worst_position']}. {p['risk_threshold_note']}"
+                            + (f" BREACH: {'; '.join(p['risk_breach_notes'])}" if p["risk_breach_notes"] else "")
+                        )
+                    context = f"{context}{scenario_block}"
+                elif result["status"] == "unmapped":
+                    factors = ", ".join(f["label"] for f in result["supported_factors"])
+                    context = (f"{context}\n\nSCENARIO SIMULATION: the user's question didn't map to a "
+                               f"supported shock factor. Tell them plainly you can't model that yet, and "
+                               f"list what you CAN model: {factors}.")
+        except Exception:
+            pass  # scenario simulator unavailable -- chat degrades gracefully without it
+
+    if re.search(r"\brun\s+the\s+desk\b|\bresearch\s+desk\b|\bcommittee\s+(view|verdict)\b", user_message, re.IGNORECASE):
+        try:
+            from rag_retriever import parse_query
+            from market_debate import get_market_debate_for
+            tickers = parse_query(user_message)["tickers"]
+            if tickers:
+                desk = get_market_debate_for(tickers[0])
+                if desk.get("direction") and desk.get("time_horizon"):
+                    key_risks = "; ".join(desk.get("key_risks") or [])
+                    contested_note = " | CONTESTED (bull and bear cases both strong)" if desk.get("contested") else ""
+                    desk_block = (
+                        f"\n\nRESEARCH DESK COMMITTEE VERDICT for {tickers[0]} (model estimate -- narrate "
+                        f"plainly, close with the standard disclaimer):\n"
+                        f"Direction: {desk['direction']} | Conviction: {desk['conviction']}/100 | "
+                        f"Horizon: {desk['time_horizon']}{contested_note}\n"
+                        f"Bull case: {desk['bull_case']}\nBear case: {desk['bear_case']}\n"
+                        + (f"Risk Officer: {desk['risk_case']}\n" if desk.get("risk_case") else "")
+                        + (f"Key risks: {key_risks}\n" if key_risks else "")
+                        + (f"Would flip on: {desk['invalidation_trigger']}\n" if desk.get("invalidation_trigger") else "")
+                    )
+                else:
+                    desk_block = (
+                        f"\n\nRESEARCH DESK for {tickers[0]} degraded to a simpler Bull/Bear verdict this "
+                        f"run (budget-constrained or a parse issue): {desk['verdict']}\n"
+                    )
+                context = f"{context}{desk_block}"
+            else:
+                context = (f"{context}\n\nRESEARCH DESK: the user asked to run the desk but didn't name "
+                           f"a ticker Fred recognizes. Ask them which one.")
+        except Exception:
+            pass  # research desk unavailable -- chat degrades gracefully without it
+
     messages = []
     # Copy previous history items and retain image payloads
     for h in history[:-1][-7:]:
@@ -721,6 +902,8 @@ def generate_summary(signals: list[dict], quotes: dict,
     bearish = [s for s in signals if s.get("signal_type") == "bearish"]
     top_assets = _top_mentioned_assets(signals)
     track_record = _format_briefing_track_record()
+    recall_block = _format_recall_for_briefing(top_assets)
+    counterfactual_line = _format_counterfactual_for_briefing()
 
     prompt = f"""You are FredAI. Generate a board-level financial intelligence briefing.
 
@@ -729,7 +912,7 @@ TOP ASSETS BY SIGNAL VOLUME: {json.dumps(top_assets)}
 
 MARKET DATA:
 {json.dumps({k: {"price": v["price"], "chg": f"{v['change_pct']:+.2f}%"} for k, v in list(quotes.items())[:10]}, indent=2)}
-{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}
+{f"\nSIGNAL TRACK RECORD (24h, self-reported accuracy):\n{track_record}\n" if track_record else ""}{f"\nCOUNTERFACTUAL P&L (honest, hypothetical -- include verbatim, do not alter the numbers): {counterfactual_line}\n" if counterfactual_line else ""}{recall_block}
 REPRESENTATIVE SIGNALS:
 {_format_signals(signals[:15])}
 
@@ -742,7 +925,7 @@ Write a structured briefing:
 
 **ASSET SPOTLIGHT**
 - (top 2-3 assets: sentiment direction + signal count + price context)
-
+{"\n**WHAT CHANGED SINCE LAST BRIEFING** — (2-4 bullets grounded ONLY in the WHAT CHANGED SINCE LAST BRIEFING context above; omit this section entirely if that context is empty, do not invent prior state)\n" if recall_block else ""}
 **RISK LEVEL: [LOW/MEDIUM/HIGH]** — (one sentence rationale)
 
 **FRED'S WATCHLIST** — (3-5 items to monitor next 4h with reason)
@@ -761,10 +944,41 @@ Direct. Specific. No filler."""
     return result
 
 
+def _format_recall_for_briefing(top_assets: dict) -> str:
+    """Previous 2 briefings + top related news for this period's top-mentioned
+    assets, formatted for the 'WHAT CHANGED SINCE LAST BRIEFING' prompt
+    section. Empty string (never fabricated) if Fred Recall has nothing yet
+    (first briefing ever, empty index, or FTS5/Ollama unavailable) -- the
+    caller drops the whole section when this returns ''."""
+    try:
+        from memory_store import get_summaries
+        from rag_retriever import retrieve, format_context
+
+        prior = get_summaries(limit=2)
+        prior_block = ""
+        if prior:
+            lines = [f"- [{p['timestamp'][:16]}] {p['content'][:300]}" for p in prior]
+            prior_block = "PRIOR BRIEFINGS:\n" + "\n".join(lines)
+
+        news_block = ""
+        if top_assets:
+            query = " ".join(list(top_assets.keys())[:3])
+            news_chunks = [c for c in retrieve(query, user_id=None, k=8) if c["source_type"] == "news"][:4]
+            if news_chunks:
+                news_block = "RELATED NEWS SINCE THEN:\n" + format_context(news_chunks)
+
+        if not prior_block and not news_block:
+            return ""
+        return f"\nWHAT CHANGED SINCE LAST BRIEFING (context, cite as [source · date]):\n{prior_block}\n{news_block}\n"
+    except Exception:
+        return ""  # Fred Recall unavailable -- briefing generates exactly as before
+
+
 def _format_briefing_track_record() -> str:
     """Per-source 24h accuracy-vs-baseline view, so the briefing can lean
     into sources proving predictive value instead of treating every source
-    as equally credible."""
+    as equally credible. Includes the calibration reliability weight (FSI
+    L4) when meaningfully off-neutral, same as _format_track_record."""
     report = get_accuracy_report().get("24h", {})
     lines = []
     for source, stats in report.get("sources", {}).items():
@@ -774,8 +988,28 @@ def _format_briefing_track_record() -> str:
         if delta is None:
             continue
         verdict = "proving value" if stats.get("proving_value") else "not proving value"
-        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})")
+        lines.append(f"{source}: {stats['accuracy_pct']:.1f}% ({delta:+.1f}pp vs baseline, {verdict})"
+                      f"{_reliability_weight_suffix(source)}")
     return " | ".join(lines)
+
+
+def _format_counterfactual_for_briefing() -> str:
+    """One honest line ('Fred's 90d counterfactual: +X% vs SPY +Y%, max DD
+    -Z%') from the aggregate source's latest persisted 90d run -- empty
+    string (never fabricated) until job_counterfactual_refresh has run at
+    least once. Uses 'aggregate' specifically since that's the actual
+    blended call Fred presents to users, not a single narrow source."""
+    try:
+        from memory_store import get_latest_counterfactual_results
+        stats = get_latest_counterfactual_results().get("aggregate", {}).get("90d")
+        if not stats or stats.get("total_return_pct") is None:
+            return ""
+        bench = stats.get("benchmark_return_pct")
+        bench_str = f" vs SPY {bench:+.1f}%" if bench is not None else ""
+        return (f"Fred's 90d counterfactual: {stats['total_return_pct']:+.1f}%"
+                f"{bench_str}, max DD {stats['max_drawdown_pct']:.1f}%")
+    except Exception:
+        return ""
 
 
 def _top_mentioned_assets(signals: list[dict]) -> dict:

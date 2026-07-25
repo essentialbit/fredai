@@ -122,7 +122,7 @@ def fetch_signals(max_results: int = SIGNAL_FETCH_LIMIT, user_watchlist: list = 
     for query in queries:
         results = search_recent(query, max_results=per_query)
         for s in results:
-            insert_signal(
+            signal_id = insert_signal(
                 source="twitter",
                 content=s["text"],
                 asset=s["asset"],
@@ -132,10 +132,23 @@ def fetch_signals(max_results: int = SIGNAL_FETCH_LIMIT, user_watchlist: list = 
                 sentiment_model=s.get("sentiment_model", "vader"),
                 metadata={"id": s["id"], "likes": s["likes"], "retweets": s["retweets"]},
             )
+            _index_signal_for_recall(signal_id, "twitter", s["author"], s["text"], s["asset"])
         collected.extend(results)
         time.sleep(0.5)  # gentle rate limit buffer
 
     return collected
+
+
+def _index_signal_for_recall(signal_id: int, source: str, author: str, content: str, asset: str) -> None:
+    """Fred Recall write-time hook -- FTS-only (embed=False), the nightly
+    embed-backlog job picks up embeddings later. Never blocks/fails the
+    caller."""
+    try:
+        from rag_store import upsert_chunk
+        title = f"{source} signal" + (f" ({author})" if author else "")
+        upsert_chunk("signal", str(signal_id), content, title=title, tickers=asset or "", embed=False)
+    except Exception:
+        pass
 
 
 def score_text(text: str) -> tuple:

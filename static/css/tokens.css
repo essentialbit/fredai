@@ -1,0 +1,43 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   FredAI — canonical design tokens
+   Single source of truth for shared CSS custom properties across every
+   template (dashboard.html, news.html, timeline.html, video_popout.html).
+
+   Page-specific tokens (e.g. dashboard.html's tier-adaptive sizing scale)
+   stay local to that page's own <style> block — only tokens that represent
+   a *shared design role* (background layers, text tiers, accent colors,
+   glow/glass/border treatments, radius, font stacks) live here.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Background layers ── */
+  --bg0:#020408; --bg1:#050a14; --bg2:#080f1e; --bg3:#0c162b;
+
+  /* ── Text tiers ── */
+  --t1:#f8f9fa; --t2:#94a3b8; --t3:#475569; --t4:#1e293b;
+
+  /* ── Borders ── */
+  --border:rgba(0, 180, 255, 0.08);
+  --border2:rgba(0, 255, 170, 0.12);
+
+  /* ── Accent colors ── */
+  --green:#00ffaa; --red:#ff3366; --blue:#00d2ff; --purple:#8338ec;
+  --gold:#ffb703; --orange:#fb5607; --cyan:#00e5cc; --pink:#ff6b9d;
+
+  /* ── Glow ── */
+  --glow-g:0 0 15px rgba(0, 255, 170, 0.35);
+  --glow-r:0 0 15px rgba(255, 51, 102, 0.35);
+  --glow-b:0 0 15px rgba(0, 210, 255, 0.35);
+
+  /* ── Glass ── */
+  --glass-bg:rgba(8, 15, 30, 0.6);
+  --glass-border:rgba(0, 210, 255, 0.12);
+  --glass-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.45);
+
+  /* ── Radius ── */
+  --radius:8px;
+
+  /* ── Font stacks — Inter (sans) + JetBrains Mono (mono) only ── */
+  --font-sans:'Inter', system-ui, -apple-system, sans-serif;
+  --mono:'JetBrains Mono', 'Fira Code', monospace;
+}

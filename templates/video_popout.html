@@ -3,11 +3,12 @@
 <head>
 <meta charset="utf-8">
 <title>{{ title }} — Fred AI</title>
+<link rel="stylesheet" href="/static/css/tokens.css">
 <style>
-  html,body{margin:0;padding:0;background:#03080f;height:100%;overflow:hidden;font-family:'JetBrains Mono',monospace}
-  #bar{position:fixed;top:0;left:0;right:0;height:26px;background:#080f1e;color:#94a3b8;font-size:10px;font-weight:700;
+  html,body{margin:0;padding:0;background:var(--bg0);height:100%;overflow:hidden;font-family:var(--mono)}
+  #bar{position:fixed;top:0;left:0;right:0;height:26px;background:var(--bg2);color:var(--t2);font-size:10px;font-weight:700;
        letter-spacing:1px;display:flex;align-items:center;padding:0 10px;border-bottom:1px solid rgba(0,180,255,.15);z-index:2}
-  #bar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;color:#00d2ff}
+  #bar span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-transform:uppercase;color:var(--blue)}
   iframe{position:fixed;top:26px;left:0;right:0;bottom:0;width:100%;height:calc(100% - 26px);border:0}
 </style>
 </head>

@@ -14,7 +14,6 @@
 <title>FredAI</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script>
 if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/static/sw.js').catch(()=>{});
@@ -71,24 +70,15 @@ if ('serviceWorker' in navigator) {
 <script src="https://cdn.jsdelivr.net/npm/d3@7" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/tokens.css">
 
 <style>
 /* ══ DESIGN TOKENS — tier-adaptive custom properties ══════════════════════ */
 :root {
-  /* Colors - Rich, futuristic dark theme with high-contrast neon accents */
-  --bg0:#020408; --bg1:#050a14; --bg2:#080f1e; --bg3:#0c162b;
-  --border:rgba(0, 180, 255, 0.08); --border2:rgba(0, 255, 170, 0.12);
-  --green:#00ffaa; --red:#ff3366; --blue:#00d2ff;
-  --yellow:#ffb703; --purple:#8338ec; --orange:#fb5607; --gold:#f5a623;
-  --t1:#f8f9fa; --t2:#94a3b8; --t3:#475569;
-  --mono:'JetBrains Mono','Fira Code',monospace;
-  --font-sans: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif;
-  --glow-g:0 0 15px rgba(0, 255, 170, 0.35);
-  --glow-r:0 0 15px rgba(255, 51, 102, 0.35);
-  --glow-b:0 0 15px rgba(0, 210, 255, 0.35);
-  --glass-bg:rgba(8, 15, 30, 0.6);
-  --glass-border:rgba(0, 210, 255, 0.12);
-  --glass-shadow:0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  /* Shared design-role tokens (bg/text/accent/glow/glass/border/radius/font)
+     now live in /static/css/tokens.css — this block only keeps tokens that
+     are page-specific to dashboard.html. */
+  --yellow:#ffb703;
 
   /* Tier-adaptive sizing — defaults = full (desktop) */
   --font-base: 13px;
@@ -179,6 +169,12 @@ body{
 ::-webkit-scrollbar-track{background:rgba(0, 0, 0, 0.2);border-radius:4px}
 ::-webkit-scrollbar-thumb{background:rgba(0,210,255,0.2);border-radius:4px;transition:all 0.2s}
 ::-webkit-scrollbar-thumb:hover{background:rgba(0,210,255,0.45)}
+/* Keyboard-focus affordance — enterprise-grade a11y, tokens only */
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible{
+  outline:2px solid var(--blue);outline-offset:2px;border-radius:var(--radius);
+}
 
 /* ══ LOGIN SCREEN ════════════════════════════════════════════════════════ */
 #login-screen{
@@ -193,13 +189,13 @@ body{
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(0, 180, 255, 0.2) !important;
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: clamp(24px,5vw,36px);
-  box-shadow: 0 0 40px rgba(0, 180, 255, 0.15), 0 20px 60px rgba(0,0,0,.6) !important;
+  box-shadow: var(--glow-b), var(--glass-shadow) !important;
   transition: all 0.3s ease;
 }
 .login-box:hover {
-  box-shadow: 0 0 50px rgba(0, 180, 255, 0.25), 0 20px 60px rgba(0,0,0,.7) !important;
+  box-shadow: var(--glow-b), var(--glass-shadow) !important;
   border-color: rgba(0, 180, 255, 0.35) !important;
 }
 .fred-hex{
@@ -208,7 +204,7 @@ body{
   clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);
   display:flex;align-items:center;justify-content:center;
   font-size:clamp(14px,3vw,22px);font-weight:700;color:#03080f;
-  box-shadow: 0 0 15px rgba(0, 180, 255, 0.5);
+  box-shadow: var(--glow-b);
 }
 .login-title{font-size:clamp(16px,4vw,22px);font-weight:700;letter-spacing:3px;text-align:center;color:var(--t1)}
 .login-sub{font-size:var(--font-xs);letter-spacing:2px;color:var(--t2);margin-top:4px;text-align:center}
@@ -219,9 +215,9 @@ body{
 .form-group{margin-bottom:12px}
 .form-group label{display:block;font-size:var(--font-xs);letter-spacing:1px;color:var(--t2);margin-bottom:4px;text-transform:uppercase}
 .form-group input{width:100%;padding:9px 12px;background:rgba(8,13,25,0.6);border:1px solid rgba(0, 180, 255, 0.2);border-radius:var(--radius);color:var(--t1);font-size:var(--font-base);outline:none;transition:all .2s ease-in-out;min-height:var(--touch)}
-.form-group input:focus{border-color:var(--blue);box-shadow: 0 0 10px rgba(0, 180, 255, 0.35)}
-.login-btn{width:100%;padding:10px;background:linear-gradient(135deg,rgba(0,180,255,.25),rgba(91,89,255,.15));border:1px solid rgba(0,180,255,.45);border-radius:var(--radius);color:var(--t1);font-size:var(--font-sm);font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s ease;min-height:var(--touch);box-shadow:0 4px 12px rgba(0,180,255,0.15)}
-.login-btn:hover,.login-btn:active{background:linear-gradient(135deg,rgba(0,180,255,.35),rgba(91,89,255,.25));box-shadow:0 4px 20px rgba(0,180,255,0.3), 0 0 10px rgba(0,255,136,0.15);transform:translateY(-1px)}
+.form-group input:focus{border-color:var(--blue);box-shadow: var(--glow-b)}
+.login-btn{width:100%;padding:10px;background:linear-gradient(135deg,rgba(0,180,255,.25),rgba(91,89,255,.15));border:1px solid rgba(0,180,255,.45);border-radius:var(--radius);color:var(--t1);font-size:var(--font-sm);font-weight:700;letter-spacing:2px;cursor:pointer;transition:all .2s ease;min-height:var(--touch);box-shadow:var(--glass-shadow)}
+.login-btn:hover,.login-btn:active{background:linear-gradient(135deg,rgba(0,180,255,.35),rgba(91,89,255,.25));box-shadow:var(--glow-b), var(--glass-shadow);transform:translateY(-1px)}
 .login-err{color:var(--red);font-size:var(--font-xs);text-align:center;margin-top:8px;min-height:16px}
 .login-footer{text-align:center;margin-top:16px;font-size:var(--font-xs);color:var(--t3)}
 
@@ -240,8 +236,8 @@ body{
 }
 .kh-box{
   width:min(480px,100%);max-height:92dvh;background:var(--bg2);
-  border:1px solid rgba(198,132,255,.3);border-radius:12px;
-  display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.9);
+  border:1px solid rgba(198,132,255,.3);border-radius:var(--radius);
+  display:flex;flex-direction:column;box-shadow:var(--glass-shadow);
 }
 .kh-hdr{
   padding:16px 20px;border-bottom:1px solid rgba(198,132,255,.2);flex-shrink:0;
@@ -250,8 +246,8 @@ body{
 .kh-title{font-size:clamp(13px,2vw,15px);font-weight:700;letter-spacing:1.5px;color:var(--purple)}
 .disc-box{
   width:min(600px,100%);max-height:90dvh;background:var(--bg2);
-  border:1px solid rgba(255,59,92,.3);border-radius:12px;
-  display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.9);
+  border:1px solid rgba(255,59,92,.3);border-radius:var(--radius);
+  display:flex;flex-direction:column;box-shadow:var(--glass-shadow);
 }
 .disc-hdr{
   padding:16px 20px;border-bottom:1px solid rgba(255,59,92,.2);flex-shrink:0;
@@ -381,7 +377,7 @@ html[data-tier="nano"] .install-btn{display:none!important}
   border: 1px solid rgba(0, 180, 255, 0.3);
   border-radius: 14px;
   width: 90%; max-width: 900px;
-  box-shadow: 0 0 60px rgba(0, 180, 255, 0.15), 0 25px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--glow-b), var(--glass-shadow);
   overflow: hidden;
 }
 .video-modal-hdr {
@@ -402,7 +398,7 @@ html[data-tier="nano"] .install-btn{display:none!important}
   height: 80%;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 0 60px rgba(0, 255, 136, 0.15), 0 25px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--glow-g), var(--glass-shadow);
   overflow: hidden;
 }
 .analyst-hdr {
@@ -446,8 +442,8 @@ html[data-tier="nano"] .install-btn{display:none!important}
 .settings-box, .install-box{
   background:rgba(15,23,42,0.8) !important;
   border:1px solid rgba(0,180,255,0.25) !important;
-  border-radius:12px;padding:24px;width:90%;
-  box-shadow:0 0 50px rgba(0,180,255,.15), 0 20px 50px rgba(0,0,0,0.5) !important;
+  border-radius:var(--radius);padding:24px;width:90%;
+  box-shadow:var(--glow-b), var(--glass-shadow) !important;
 }
 .settings-box{max-width:440px}
 .install-box{max-width:480px;padding:28px 32px}
@@ -552,13 +548,13 @@ html[data-tier="micro"] #mobile-nav { display:flex }
   border-radius: var(--radius);
   padding:12px 16px;
   display:flex;flex-direction:column;justify-content:center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: var(--glass-shadow);
   transition: all 0.2s ease-in-out;
 }
 .kpi:hover{
   border-color: rgba(0, 180, 255, 0.15) !important;
   transform:scale(1.02);
-  box-shadow: 0 4px 20px rgba(0, 180, 255, 0.05);
+  box-shadow: 0 8px 32px 0 rgba(0, 210, 255, 0.05), var(--glass-shadow);
 }
 .kpi-lbl{font-size:var(--font-xs);letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:3px}
 .kpi-val{font-size:var(--kpi-size);font-weight:700;font-family:var(--mono);line-height:1}
@@ -701,7 +697,7 @@ html[data-touch="1"] .pos-row { min-height:var(--touch) }
 #cmp-exit:hover{color:var(--t1);border-color:var(--border2)}
 #cmdk-overlay,#keymap-overlay{display:none;position:fixed;inset:0;background:rgba(2,4,8,.7);backdrop-filter:blur(3px);z-index:9000}
 #cmdk-overlay.on,#keymap-overlay.on{display:flex;align-items:flex-start;justify-content:center;padding-top:14vh}
-#cmdk-box{width:min(560px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);overflow:hidden}
+#cmdk-box{width:min(560px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:var(--glass-shadow);overflow:hidden}
 #cmdk-inp{width:100%;background:var(--bg1);border:none;outline:none;color:var(--t1);font-family:var(--mono);font-size:15px;padding:14px 16px;border-bottom:1px solid var(--border)}
 #cmdk-inp::placeholder{color:var(--t3)}
 #cmdk-results{max-height:46vh;overflow-y:auto}
@@ -712,7 +708,7 @@ html[data-touch="1"] .pos-row { min-height:var(--touch) }
 .cmdk-act{color:var(--blue);font-family:var(--mono)}
 .cmdk-hint{padding:8px 16px;color:var(--t3);font-size:var(--font-xs);border-top:1px solid var(--border);display:flex;gap:14px}
 .cmdk-hint kbd,#keymap-box kbd{background:var(--bg1);border:1px solid var(--border);border-radius:3px;padding:1px 5px;font-family:var(--mono);font-size:10px;color:var(--t2)}
-#keymap-box{width:min(440px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.6);padding:18px 20px}
+#keymap-box{width:min(440px,92vw);background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:var(--glass-shadow);padding:18px 20px}
 #keymap-box h3{margin:0 0 12px;font-size:13px;color:var(--t1);letter-spacing:.5px}
 .km-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border);font-size:var(--font-xs);color:var(--t2)}
 .km-row:last-child{border-bottom:none}
@@ -838,7 +834,7 @@ html[data-tier="micro"] .wl-table td:nth-child(6) { display:none }
   padding-bottom:env(safe-area-inset-bottom);
 }
 .fred-icon{font-size:clamp(12px,2vw,16px);color:var(--purple);flex-shrink:0}
-#fred-input{flex:1;background:none;border:none;outline:none;color:var(--t1);font-size:var(--font-base);font-family:'Inter',sans-serif;min-width:0}
+#fred-input{flex:1;background:none;border:none;outline:none;color:var(--t1);font-size:var(--font-base);font-family:var(--font-sans);min-width:0}
 #fred-input::placeholder{color:var(--t3)}
 #fred-reply{font-size:var(--font-xs);color:var(--t2);font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:40%;display:none}
 html[data-tier="full"] #fred-reply,
@@ -863,7 +859,7 @@ html[data-tier="ultra"] #fred-reply { display:block }
   position:fixed;z-index:500;
   background:var(--bg2);border:1px solid var(--border2);
   overflow-y:auto;padding:var(--pad);display:none;
-  box-shadow:0 12px 40px rgba(0,0,0,.7);
+  box-shadow:var(--glass-shadow);
   -webkit-overflow-scrolling:touch;
 }
 html[data-tier="nano"] #fred-drawer,
@@ -885,8 +881,8 @@ html[data-tier="ultra"] #fred-drawer {
 }
 #fred-drawer.open{display:block}
 .cm{margin-bottom:10px}
-.cm.user .cb{background:rgba(155,89,255,.1);border:1px solid rgba(155,89,255,.18);border-radius:8px 8px 2px 8px}
-.cm.fred .cb{background:rgba(0,180,255,.05);border:1px solid rgba(0,180,255,.13);border-radius:8px 8px 8px 2px}
+.cm.user .cb{background:rgba(155,89,255,.1);border:1px solid rgba(155,89,255,.18);border-radius:var(--radius) var(--radius) 2px var(--radius)}
+.cm.fred .cb{background:rgba(0,180,255,.05);border:1px solid rgba(0,180,255,.13);border-radius:var(--radius) var(--radius) var(--radius) 2px}
 .cb{padding:clamp(7px,1.5vw,9px) clamp(10px,2vw,13px);font-size:var(--font-sm);line-height:1.7;white-space:pre-wrap}
 .cr{font-size:var(--font-xs);font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:3px}
 .cm.user .cr{color:var(--purple)}.cm.fred .cr{color:var(--blue)}
@@ -924,8 +920,9 @@ html[data-tier="nano"] #mobile-nav { display:none !important }
 .nano-dots{display:flex;gap:5px;justify-content:center;padding:8px 0}
 .nano-dot-ind{width:6px;height:6px;border-radius:50%;background:var(--t3);transition:.2s}
 .nano-dot-ind.active{background:var(--green)}
-.nano-chat-inp{width:100%;padding:8px;background:var(--bg1);border:1px solid var(--border);border-radius:8px;color:var(--t1);font-size:12px;outline:none}
-.nano-ask{width:100%;padding:10px;background:rgba(155,89,255,.15);border:1px solid rgba(155,89,255,.3);border-radius:8px;color:var(--purple);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:6px}
+.nano-chat-inp{width:100%;padding:8px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);color:var(--t1);font-size:12px;outline:none}
+.nano-ask{width:100%;padding:10px;background:rgba(155,89,255,.15);border:1px solid rgba(155,89,255,.3);border-radius:var(--radius);color:var(--purple);font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;margin-top:6px;transition:.15s}
+.nano-ask:hover{background:rgba(155,89,255,.25)}
 .nano-resp{font-size:10px;color:var(--t2);line-height:1.6;margin-top:8px;text-align:left;max-height:80px;overflow-y:auto}
 
 /* ══ OV-EXTRA ROW (Calendar, News, TechAlerts) ══ */
@@ -963,7 +960,7 @@ html[data-tier="ultra"] #ov-extra{display:grid}
   font-size:8px;font-weight:700;letter-spacing:.5px;padding:1px 5px;
   border-radius:3px;text-transform:uppercase;margin-right:4px;
 }
-.cal-type-fomc,.cal-type-fomc_press_conference{color:#f5a623;background:rgba(245,166,35,.1)}
+.cal-type-fomc,.cal-type-fomc_press_conference{color:#ffb703;background:rgba(255,183,3,.1)}
 .cal-type-rba{color:#00b4ff;background:rgba(0,180,255,.1)}
 .cal-type-macro{color:#9b59ff;background:rgba(155,89,255,.1)}
 .cal-type-earnings{color:#00ff88;background:rgba(0,255,136,.1)}
@@ -1062,7 +1059,7 @@ html[data-tier="compact"] #fred-intelligence { display:flex;flex-direction:colum
 .fi-meta{margin-left:auto;display:flex;align-items:center;gap:8px}
 .fi-risk{font-size:10px;font-weight:700;letter-spacing:1.5px;padding:2px 8px;border-radius:20px}
 .fi-risk.LOW{color:#00ff88;border:1px solid rgba(0,255,136,.3);background:rgba(0,255,136,.08)}
-.fi-risk.MEDIUM{color:#f5a623;border:1px solid rgba(245,166,35,.3);background:rgba(245,166,35,.08)}
+.fi-risk.MEDIUM{color:#ffb703;border:1px solid rgba(255,183,3,.3);background:rgba(255,183,3,.08)}
 .fi-risk.HIGH{color:#ff3b5c;border:1px solid rgba(255,59,92,.3);background:rgba(255,59,92,.08)}
 .fi-refresh{font-size:9px;color:var(--t3);cursor:pointer;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:none;transition:.2s}
 .fi-refresh:hover{color:var(--blue);border-color:var(--blue)}
@@ -1135,7 +1132,7 @@ html[data-tier="compact"] #fred-intelligence { display:flex;flex-direction:colum
   padding:2px 7px;border-radius:20px;text-transform:uppercase;
 }
 .fi-strength.STRONG{color:#00ff88;background:rgba(0,255,136,.1);border:1px solid rgba(0,255,136,.25)}
-.fi-strength.MODERATE{color:#f5a623;background:rgba(245,166,35,.1);border:1px solid rgba(245,166,35,.25)}
+.fi-strength.MODERATE{color:#ffb703;background:rgba(255,183,3,.1);border:1px solid rgba(255,183,3,.25)}
 .fi-strength.WATCH{color:#00b4ff;background:rgba(0,180,255,.1);border:1px solid rgba(0,180,255,.25)}
 .fi-source-badge{
   font-size:8px;letter-spacing:.5px;color:var(--t3);margin-left:5px;
@@ -1179,12 +1176,12 @@ html[data-tier="micro"] #fred-query-wrap{display:none}
 #fq-icon{color:var(--blue);font-size:14px;flex-shrink:0}
 #fred-query-input{
   flex:1;background:none;border:none;color:var(--t1);font-size:11px;
-  outline:none;font-family:var(--sans);
+  outline:none;font-family:var(--font-sans);
 }
 #fred-query-input::placeholder{color:var(--t3)}
 #fq-btn{
   padding:3px 12px;background:rgba(0,180,255,.12);border:1px solid rgba(0,180,255,.25);
-  border-radius:12px;color:var(--blue);font-size:10px;cursor:pointer;font-family:var(--sans);
+  border-radius:12px;color:var(--blue);font-size:10px;cursor:pointer;font-family:var(--font-sans);
   transition:.15s;white-space:nowrap;
 }
 #fq-btn:hover{background:rgba(0,180,255,.22)}
@@ -1287,7 +1284,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
 /* Ticker Network — ephemeral micro-popup on hover/click of a node or link */
 #rn-tooltip{position:fixed;z-index:2000;pointer-events:none;background:rgba(6,15,28,.97);
   border:1px solid rgba(0,180,255,.35);border-radius:8px;padding:10px 12px;
-  font-family:'JetBrains Mono',monospace;font-size:10px;color:#e8f4ff;max-width:260px;
+  font-family:var(--mono);font-size:10px;color:#e8f4ff;max-width:260px;
   box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;line-height:1.5;
   transition:opacity .2s ease;}
 #rn-tooltip.pinned{pointer-events:auto}
@@ -1295,7 +1292,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .rn-tt-sub{color:var(--t2);font-size:9.5px;margin-bottom:4px}
 .rn-tt-row{display:flex;justify-content:space-between;gap:10px;color:var(--t2)}
 .rn-tt-label{color:var(--t3)}
-.rn-tt-desc{margin-top:6px;color:var(--t2);font-family:'Inter',sans-serif;font-size:9.5px;line-height:1.4}
+.rn-tt-desc{margin-top:6px;color:var(--t2);font-family:var(--font-sans);font-size:9.5px;line-height:1.4}
 .rn-tt-badge{font-size:8px;letter-spacing:.5px;padding:1px 5px;border-radius:3px}
 .rn-tt-close{cursor:pointer;color:var(--t3);font-size:10px;display:block;margin-top:6px;text-align:right}
 .rn-tt-close:hover{color:var(--t1)}
@@ -1315,7 +1312,7 @@ html[data-tier="ultra"] #ops-picture{display:block}
 .sd-signal{font-size:8px;font-weight:700;padding:1px 4px;border-radius:3px;flex-shrink:0}
 .sd-signal.BUY{background:rgba(0,255,136,.15);color:var(--green)}
 .sd-signal.SELL{background:rgba(255,59,92,.15);color:var(--red)}
-.sd-signal.HOLD{background:rgba(245,166,35,.1);color:var(--gold)}
+.sd-signal.HOLD{background:rgba(255,183,3,.1);color:var(--gold)}
 .sd-signal.WATCH{background:rgba(0,180,255,.1);color:var(--blue)}
 
 /* Cascade items in ops panel */
@@ -1365,9 +1362,9 @@ html[data-tier="micro"] #ticker-tape { display:none }
 /* ══ NOTIFICATION CENTER ══════════════════════════════════════════════════ */
 .notif-bell-wrapper {
   position:relative;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  width:26px;height:26px;border-radius:6px;background:rgba(255,255,255,0.03);
+  width:26px;height:26px;border-radius:var(--radius);background:rgba(255,255,255,0.03);
   border:1px solid rgba(255,255,255,0.05);margin-right:clamp(4px,1.5vw,10px);
-  user-select:none;
+  user-select:none;transition:background .15s ease-in-out;
 }
 .notif-bell-wrapper:hover { background:rgba(255,255,255,0.06); }
 .notif-bell-icon { font-size:12px;filter:drop-shadow(0 0 2px rgba(0,180,255,0.3)); }
@@ -1379,8 +1376,8 @@ html[data-tier="micro"] #ticker-tape { display:none }
 .notif-dropdown {
   display:none;position:absolute;top:32px;right:0;width:clamp(280px,80vw,340px);
   background:rgba(4,12,23,0.96);backdrop-filter:blur(20px);
-  border:1px solid var(--border2);border-radius:10px;
-  box-shadow:0 10px 30px rgba(0,0,0,0.6);z-index:1000;overflow:hidden;text-align:left;
+  border:1px solid var(--border2);border-radius:var(--radius);
+  box-shadow:var(--glass-shadow);z-index:1000;overflow:hidden;text-align:left;
 }
 .notif-dropdown.open { display:block; }
 .notif-hdr {
@@ -1519,10 +1516,10 @@ html[data-tier="micro"] #ov-globe-stage {
 
   <!-- HEADER -->
   <div id="hdr">
-    <div class="hdr-logo">
+    <a href="/" class="hdr-logo" style="text-decoration:none;color:inherit" title="FredAI Home">
       <div class="mini-hex">F</div>
       <div><div class="hdr-name">FREDAI</div><div class="hdr-sub">Financial Intelligence</div></div>
-    </div>
+    </a>
     <div class="hdr-center">
       <div class="market-pill" id="mkt-pill"><div class="pulse" id="mkt-dot"></div><span id="mkt-lbl">LIVE</span></div>
       <div id="clock">--:--:-- UTC</div>
@@ -1567,6 +1564,7 @@ html[data-tier="micro"] #ov-globe-stage {
     <button class="nav-tab" onclick="switchTab('ai',this)">AI Universe</button>
     <button class="nav-tab" onclick="switchTab('globe',this)">◎ Situation Room</button>
     <button class="nav-tab" onclick="window.location='/news'" style="border-left:1px solid var(--border);margin-left:4px;color:var(--blue)">News ↗</button>
+    <button class="nav-tab" id="nav-timeline-btn" onclick="window.location='/timeline/SPY'" style="color:var(--blue)">Timeline ↗</button>
   </div>
   <!-- ── FRED QUERY BAR ── -->
   <div id="fred-query-wrap">
@@ -1968,7 +1966,7 @@ html[data-tier="micro"] #ov-globe-stage {
           <button class="dash-gflt" onclick="dashGlobeFilter(this,'market')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#00b4ff;cursor:pointer">Market</button>
           <button class="dash-gflt" onclick="dashGlobeFilter(this,'ai')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#00ff88;cursor:pointer">AI</button>
           <button class="dash-gflt" onclick="dashGlobeFilter(this,'geopolitical')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#ff3b5c;cursor:pointer">Geopolitical</button>
-          <button class="dash-gflt" onclick="dashGlobeFilter(this,'central_bank')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#f5a623;cursor:pointer">Central Bank</button>
+          <button class="dash-gflt" onclick="dashGlobeFilter(this,'central_bank')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#ffb703;cursor:pointer">Central Bank</button>
           <button class="dash-gflt" onclick="dashGlobeFilter(this,'macro')" style="font-size:9px;padding:3px 8px;border-radius:3px;background:none;border:1px solid var(--border);color:#9b59ff;cursor:pointer">Macro</button>
         </div>
       </div>
@@ -1979,7 +1977,7 @@ html[data-tier="micro"] #ov-globe-stage {
           </div>
           <div style="width:220px;flex-shrink:0;border-left:1px solid var(--border);padding:10px;overflow:hidden;display:flex;flex-direction:column">
             <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:6px">Live Feed</div>
-            <div id="globe-hud-feed" style="flex:1;overflow-y:auto;font-size:9px;line-height:1.6;color:var(--t3);font-family:'JetBrains Mono',monospace"></div>
+            <div id="globe-hud-feed" style="flex:1;overflow-y:auto;font-size:9px;line-height:1.6;color:var(--t3);font-family:var(--mono)"></div>
           </div>
         </div>
 
@@ -2459,7 +2457,7 @@ html[data-tier="micro"] #ov-globe-stage {
     <div class="analyst-footer">
       <button class="login-btn" id="btn-email-report" onclick="emailAnalystReport()" style="background:var(--green);padding:6px 12px;font-size:11px;margin:0 6px 0 0;display:none">Email Report</button>
       <button class="login-btn" id="btn-toggle-debate" onclick="toggleMarketDebate()" style="background:#a78bfa;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Research Desk</button>
-      <button class="login-btn" id="btn-toggle-filings" onclick="toggleFilingWatch()" style="background:#f5a623;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Filing Watch</button>
+      <button class="login-btn" id="btn-toggle-filings" onclick="toggleFilingWatch()" style="background:#ffb703;padding:6px 12px;font-size:11px;margin:0 6px 0 0">Filing Watch</button>
       <button class="login-btn" onclick="printAnalystReport()" style="background:var(--blue);padding:6px 12px;font-size:11px;margin:0">Print Report</button>
       <button class="install-close" onclick="closeAnalystModal()" style="margin:0">Close</button>
     </div>
@@ -3279,7 +3277,7 @@ document.addEventListener('visibilitychange', () => {
   else stopLzAutoRefresh();
 });
 
-const _GCOLS = {market:'#00b4ff',ai:'#00ff88',geopolitical:'#ff3b5c',central_bank:'#f5a623',macro:'#9b59ff',ticker:'#8ba3b8'};
+const _GCOLS = {market:'#00b4ff',ai:'#00ff88',geopolitical:'#ff3b5c',central_bank:'#ffb703',macro:'#9b59ff',ticker:'#8ba3b8'};
 function _gcol(cat){return _GCOLS[cat]||'#8ba3b8'}
 
 const TICKER_HQ_EXCHANGE = {
@@ -3628,7 +3626,7 @@ async function loadLzGlobePreview() {
     const points = (data.points || []).map(p => ({...p, color: _gcol(p.category)}));
     const arcs = (data.story_arcs || []).slice(0, 25).map(s => {
       const score = s.sentiment_score || 0;
-      const color = score > 0.05 ? 'rgba(0,255,136,.7)' : score < -0.05 ? 'rgba(255,59,92,.7)' : 'rgba(245,166,35,.5)';
+      const color = score > 0.05 ? 'rgba(0,255,136,.7)' : score < -0.05 ? 'rgba(255,59,92,.7)' : 'rgba(255,183,3,.5)';
       return {startLat: s.hq_lat, startLng: s.hq_lng, endLat: s.exchange_lat, endLng: s.exchange_lng, color: [color, 'rgba(0,0,0,0.1)']};
     });
 
@@ -3722,7 +3720,7 @@ async function loadLzAlerts() {
     if (!alerts.length) { body.innerHTML = '<div class="lz-empty">No alerts fired recently</div>'; return; }
     body.innerHTML = alerts.map(a => {
       const color = _ALERT_LEVEL_COLOR[a.level] || 'var(--t3)';
-      return `<div class="lz-row" style="align-items:flex-start;font-family:'Inter',sans-serif">
+      return `<div class="lz-row" style="align-items:flex-start;font-family:var(--font-sans)">
         <span style="display:flex;gap:6px;align-items:flex-start;min-width:0">
           <span style="width:6px;height:6px;border-radius:50%;background:${color};margin-top:4px;flex-shrink:0"></span>
           <span style="min-width:0">
@@ -3882,7 +3880,7 @@ async function loadSectorRotation() {
       const rsCls = s.relative_strength_20d >= 0 ? 'pos' : 'neg';
       const sign = s.relative_strength_20d >= 0 ? '+' : '';
       return `<div style="display:flex;align-items:center;gap:8px;padding:5px 16px;border-bottom:1px solid var(--border)">
-        <span style="font-family:'JetBrains Mono',monospace;font-weight:700;width:44px;flex-shrink:0">${esc(s.symbol)}</span>
+        <span style="font-family:var(--mono);font-weight:700;width:44px;flex-shrink:0">${esc(s.symbol)}</span>
         <span style="flex:1;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.name)}</span>
         <span style="width:60px;text-align:right;color:var(--t3)">${s.return_20d >= 0 ? '+' : ''}${s.return_20d}%</span>
         <span class="${rsCls}" style="width:70px;text-align:right;font-weight:700">${sign}${s.relative_strength_20d}% <span style="font-size:8px;color:var(--t3);font-weight:400">vs SPY</span></span>
@@ -3974,7 +3972,7 @@ function _rnEdgeTooltipHtml(d) {
   const known = d.data_source === 'known_relationship';
   const badge = known
     ? '<span class="rn-tt-badge pos" style="background:rgba(0,255,170,.12)">KNOWN RELATIONSHIP</span>'
-    : '<span class="rn-tt-badge" style="background:rgba(245,166,35,.15);color:var(--gold)">STATISTICAL CORRELATION</span>';
+    : '<span class="rn-tt-badge" style="background:rgba(255,183,3,.15);color:var(--gold)">STATISTICAL CORRELATION</span>';
   const src = d.source.id || d.source, tgt = d.target.id || d.target;
   return `
     <div class="rn-tt-title"><span>${esc(src)} ↔ ${esc(tgt)}</span></div>
@@ -4245,7 +4243,7 @@ async function initDashGlobe() {
       const score = s.sentiment_score || 0;
       const isPositive = score > 0.05;
       const isNegative = score < -0.05;
-      const color = isPositive ? 'rgba(0, 255, 136, 0.75)' : isNegative ? 'rgba(255, 59, 92, 0.75)' : 'rgba(245, 166, 35, 0.55)';
+      const color = isPositive ? 'rgba(0, 255, 136, 0.75)' : isNegative ? 'rgba(255, 59, 92, 0.75)' : 'rgba(255, 183, 3, 0.55)';
       return {
         ticker: s.ticker,
         startLat: s.hq_lat,
@@ -4259,7 +4257,7 @@ async function initDashGlobe() {
             <span style="font-size:8px;background:#1a2b3c;color:#00ff88;padding:1px 4px;border-radius:2px">${esc(s.exchange)}</span>
           </div>
           <div style="font-size:11px;color:#e8f4ff;line-height:1.4">${esc(s.title)}</div>
-          <div style="font-size:10px;margin-top:5px;font-family:monospace;color:${isPositive?'#00ff88':(isNegative?'#ff3b5c':'#f5a623')}">
+          <div style="font-size:10px;margin-top:5px;font-family:monospace;color:${isPositive?'#00ff88':(isNegative?'#ff3b5c':'#ffb703')}">
             Sentiment: ${score >= 0 ? '+' : ''}${score.toFixed(2)}
           </div>
         </div>`
@@ -4331,7 +4329,7 @@ async function initDashGlobe() {
       .onArcClick(a => { if (a.ticker) openAnalystReport(a.ticker); })
       .onArcHover(a => { container.style.cursor = a ? 'pointer' : 'grab'; })
       .ringsData(ringClusters)
-      .ringColor(d => d.sentiment > 0.05 ? 'rgba(0, 255, 136, 0.55)' : (d.sentiment < -0.05 ? 'rgba(255, 59, 92, 0.55)' : 'rgba(245, 166, 35, 0.55)'))
+      .ringColor(d => d.sentiment > 0.05 ? 'rgba(0, 255, 136, 0.55)' : (d.sentiment < -0.05 ? 'rgba(255, 59, 92, 0.55)' : 'rgba(255, 183, 3, 0.55)'))
       .ringMaxRadius(d => d.maxRadius)
       .ringPropagationSpeed(1.8)
       .ringRepeatPeriod(900)
@@ -4475,7 +4473,7 @@ function renderPositions(positions, cid) {
   const asxPos=positions.filter(p=>isAsx(p.symbol));
   function posRow(p){
     const currency=quotesCache[p.symbol]?.currency||(isAsx(p.symbol)?'AUD':'USD');
-    const cTag=currency==='AUD'?`<span style="font-size:7px;color:#f5a623;margin-left:3px">AUD</span>`:'';
+    const cTag=currency==='AUD'?`<span style="font-size:7px;color:#ffb703;margin-left:3px">AUD</span>`:'';
     const siTag=(p.short_float_pct!=null)?`<span title="Short float / days-to-cover" style="font-size:7px;color:${p.short_float_pct>=10?'#ff3b5c':'var(--t3)'};margin-left:5px">SI ${p.short_float_pct.toFixed(1)}%${p.short_ratio!=null?` / ${p.short_ratio.toFixed(1)}d`:''}</span>`:'';
     const sv=p.short_volume;
     const svTag=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};margin-left:5px">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
@@ -4484,7 +4482,7 @@ function renderPositions(positions, cid) {
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
   if(asxPos.length){
-    html+=`<div style="font-size:8px;letter-spacing:1.2px;color:#f5a623;padding:6px 10px 2px;text-transform:uppercase;border-top:1px solid #1a2a1a">◈ ASX Holdings (AUD)</div>`;
+    html+=`<div style="font-size:8px;letter-spacing:1.2px;color:#ffb703;padding:6px 10px 2px;text-transform:uppercase;border-top:1px solid #1a2a1a">◈ ASX Holdings (AUD)</div>`;
     html+=asxPos.map(posRow).join('');
   }
   g(cid).innerHTML=html;
@@ -5046,7 +5044,7 @@ function renderWatchlist(items,interests){
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
     const anomaly=volumeAnomalyCache[sym];
-    const anomalyBadge=anomaly?`<span title="${esc(anomaly.count+' signal+news mentions today, z-score '+anomaly.z_score+' vs 30d baseline')}" style="font-size:7px;background:${anomaly.level==='anomalous'?'#3c1a1a':'#3c2f1a'};color:${anomaly.level==='anomalous'?'var(--red)':'#f5a623'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">▲VOL</span>`:'';
+    const anomalyBadge=anomaly?`<span title="${esc(anomaly.count+' signal+news mentions today, z-score '+anomaly.z_score+' vs 30d baseline')}" style="font-size:7px;background:${anomaly.level==='anomalous'?'#3c1a1a':'#3c2f1a'};color:${anomaly.level==='anomalous'?'var(--red)':'#ffb703'};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">▲VOL</span>`:'';
     const onchain=w.onchain;
     const onchainDir=onchain&&onchain.hash_rate?onchain.hash_rate.direction:null;
     const onchainClr=onchainDir==='rising'?'#00ff88':onchainDir==='falling'?'#ff3b5c':'#3d5a73';
@@ -5095,7 +5093,7 @@ function renderWatchlist(items,interests){
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
   if(asxItems.length){
     const delayedTag=isAsxDelayed(asxItems)?`<span title="ASX quotes haven't refreshed in a while — data may be delayed" style="color:var(--red);margin-left:6px;letter-spacing:0;text-transform:none">⚠ data may be delayed</span>`:'';
-    html+=`<tr><td colspan="7" style="padding:6px 8px 3px;font-size:9px;letter-spacing:1.5px;color:#f5a623;text-transform:uppercase;border-top:1px solid #1a3020;background:rgba(245,166,35,0.04)">◈ ASX — Australia (AUD)${delayedTag}</td></tr>`;
+    html+=`<tr><td colspan="7" style="padding:6px 8px 3px;font-size:9px;letter-spacing:1.5px;color:#ffb703;text-transform:uppercase;border-top:1px solid #1a3020;background:rgba(255,183,3,0.04)">◈ ASX — Australia (AUD)${delayedTag}</td></tr>`;
     html+=asxItems.map(rowHtml).join('');
   }
   tbody.innerHTML=html;
@@ -5171,7 +5169,7 @@ function renderPortfolioTab(p){
     const audPnl=asxPos.reduce((s,x)=>s+(x.pnl||0),0);
     const audNote=document.getElementById('port-aud-note')||document.createElement('div');
     audNote.id='port-aud-note';
-    audNote.style.cssText='font-size:9px;color:#f5a623;padding:2px 0 4px;letter-spacing:.5px';
+    audNote.style.cssText='font-size:9px;color:#ffb703;padding:2px 0 4px;letter-spacing:.5px';
     audNote.textContent=`ASX sub-total: A$${audVal.toLocaleString('en-AU',{minimumFractionDigits:2,maximumFractionDigits:2})} (P&L ${audPnl>=0?'+':''}A$${Math.abs(audPnl).toFixed(2)}) — AUD prices, not converted`;
     const pnlEl=g('port-pnl-big');
     if(!document.getElementById('port-aud-note')) pnlEl.parentNode.insertBefore(audNote,pnlEl.nextSibling);
@@ -5965,7 +5963,7 @@ async function loadCalibration() {
       </tr>`;
     }).join('');
 
-    const palette = ['#00b4ff','#00ff88','#ff3b5c','#f5a623','#9b59ff','#3d5a73'];
+    const palette = ['#00b4ff','#00ff88','#ff3b5c','#ffb703','#9b59ff','#3d5a73'];
     const points = [];
     sources.forEach((s, i) => {
       (s.curve || []).forEach(c => {
@@ -6895,7 +6893,7 @@ async function loadResearchDesk(ticker, forceRefresh) {
       window._marketDebateLoaded = true;
       const md = (t) => window.marked && window.marked.parse ? window.marked.parse(t || '') : esc(t || '');
       const dirColor = d.direction === 'bullish' ? 'var(--green)' : d.direction === 'bearish' ? 'var(--red)' : 'var(--t3)';
-      const contestedBadge = d.contested ? `<span style="background:rgba(245,166,35,.15);color:var(--gold);border-radius:3px;padding:2px 8px;font-size:10px;letter-spacing:1px;text-transform:uppercase">⚠ Contested</span>` : '';
+      const contestedBadge = d.contested ? `<span style="background:rgba(255,183,3,.15);color:var(--gold);border-radius:3px;padding:2px 8px;font-size:10px;letter-spacing:1px;text-transform:uppercase">⚠ Contested</span>` : '';
       const scoreBadge = (label, score) => score != null ? `<span style="font-size:10px;color:var(--t3);font-weight:normal"> (${label} strength ${Math.round(score*100)}%)</span>` : '';
       const riskCol = d.risk_case ? `
         <div style="flex:1;min-width:220px">
@@ -7192,27 +7190,27 @@ async function systemRefresh() {
       </p>
 
       <!-- Anthropic Section -->
-      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:12px">
+      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <span style="font-weight:600;color:var(--t1)">Anthropic Claude API</span>
           <span id="kh-anthropic-badge" style="font-size:9px;padding:2px 6px;border-radius:10px;color:#fff;background:var(--border)">Checking...</span>
         </div>
         <div id="kh-anthropic-desc" style="color:var(--t3);font-size:10px;margin-bottom:8px">Checking configuration...</div>
-        <input type="password" id="kh-anthropic-input" placeholder="Enter personal sk-ant-... key to override" style="width:100%;box-sizing:border-box;padding:6px;font-size:10px;background:rgba(8,13,25,0.6);border:1px solid var(--border);color:var(--t1);outline:none;border-radius:4px">
+        <input type="password" id="kh-anthropic-input" placeholder="Enter personal sk-ant-... key to override" style="width:100%;box-sizing:border-box;padding:6px;font-size:10px;background:rgba(8,13,25,0.6);border:1px solid var(--border);color:var(--t1);outline:none;border-radius:var(--radius)">
       </div>
 
       <!-- Gemini Section -->
-      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:12px">
+      <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <span style="font-weight:600;color:var(--t1)">Google Gemini API</span>
           <span id="kh-gemini-badge" style="font-size:9px;padding:2px 6px;border-radius:10px;color:#fff;background:var(--border)">Checking...</span>
         </div>
         <div id="kh-gemini-desc" style="color:var(--t3);font-size:10px;margin-bottom:8px">Checking configuration...</div>
-        <input type="password" id="kh-gemini-input" placeholder="Enter personal AIzaSy... key to override" style="width:100%;box-sizing:border-box;padding:6px;font-size:10px;background:rgba(8,13,25,0.6);border:1px solid var(--border);color:var(--t1);outline:none;border-radius:4px">
+        <input type="password" id="kh-gemini-input" placeholder="Enter personal AIzaSy... key to override" style="width:100%;box-sizing:border-box;padding:6px;font-size:10px;background:rgba(8,13,25,0.6);border:1px solid var(--border);color:var(--t1);outline:none;border-radius:var(--radius)">
       </div>
 
       <!-- Ollama Status Section -->
-      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;padding:10px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:var(--radius);padding:10px;margin-bottom:16px">
         <div>
           <div style="font-weight:600;color:var(--t1)">Local Ollama Fallback</div>
           <div style="color:var(--t3);font-size:9.5px;margin-top:2px">Runs entirely free and on-device (requires Ollama running on port 11434).</div>
@@ -7221,7 +7219,7 @@ async function systemRefresh() {
       </div>
 
       <!-- Fallback Consent Checkbox -->
-      <label class="disc-check" style="background:rgba(198,132,255,0.03);border:1px solid rgba(198,132,255,0.15);border-radius:6px;padding:10px;display:flex;gap:8px;cursor:pointer;box-sizing:border-box">
+      <label class="disc-check" style="background:rgba(198,132,255,0.03);border:1px solid rgba(198,132,255,0.15);border-radius:var(--radius);padding:10px;display:flex;gap:8px;cursor:pointer;box-sizing:border-box">
         <input type="checkbox" id="kh-consent-cb" checked style="margin-top:2px;flex-shrink:0;width:16px;height:16px;accent-color:var(--purple);cursor:pointer">
         <span style="font-size:10px;color:var(--t2);line-height:1.4">
           <strong>Consent to Fallback:</strong> Allow Fred AI to automatically fall back to local Ollama if cloud API keys are missing, invalid, or run out of credits.

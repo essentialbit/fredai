@@ -30,6 +30,9 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--fo
 #back-btn{display:inline-block;padding:5px 13px;background:rgba(0,210,255,.08);border:1px solid rgba(0,210,255,.2);border-radius:var(--radius);color:var(--blue);font-size:11px;cursor:pointer;font-family:var(--font-sans);text-decoration:none;transition:all 0.2s ease-in-out}
 #back-btn:hover{background:rgba(0,210,255,.18);transform:scale(1.02)}
 #back-btn:focus-visible{outline:1px solid var(--blue);outline-offset:2px}
+.nav-link{display:inline-block;padding:5px 13px;background:rgba(0,210,255,.08);border:1px solid rgba(0,210,255,.2);border-radius:var(--radius);color:var(--blue);font-size:11px;cursor:pointer;font-family:var(--font-sans);text-decoration:none;transition:all 0.2s ease-in-out}
+.nav-link:hover{background:rgba(0,210,255,.18);transform:scale(1.02)}
+.nav-link:focus-visible{outline:1px solid var(--blue);outline-offset:2px}
 #tl-sym{font-size:18px;font-weight:800;font-family:var(--mono);color:var(--t1)}
 #tl-price{font-size:14px;font-family:var(--mono);color:var(--t1)}
 #tl-chg{font-size:11px;font-family:var(--mono);font-weight:700;padding:2px 7px;border-radius:10px}
@@ -212,6 +215,7 @@ html,body{height:100%;background:var(--bg0);color:var(--t1);font-family:var(--fo
 
 <div id="top-bar">
   <a id="back-btn" href="/">← Back</a>
+  <a id="nav-news-btn" class="nav-link" href="/news">News →</a>
   <div class="brand">Fred<span>AI</span></div>
   <span id="tl-sym">{{ symbol }}</span>
   <span id="tl-price">--</span>

@@ -40,6 +40,12 @@ button{font-family:var(--font-sans);cursor:pointer}
   transition:all .2s ease-in-out;white-space:nowrap;
 }
 #back-btn:hover{background:rgba(0,210,255,.18);box-shadow:var(--glow-b);transform:scale(1.03)}
+.nav-link{
+  padding:5px 14px;background:rgba(0,210,255,.08);border:1px solid rgba(0,210,255,.2);
+  border-radius:20px;color:var(--blue);font-size:11px;letter-spacing:.5px;
+  transition:all .2s ease-in-out;white-space:nowrap;
+}
+.nav-link:hover{background:rgba(0,210,255,.18);box-shadow:var(--glow-b);transform:scale(1.03)}
 .page-title{font-size:13px;font-weight:600;letter-spacing:.5px;color:var(--t1);flex:1}
 .live-badge{
   display:flex;align-items:center;gap:5px;font-size:9px;font-weight:700;
@@ -319,7 +325,7 @@ button{font-family:var(--font-sans);cursor:pointer}
 }
 
 /* ══ FOCUS STATES ═══════════════════════════════════════════════════════════ */
-#back-btn:focus-visible,.ptab:focus-visible,.filter-btn:focus-visible,
+#back-btn:focus-visible,.nav-link:focus-visible,.ptab:focus-visible,.filter-btn:focus-visible,
 .time-pill:focus-visible,#ticker-input:focus-visible,#ticker-clear:focus-visible,
 #search-box:focus-visible,#refresh-btn:focus-visible,.page-btn:focus-visible,
 .globe-filter-btn:focus-visible{
@@ -343,6 +349,7 @@ button{font-family:var(--font-sans);cursor:pointer}
   <!-- TOP BAR -->
   <div id="top-bar">
     <a id="back-btn" href="/">← Dashboard</a>
+    <a id="nav-timeline-btn" class="nav-link" href="/timeline/SPY">Timeline →</a>
     <div class="brand">FredAI</div>
     <div class="page-title">Global Intelligence Feed</div>
     <div class="live-badge"><div class="live-pulse"></div>LIVE</div>

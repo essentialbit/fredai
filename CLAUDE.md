@@ -40,7 +40,7 @@ FredAI is an AI-powered financial intelligence dashboard with:
 - SQLite (no tweepy — use requests for X API v2)
 - Lightweight Charts (TradingView) + Chart.js
 - Inter + JetBrains Mono fonts
-- Dark finance theme (#03080f, #00ff88, #ff3b5c, #00b4ff)
+- Dark finance theme (background #020408, green #00ffaa, red #ff3366, blue #00d2ff)
 
 ## Key Files
 - `main.py` — Flask app, routes, WebSocket, scheduler

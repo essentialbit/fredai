@@ -1216,7 +1216,7 @@ html[data-tier="micro"] #fred-query-wrap{display:none}
 html[data-tier="standard"] #ops-picture,
 html[data-tier="full"] #ops-picture,
 html[data-tier="ultra"] #ops-picture{display:block}
-#ops-header{
+.ops-hdr{
   display:flex;align-items:center;gap:10px;padding:10px 14px;
   border-bottom:1px solid rgba(255,59,92,.1);
   background:rgba(255,59,92,.04);
@@ -1643,7 +1643,7 @@ html[data-tier="micro"] #ov-globe-stage {
 
     <!-- OPERATIONAL PICTURE — Mission Control -->
     <div id="ops-picture">
-      <div id="ops-header">
+      <div class="ops-hdr">
         <span style="font-size:14px">◉</span>
         <div class="ops-title">Mission Control — Operational Picture</div>
         <span id="ops-market-status">LOADING</span>
@@ -1660,17 +1660,12 @@ html[data-tier="micro"] #ov-globe-stage {
           <div class="ops-col-title"><div class="ops-badge" style="background:var(--red)"></div>Cascade Alerts</div>
           <div id="ops-cascade-list"><div style="color:var(--t3);font-size:9px">Loading...</div></div>
         </div>
-        <!-- Col 3: Today's High-Impact Events -->
-        <div class="ops-col">
-          <div class="ops-col-title"><div class="ops-badge" style="background:var(--gold)"></div>Today's Events</div>
-          <div id="ops-events-list"><div style="color:var(--t3);font-size:9px">Loading...</div></div>
-        </div>
       </div>
     </div>
 
     <!-- TRACK RECORD — signal-accuracy transparency -->
-    <div id="track-record">
-      <div id="ops-header">
+    <div class="panel" id="track-record" style="grid-column:1/-1">
+      <div class="ops-hdr">
         <span style="font-size:14px">◎</span>
         <div class="ops-title">Fred's Track Record</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">How often has Fred's signal direction matched reality?</span>
@@ -1692,8 +1687,8 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- CALIBRATION — Brier-scored reliability weighting (FSI L4) -->
-    <div id="calibration-panel">
-      <div id="ops-header">
+    <div class="panel" id="calibration-panel" style="grid-column:1/-1">
+      <div class="ops-hdr">
         <span style="font-size:14px">◐</span>
         <div class="ops-title">Fred's Calibration</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">When Fred says he's confident, is he actually more often right?</span>
@@ -1714,8 +1709,8 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- FRED'S ACCOUNTABILITY — honest counterfactual P&L simulation (FSI L3) -->
-    <div id="counterfactual-panel">
-      <div id="ops-header">
+    <div class="panel" id="counterfactual-panel" style="grid-column:1/-1">
+      <div class="ops-hdr">
         <span style="font-size:14px">◑</span>
         <div class="ops-title">Fred's Accountability</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">If you had traded Fred's signals — the honest equity curve, drawdowns included</span>
@@ -1738,8 +1733,8 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- DIVERGENCE RADAR — cross-asset disagreement detection (FSI L2) -->
-    <div id="divergence-panel">
-      <div id="ops-header">
+    <div class="panel" id="divergence-panel" style="grid-column:1/-1">
+      <div class="ops-hdr">
         <span style="font-size:14px">◉</span>
         <div class="ops-title">Divergence Radar</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">When markets that normally agree stop agreeing</span>
@@ -3153,16 +3148,10 @@ async function loadInitData() {
     if (d.timeline && !IS_NANO && !IS_MOBILE) initSentChart(d.timeline);
     // Nano-specific
     if (IS_NANO) { updateNanoQuotes(quotesCache); updateNanoSignal(allSignals); updateNanoRisk(d.risk_level); }
-    // New panels
+    // New panels (Overview-only loaders now fire from switchTab() itself,
+    // gated on _overviewPanelsLoaded, so they don't run before the user
+    // ever sees the Overview tab -- see switchTab()'s 'overview' branch)
     if (!IS_NANO) {
-      setTimeout(loadRecommendations, 800);
-      setTimeout(loadOpsPicture, 1200);
-      setTimeout(loadTrackRecord, 1600);
-      setTimeout(loadCalibration, 1800);
-      setTimeout(loadCounterfactual, 1900);
-      setTimeout(loadDivergenceRadar, 1950);
-      setTimeout(loadTheses, 2000);
-      setTimeout(loadScenarioFactors, 2200);
       if (d.calendar) renderCalendar(d.calendar);
       else loadCalendar();
       if (d.news_preview) renderNewsPreview(d.news_preview);
@@ -3175,6 +3164,12 @@ async function loadInitData() {
     // Overview's raw-HTML default visibility (kept as a normal tab, no
     // longer the default there).
     if (activeTab === 'landingzone') switchTab('landingzone', g('nav-home-btn'));
+    // nano/micro tiers default straight to Overview and have no #nav-tabs
+    // to click through, so switchTab('overview',...) would otherwise never
+    // fire on load -- invoke it here (preserving whichever #mobile-nav
+    // button is already marked active in the static HTML, if any) so the
+    // Overview-only loaders below actually run for these tiers too.
+    else if (activeTab === 'overview') switchTab('overview', document.querySelector('.mnav-btn.active'));
   } catch(e) { console.error('Init error:',e); }
 }
 
@@ -3200,7 +3195,7 @@ function tickClock() {
 setInterval(tickClock, 1000); tickClock();
 
 // ── TABS ──────────────────────────────────────────────────────────────────
-const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record'];
+const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record','ov-recall','calibration-panel','counterfactual-panel','divergence-panel','ov-theses','ov-scenario'];
 const WL=['tab-watchlist'];
 const PF=['tab-portfolio-left','tab-portfolio-chart'];
 const TR=['tab-trending-list','tab-trending-chart'];
@@ -3211,6 +3206,7 @@ const ALL_PANELS=[...OV,...WL,...PF,...TR,...AI,...GB,...LZ];
 const LZ_WIDGET_IDS=['lz-portfolio','lz-alerts','lz-trending','lz-watchlist','lz-aiuniverse','lz-news','lz-globalmap','lz-briefing','lz-ops','lz-globe','lz-relationship','lz-video'];
 
 let _dashGlobeInst = null, _dashGlobeData = [], _dashGlobeFilter = 'all';
+let _overviewPanelsLoaded = false; // guards the 8 Overview-only loaders below so they fire once, on first Overview visit
 
 function switchTab(tab, btn) {
   activeTab = tab;
@@ -3226,6 +3222,17 @@ function switchTab(tab, btn) {
     content.className='tab-overview';
     OV.forEach(id=>{const el=g(id);if(el)el.style.display=''});
     if (IS_ULTRA) g('ultra-trend-mini').style.display='';
+    if (!IS_NANO && !_overviewPanelsLoaded) {
+      _overviewPanelsLoaded = true;
+      setTimeout(loadRecommendations, 800);
+      setTimeout(loadOpsPicture, 1200);
+      setTimeout(loadTrackRecord, 1600);
+      setTimeout(loadCalibration, 1800);
+      setTimeout(loadCounterfactual, 1900);
+      setTimeout(loadDivergenceRadar, 1950);
+      setTimeout(loadTheses, 2000);
+      setTimeout(loadScenarioFactors, 2200);
+    }
   } else if (tab==='watchlist') {
     content.className='tab-watchlist';
     WL.forEach(id=>{const el=g(id);if(el)el.style.display=''});
@@ -6447,28 +6454,6 @@ function renderOpsPicture(d) {
       }).join('');
     } else {
       cascadeEl.innerHTML = '<div style="color:var(--t3);font-size:9px">No major moves today. All quiet.</div>';
-    }
-  }
-
-  // Today's events
-  const eventsEl = g('ops-events-list');
-  if (eventsEl) {
-    const events = d.today_events || [];
-    if (events.length) {
-      eventsEl.innerHTML = events.slice(0,6).map(ev => {
-        const imp = ev.importance || 'medium';
-        const impColor = imp === 'high' || imp === 'critical' ? 'var(--red)' : imp === 'medium' ? 'var(--gold)' : 'var(--t3)';
-        const evDate = ev.event_date ? new Date(ev.event_date).toLocaleDateString('en-AU',{month:'short',day:'numeric'}) : '';
-        return `<div class="ops-event">
-          <div class="ops-event-title">
-            <span class="ops-imp-dot" style="background:${impColor}"></span>${esc(ev.title||ev.event_type||'')}
-            ${ev.symbol ? `<span style="color:var(--blue);font-weight:700;margin-left:4px;cursor:pointer" onclick="loadSymbolChart('${esc(ev.symbol)}')">${esc(ev.symbol)}</span>` : ''}
-          </div>
-          <div class="ops-event-meta">${evDate}${ev.event_time ? ' · ' + ev.event_time : ''} · ${imp.toUpperCase()}</div>
-        </div>`;
-      }).join('');
-    } else {
-      eventsEl.innerHTML = '<div style="color:var(--t3);font-size:9px">No high-impact events today.</div>';
     }
   }
 }

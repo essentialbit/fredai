@@ -56,34 +56,56 @@ def _referenced_issue_numbers(prs: list[dict]) -> set[int]:
     return referenced
 
 
-def compute_eligible_backlog(threshold: float = 0.55) -> list[dict]:
+def compute_eligible_backlog(threshold: float = 0.55, include_near_misses: bool = False):
+    """Returns the eligible list, or (eligible, near_misses) when include_near_misses.
+
+    near_misses are non-risk:high, unreferenced proposals below threshold —
+    sorted by consensus descending, so a cycle can see how close the backlog
+    actually is instead of re-deriving "why is this empty" from scratch.
+    """
     issues = _get_open_proposals()
     referenced = _referenced_issue_numbers(_get_all_prs())
 
     eligible = []
+    near_misses = []
     for issue in issues:
         labels = [l["name"] for l in issue.get("labels", [])]
-        if "risk:high" in labels:
+        if issue["number"] in referenced:
             continue
         consensus_vals = [
             float(l.split(":", 1)[1]) for l in labels if l.startswith("consensus:")
         ]
         max_consensus = max(consensus_vals) if consensus_vals else 0.0
-        if max_consensus < threshold:
-            continue
-        if issue["number"] in referenced:
-            continue
-        eligible.append({
+        entry = {
             "number": issue["number"],
             "title": issue["title"],
             "consensus": max_consensus,
             "labels": labels,
-        })
-    return eligible
+        }
+        if "risk:high" in labels:
+            continue
+        if max_consensus < threshold:
+            near_misses.append(entry)
+            continue
+        eligible.append(entry)
+
+    if not include_near_misses:
+        return eligible
+
+    near_misses.sort(key=lambda e: e["consensus"], reverse=True)
+    return eligible, near_misses
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--threshold", type=float, default=0.55)
+    parser.add_argument(
+        "--verbose", action="store_true",
+        help="also list near-miss candidates (below threshold, non-risk:high, unreferenced)",
+    )
     args = parser.parse_args()
-    print(json.dumps(compute_eligible_backlog(args.threshold), indent=2))
+    if args.verbose:
+        eligible, near_misses = compute_eligible_backlog(args.threshold, include_near_misses=True)
+        print(json.dumps({"eligible": eligible, "near_misses": near_misses}, indent=2))
+    else:
+        print(json.dumps(compute_eligible_backlog(args.threshold), indent=2))

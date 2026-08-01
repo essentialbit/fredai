@@ -226,7 +226,10 @@ class ClaudeCodeAgent:
     """Fred's embedded Claude Code agent — implements features in the live codebase."""
 
     def __init__(self, model: str = "claude-opus-4-8", max_iterations: int = 25):
-        self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        key = os.getenv("ANTHROPIC_API_KEY")
+        from api_handler import log_api_access
+        log_api_access("anthropic_key", "read", error_code=0 if key else 1)
+        self.client = anthropic.Anthropic(api_key=key)
         self.model = model
         self.max_iterations = max_iterations
 
@@ -249,7 +252,10 @@ After implementing, log_progress with a summary of what changed."""
 
         messages.append({"role": "user", "content": user_content})
 
+        from api_handler import log_api_access
+
         for iteration in range(self.max_iterations):
+            log_api_access("anthropic_key", "use", error_code=0)
             resp = self.client.messages.create(
                 model=self.model,
                 max_tokens=4096,

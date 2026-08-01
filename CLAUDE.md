@@ -63,6 +63,9 @@ FredAI is an AI-powered financial intelligence dashboard with:
 - `config.py` — API keys from .env
 - `data/sentinel.db` — SQLite database
 
+## Visual UI Verification (agent-browser)
+`agent-browser` (headless Chrome CLI, wired as an MCP server via `.mcp.json` — `core,debug` tool profiles) is available for verifying `templates/*.html` changes without an attached interactive Chrome session. Typical loop once `main.py` is running (see the shortcut-overwrite hazard above — boot from the primary checkout, not a worktree, unless the installer version check passes): `agent-browser open http://localhost:8080/<route>`, `screenshot`, `a11y --tags wcag2a,wcag2aa` to catch regressions before shipping a dashboard/frontend PR. Pairs with the `web-design-guidelines` Claude Code skill for a written accessibility/UX review of the same page.
+
 ## Self-Improvement Protocol — North Star: Financial Super Intelligence (FSI)
 
 **Overarching goal:** Every 6-hour cycle must measurably advance Fred toward becoming the world's first Financial Super Intelligence. This is not a maintenance loop — it is a capability-building engine. Every implementation decision must be evaluated against the FSI roadmap in `MISSION.md`.

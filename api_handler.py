@@ -1,56 +1,64 @@
 import os
 import json
+import stat
 from datetime import datetime
 
-# Primary log file path
-PRIMARY_LOG_DIR = "/var/log/fredai"
+# Primary log dir — override via FREDAI_API_LOG_DIR for deployments that need
+# a different location (Docker, Raspberry Pi, cloud VM); see CLAUDE.md's
+# "every configurable value is an env var" convention.
+PRIMARY_LOG_DIR = os.getenv("FREDAI_API_LOG_DIR", "/var/log/fredai")
 PRIMARY_LOG_FILE = os.path.join(PRIMARY_LOG_DIR, "api_access.json")
 
-# Fallback path inside the shared cockpit or current working directory
-FALLBACK_LOG_DIR = "/Volumes/Iron 1TBSSD/Shared/Co-Agent Çockpit"
-FALLBACK_LOG_FILE = os.path.join(FALLBACK_LOG_DIR, "api_access.json")
-
-# Project local fallback path
+# Local project fallback — used when the primary dir isn't writable (e.g. no
+# root on a plain macOS/Linux install). Already covered by .gitignore's `logs/`.
 LOCAL_FALLBACK_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs")
 LOCAL_FALLBACK_FILE = os.path.join(LOCAL_FALLBACK_DIR, "api_access.json")
+
+_DIR_MODE = stat.S_IRWXU  # 0700 — owner-only
+_FILE_MODE = stat.S_IRUSR | stat.S_IWUSR  # 0600 — owner-only
+
+def _ensure_owner_only_dir(path: str) -> None:
+    if not os.path.exists(path):
+        os.makedirs(path, mode=_DIR_MODE, exist_ok=True)
+        try:
+            os.chmod(path, _DIR_MODE)
+        except OSError:
+            pass  # e.g. pre-existing dir owned by a different user/process (ops-managed /var/log/fredai)
+
+def _try_candidate(log_dir: str, log_file: str) -> str | None:
+    try:
+        _ensure_owner_only_dir(log_dir)
+        is_new = not os.path.exists(log_file)
+        with open(log_file, "a"):
+            pass
+        if is_new:
+            try:
+                os.chmod(log_file, _FILE_MODE)
+            except OSError:
+                pass
+        return log_file
+    except OSError:
+        return None
 
 def get_writable_log_file():
     """
     Returns the first writable log file path among the candidates,
-    ensuring directories are created.
+    ensuring directories/files are created owner-only (0700/0600) so
+    access-pattern metadata (which keys were saved/read/used, by which
+    user id, when) isn't world-readable on shared/multi-tenant hosts.
+    Never logs key material itself, only key names.
     """
-    # 1. Try primary path
-    try:
-        if not os.path.exists(PRIMARY_LOG_DIR):
-            os.makedirs(PRIMARY_LOG_DIR, exist_ok=True)
-        # Test write access
-        with open(PRIMARY_LOG_FILE, "a") as f:
-            pass
-        return PRIMARY_LOG_FILE
-    except Exception:
-        pass
+    for log_dir, log_file in (
+        (PRIMARY_LOG_DIR, PRIMARY_LOG_FILE),
+        (LOCAL_FALLBACK_DIR, LOCAL_FALLBACK_FILE),
+    ):
+        result = _try_candidate(log_dir, log_file)
+        if result:
+            return result
 
-    # 2. Try shared cockpit fallback
-    try:
-        if not os.path.exists(FALLBACK_LOG_DIR):
-            os.makedirs(FALLBACK_LOG_DIR, exist_ok=True)
-        with open(FALLBACK_LOG_FILE, "a") as f:
-            pass
-        return FALLBACK_LOG_FILE
-    except Exception:
-        pass
-
-    # 3. Try local fallback
-    try:
-        if not os.path.exists(LOCAL_FALLBACK_DIR):
-            os.makedirs(LOCAL_FALLBACK_DIR, exist_ok=True)
-        with open(LOCAL_FALLBACK_FILE, "a") as f:
-            pass
-        return LOCAL_FALLBACK_FILE
-    except Exception:
-        pass
-
-    # Default to local fallback path regardless
+    # Both candidates failed (e.g. read-only filesystem) — return the local
+    # path anyway so callers get a consistent target; log_api_access's own
+    # try/except degrades this to a no-op print rather than a crash.
     return LOCAL_FALLBACK_FILE
 
 def log_api_access(api_key_name: str, access_type: str, error_code: int = 0, user_id=None):
@@ -64,7 +72,7 @@ def log_api_access(api_key_name: str, access_type: str, error_code: int = 0, use
       - user_id: identifier of the user (if context is available)
     """
     log_file = get_writable_log_file()
-    
+
     log_entry = {
         "timestamp": datetime.utcnow().isoformat() + "Z",
         "api_key_name": api_key_name,
@@ -72,9 +80,9 @@ def log_api_access(api_key_name: str, access_type: str, error_code: int = 0, use
         "error_code": error_code,
         "user_id": user_id
     }
-    
+
     try:
         with open(log_file, "a") as f:
             f.write(json.dumps(log_entry) + "\n")
-    except Exception as e:
+    except OSError as e:
         print(f"[api_handler] Failed to log API access: {e}")

@@ -127,7 +127,10 @@ class GeminiCodeAgent:
     """Fred's embedded Gemini Code agent — implements features in the live codebase."""
 
     def __init__(self, model: str = "gemini-2.5-flash", max_iterations: int = 25):
-        self.api_key = os.getenv("GEMINI_API_KEY", "")
+        key = os.getenv("GEMINI_API_KEY", "")
+        from api_handler import log_api_access
+        log_api_access("gemini_key", "read", error_code=0 if key else 1)
+        self.api_key = key
         self.model = model
         self.max_iterations = max_iterations
 
@@ -182,6 +185,8 @@ After implementing, call 'done' with a summary of what changed."""
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
 
+        from api_handler import log_api_access
+
         for iteration in range(self.max_iterations):
             body = {
                 "contents": messages,
@@ -195,6 +200,7 @@ After implementing, call 'done' with a summary of what changed."""
             data = None
             try:
                 if self.api_key:
+                    log_api_access("gemini_key", "use", error_code=0)
                     r = requests.post(url, json=body, timeout=60)
                     if r.status_code == 200:
                         data = r.json()

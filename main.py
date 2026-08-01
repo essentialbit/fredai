@@ -2006,15 +2006,21 @@ def api_save_user_keys():
     except Exception:
         pass
 
+    from api_handler import log_api_access
+
     if anthropic_key:
         prefs["user_anthropic_key"] = encrypt_secret(anthropic_key)
+        log_api_access("anthropic_key", "save", error_code=0, user_id=uid)
     elif "user_anthropic_key" in prefs:
         del prefs["user_anthropic_key"]
+        log_api_access("anthropic_key", "delete", error_code=0, user_id=uid)
 
     if gemini_key:
         prefs["user_gemini_key"] = encrypt_secret(gemini_key)
+        log_api_access("gemini_key", "save", error_code=0, user_id=uid)
     elif "user_gemini_key" in prefs:
         del prefs["user_gemini_key"]
+        log_api_access("gemini_key", "delete", error_code=0, user_id=uid)
         
     with get_conn() as conn:
         conn.execute("UPDATE users SET preferences=? WHERE id=?", (json.dumps(prefs), uid))
@@ -2039,6 +2045,11 @@ def api_get_user_keys_status():
         prefs = json.loads(user.get("preferences") or "{}")
     except Exception:
         pass
+    
+    from api_handler import log_api_access
+    log_api_access("anthropic_key", "read", error_code=0, user_id=uid)
+    log_api_access("gemini_key", "read", error_code=0, user_id=uid)
+    
     return jsonify({
         "has_anthropic": bool(prefs.get("user_anthropic_key")),
         "has_gemini": bool(prefs.get("user_gemini_key"))

@@ -3369,6 +3369,24 @@ function resolveTickerLocation(ticker) {
 }
 
 let _globeMode = 'standard';
+let _globeDataTotal = 0;
+
+// Recomputes the "N signals" stat line to match what's actually plotted --
+// must be called any time mode/filter changes, not just once at load, or
+// the count silently drifts out of sync with the visible points.
+function updateGlobeStats() {
+  const el = g('dash-globe-stats');
+  if (!el) return;
+  if (_globeMode === 'monitored') {
+    const n = new Set([...(window._portfolio || []), ...(window._watchlist || [])]).size;
+    el.textContent = `${n} monitored ticker${n!==1?'s':''} · Portfolio + Watchlist`;
+    return;
+  }
+  const shown = _dashGlobeFilter === 'all'
+    ? _globeDataTotal
+    : _dashGlobeData.filter(d => d.category === _dashGlobeFilter).reduce((s,d) => s+(d.count||1), 0);
+  el.textContent = `${shown} signal${shown!==1?'s':''} · 24h${_dashGlobeFilter!=='all'?' · '+_dashGlobeFilter:''}`;
+}
 
 function getGlobePoints() {
   let pts = [];
@@ -3419,6 +3437,7 @@ function setGlobeMode(mode, btn) {
   document.querySelectorAll('.dash-gmode').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   _globeMode = mode;
+  updateGlobeStats();
   if (!_dashGlobeInst) return;
   _dashGlobeInst.pointsData(getGlobePoints());
 }
@@ -4055,7 +4074,8 @@ async function initDashGlobe() {
     const r = await fetch('/api/news/globe-data?hours=24');
     const data = await r.json();
     _dashGlobeData = data.points || [];
-    g('dash-globe-stats').textContent = `${data.total} signals · 24h`;
+    _globeDataTotal = data.total || 0;
+    updateGlobeStats();
     loading.style.display = 'none';
 
     const storyArcs = (data.story_arcs || []).slice(0, 40).map(s => {
@@ -4191,32 +4211,43 @@ async function initDashGlobe() {
     ['mousedown', 'wheel', 'touchstart'].forEach(evt =>
       container.addEventListener(evt, pauseThenResumeRotation, { passive: true }));
 
-    // HUD Live logger simulation
+    // HUD Live Feed -- cycles through the real story_arcs/points this
+    // fetch actually ingested (same data driving the globe itself), not
+    // canned placeholder text. There's no push channel for individual news
+    // items, so this replays the real fetched batch on a timer rather than
+    // streaming genuinely-new events -- honest about being a feed of real
+    // ingested signals, not a claim of sub-second live ingestion.
     const logFeed = g('globe-hud-feed');
-    const logLines = [
-      "[OK] Ingested Yahoo feed symbol: AAPL (VADER: +0.62)",
-      "[OK] Ingested RBA interest rate decision (VADER: 0.00)",
-      "[OK] Nikkei Asia news feed auto-translated: JP -> EN",
-      "[OK] Ingested FOMC policy meeting notes (VADER: -0.15)",
-      "[OK] Seeking Alpha analyst updates symbol: TSLA",
-      "[OK] Ingested NHK Geopolitical news feed auto-translated",
-      "[OK] Sector sentiment audit completed successfully",
-      "[OK] Ingested VentureBeat AI sector briefing"
+    const hudEvents = [
+      ...(data.story_arcs || []).slice(0, 30).map(s => {
+        const score = s.sentiment_score;
+        const sentTxt = score == null ? '' : ` (sentiment ${score>=0?'+':''}${score.toFixed(2)})`;
+        return `[NEWS] ${esc(s.ticker)} — ${esc((s.title||'').slice(0,90))}${sentTxt}`;
+      }),
+      ...(data.points || []).slice(0, 20).map(p =>
+        `[REGION] ${esc(p.label)} — ${p.count} report${p.count!==1?'s':''} (${esc(p.category)})`
+      )
     ];
     if (window._globeHudInterval) clearInterval(window._globeHudInterval);
-    window._globeHudInterval = setInterval(() => {
-      if (logFeed && activeTab === 'globe') {
-        const line = logLines[Math.floor(Math.random() * logLines.length)];
-        const timestamp = new Date().toLocaleTimeString();
-        const d = document.createElement('div');
-        d.innerHTML = `<span style="color:#8ba3b8">[${timestamp}]</span> ${line}`;
-        logFeed.appendChild(d);
-        logFeed.scrollTop = 1e9;
-        if (logFeed.children.length > 15) {
-          logFeed.removeChild(logFeed.firstChild);
+    if (!hudEvents.length) {
+      if (logFeed) logFeed.innerHTML = '<span style="color:var(--t3)">No signals ingested in this window.</span>';
+    } else {
+      let hudIdx = 0;
+      window._globeHudInterval = setInterval(() => {
+        if (logFeed && activeTab === 'globe') {
+          const line = hudEvents[hudIdx % hudEvents.length];
+          hudIdx++;
+          const timestamp = new Date().toLocaleTimeString();
+          const d = document.createElement('div');
+          d.innerHTML = `<span style="color:#8ba3b8">[${timestamp}]</span> ${line}`;
+          logFeed.appendChild(d);
+          logFeed.scrollTop = 1e9;
+          if (logFeed.children.length > 15) {
+            logFeed.removeChild(logFeed.firstChild);
+          }
         }
-      }
-    }, 2500);
+      }, 2500);
+    }
 
   } catch(e) {
     if (loading) loading.innerHTML = `<span style="color:var(--red)">Situation Room unavailable</span>`;
@@ -4241,6 +4272,7 @@ function dashGlobeFilter(btn, cat) {
   document.querySelectorAll('.dash-gflt').forEach(b => b.style.background = 'none');
   btn.style.background = 'rgba(0,180,255,.12)';
   _dashGlobeFilter = cat;
+  updateGlobeStats();
   if (!_dashGlobeInst) return;
   _dashGlobeInst.pointsData(getGlobePoints());
 }

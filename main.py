@@ -265,16 +265,6 @@ AI_UNIVERSE = {
         "desc": "Companies with AI as their primary business model",
         "tickers": ["PLTR", "AI", "SOUN", "BBAI", "UPST", "PATH", "RXRX"],
     },
-    "Defence & Aerospace": {
-        "color": "#8ba3b8",
-        "desc": "Defence contractors, aerospace, and military-AI companies",
-        "tickers": ["LMT", "RTX", "NOC", "GD", "BA", "KTOS", "HII", "LDOS", "CACI", "SAIC"],
-    },
-    "Oil, Gas & Energy": {
-        "color": "#f5a623",
-        "desc": "Fossil fuel majors and energy transition plays",
-        "tickers": ["XOM", "CVX", "COP", "OXY", "SLB", "EOG", "PSX", "VLO", "MPC", "BP"],
-    },
     "Biotech & AI Health": {
         "color": "#ff6b9d",
         "desc": "AI-driven drug discovery, genomics, and health tech",

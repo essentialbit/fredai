@@ -1013,6 +1013,10 @@ html[data-tier="ultra"] #ov-extra{display:grid}
 .ai-ticker-chg{font-family:var(--mono);font-size:9px;font-weight:700}
 .ai-ticker-chg.up{color:var(--green)}
 .ai-ticker-chg.dn{color:var(--red)}
+.ai-ticker-sent{width:6px;height:6px;border-radius:50%;flex-shrink:0;display:inline-block;margin-left:4px}
+.ai-ticker-sent.pos{background:var(--green)}
+.ai-ticker-sent.neg{background:var(--red)}
+.ai-ticker-sent.neu{background:var(--t3)}
 
 /* ══ FRED'S INTELLIGENCE — Futuristic AI Recommendations Panel ══ */
 #fred-intelligence{
@@ -2484,6 +2488,7 @@ socket.on('market_update', d => {
   if (d.stats) updateKPIs(d.stats, d.risk_level);
   if (d.trending) { trendData = d.trending; if (activeTab==='trending') renderTrending(d.trending); renderUltraTrend(d.trending); }
   if (d.macro) renderMacroStrip(d.macro);
+  if (activeTab==='ai') loadAIUniverse();
 });
 socket.on('new_signal', s => {
   allSignals.unshift(s);
@@ -4734,7 +4739,7 @@ function execPaletteItem(i) {
   const it = _cmdkItems[i]; if (!it) return;
   closePalette();
   if (it.type === 'jump') { exitCompareQuiet(); loadSymbolChart(it.sym); saveChartWorkspace(); }
-  else if (it.type === 'compare') { switchTab('overview', document.querySelector('.nav-tab')); setCompare(it.syms); }
+  else if (it.type === 'compare') { switchTab('overview', document.querySelector('.nav-tab[onclick*="\'overview\'"]')); setCompare(it.syms); }
   else if (it.type === 'clear') exitCompare();
   else if (it.type === 'watch') {
     fetch('/api/watchlist', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({symbol: it.sym})}).then(() => loadWatchlist()).catch(() => {});
@@ -5088,9 +5093,10 @@ function renderRecallResults(results){
 }
 function jumpToSymbol(asset){
   const sel=g('sym-sel');if([...sel.options].some(o=>o.value===asset))sel.value=asset;
-  switchTab('overview',document.querySelector('.nav-tab'));
+  const ovBtn=document.querySelector('.nav-tab[onclick*="\'overview\'"]');
+  switchTab('overview',ovBtn);
   document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
-  document.querySelector('.nav-tab').classList.add('active');
+  if(ovBtn) ovBtn.classList.add('active');
   setTimeout(()=>loadPriceChart(),100);
 }
 
@@ -5486,6 +5492,7 @@ async function loadAIUniverse() {
     if (loading) loading.textContent='';
     el.innerHTML = (d.sectors||[]).map(sector => renderAISector(sector)).join('');
   } catch(e) {
+    if (loading) loading.textContent='';
     if (el) el.innerHTML='<div style="color:var(--t3);padding:20px">Failed to load AI universe data.</div>';
   }
 }
@@ -5495,9 +5502,12 @@ function renderAISector(sector) {
     const chgClass = (t.change_pct||0)>=0?'up':'dn';
     const chgSign = (t.change_pct||0)>=0?'+':'';
     const price = t.price>0?'$'+t.price.toFixed(2):'--';
+    const sent = t.sentiment;
+    const sentCls = sent ? (sent.signal_type==='bullish'?'pos':sent.signal_type==='bearish'?'neg':'neu') : '';
+    const sentDot = sent ? `<span class="ai-ticker-sent ${sentCls}" title="${sent.signal_count} signal${sent.signal_count!==1?'s':''} (24h) · ${esc(sent.signal_type)} · avg ${sent.avg_sentiment}"></span>` : '';
     return `<div class="ai-ticker" onclick="loadSymbolChart('${esc(t.symbol)}')">
       <div>
-        <div class="ai-ticker-sym">${esc(t.symbol)}</div>
+        <div class="ai-ticker-sym">${esc(t.symbol)}${sentDot}</div>
         <div class="ai-ticker-price">${price}</div>
       </div>
       <div class="ai-ticker-chg ${chgClass}">${t.price>0?chgSign+(t.change_pct||0).toFixed(2)+'%':'--'}</div>
@@ -5520,7 +5530,7 @@ function loadSymbolChart(sym) {
     if (!opt) { const o=new Option(sym,sym); sel.add(o); }
     sel.value = sym;
   }
-  switchTab('overview', document.querySelector('.nav-tab'));
+  switchTab('overview', document.querySelector('.nav-tab[onclick*="\'overview\'"]'));
   setTimeout(loadPriceChart, 100);
 }
 

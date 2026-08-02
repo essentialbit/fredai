@@ -670,9 +670,10 @@ html[data-tier="micro"] #ov-bottom { display:none }
 /* ══ POSITION / PORTFOLIO ROWS ═══════════════════════════════════════════ */
 .pos-row{
   padding:10px var(--pad);border-bottom:1px solid rgba(255, 255, 255, 0.02);
-  display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:8px;
+  display:grid;grid-template-columns:1fr auto;align-items:center;
   transition:all .15s ease-in-out;min-height:var(--touch);
 }
+.pos-row.has-remove{grid-template-columns:1fr auto auto;gap:8px}
 html[data-touch="1"] .pos-row { min-height:var(--touch) }
 .pos-row:hover{background:rgba(0, 210, 255, 0.05);padding-left:calc(var(--pad) + 3px)}
 .ps{font-weight:600;font-size:var(--font-base)}.pn{font-size:var(--font-xs);color:var(--t3);margin-top:1px}
@@ -4313,8 +4314,9 @@ function renderPositions(positions, cid) {
     const siTag=(p.short_float_pct!=null)?`<span title="Short float / days-to-cover" style="font-size:7px;color:${p.short_float_pct>=10?'#ff3b5c':'var(--t3)'};margin-left:5px">SI ${p.short_float_pct.toFixed(1)}%${p.short_ratio!=null?` / ${p.short_ratio.toFixed(1)}d`:''}</span>`:'';
     const sv=p.short_volume;
     const svTag=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};margin-left:5px">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
-    const rmBtn=cid==='port-positions-list'?`<button class="pos-remove" title="Close position (removes from portfolio)" onclick="event.stopPropagation();removePortfolioPos('${esc(p.symbol)}')">✕</button>`:'';
-    return `<div class="pos-row" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div>${rmBtn}</div>`;
+    const hasRemove=cid==='port-positions-list';
+    const rmBtn=hasRemove?`<button class="pos-remove" title="Close position (removes from portfolio)" onclick="event.stopPropagation();removePortfolioPos('${esc(p.symbol)}')">✕</button>`:'';
+    return `<div class="pos-row${hasRemove?' has-remove':''}" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div>${rmBtn}</div>`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -4963,8 +4965,8 @@ function renderStressTest(d){
       <div class="sc-dates">${sc.start_date} → ${sc.end_date}</div>
       <div class="sc-pct ${cls}">${pct>=0?'+':''}${pct.toFixed(2)}%</div>
       <div class="sc-val ${cls}">${pct>=0?'+':'-'}${fmtD(sc.portfolio_value_change)}</div>
-      <div class="sc-row"><span>Worst: ${esc(sc.worst_holding.symbol)}</span><span class="neg">${sc.worst_holding.pct_change.toFixed(1)}%</span></div>
-      <div class="sc-row"><span>Best: ${esc(sc.best_holding.symbol)}</span><span class="pos">+${sc.best_holding.pct_change.toFixed(1)}%</span></div>
+      <div class="sc-row"><span>Worst: ${esc(sc.worst_holding.symbol)}</span><span class="${sc.worst_holding.pct_change>=0?'pos':'neg'}">${sc.worst_holding.pct_change>=0?'+':''}${sc.worst_holding.pct_change.toFixed(1)}%</span></div>
+      <div class="sc-row"><span>Best: ${esc(sc.best_holding.symbol)}</span><span class="${sc.best_holding.pct_change>=0?'pos':'neg'}">${sc.best_holding.pct_change>=0?'+':''}${sc.best_holding.pct_change.toFixed(1)}%</span></div>
       <div class="sc-coverage">${sc.coverage_pct}% of portfolio value covered (${sc.holdings_covered} holding${sc.holdings_covered===1?'':'s'}${sc.holdings_excluded.length?`, ${sc.holdings_excluded.length} excluded for insufficient history`:''})</div>
     </div>`;
   }).join('');

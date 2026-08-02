@@ -776,8 +776,6 @@ html[data-tier="micro"] #heatmap { grid-template-columns:repeat(4,1fr) }
 .wl-row td:first-child{font-weight:600;color:var(--t1);font-family:var(--mono)}
 .wl-remove{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0 4px;line-height:1;min-width:var(--touch);min-height:var(--touch);display:flex;align-items:center;justify-content:center}
 .wl-remove:hover{color:var(--red)}
-.interest-bar{width:100%;height:3px;background:var(--border);border-radius:2px;margin-top:3px}
-.interest-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .4s}
 .add-form{padding:var(--pad);border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
 .add-form input{flex:1;padding:6px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);color:var(--t1);font-size:var(--font-base);outline:none;min-height:var(--touch)}
 .add-form input:focus{border-color:var(--blue)}
@@ -1886,7 +1884,7 @@ html[data-tier="micro"] #ov-globe-stage {
       <div class="ph">Your Watchlist <span class="ptag" id="wl-cnt">0 symbols</span></div>
       <div class="scroll">
         <table class="wl-table" id="wl-table">
-          <thead><tr><th>Symbol</th><th>Name</th><th>Price</th><th>Today</th><th>Sentiment</th><th>Fred Interest</th><th></th></tr></thead>
+          <thead><tr><th>Symbol</th><th>Name</th><th>Price</th><th>Today</th><th>Sentiment</th><th title="Deterministic composite of sentiment, insider trading clusters, and short-volume trend — not a personal browsing score">Fred Signal</th><th></th></tr></thead>
           <tbody id="wl-body"></tbody>
         </table>
         <div class="empty" id="wl-empty" style="display:none">No watchlist symbols yet.</div>
@@ -3041,7 +3039,7 @@ async function loadInitData() {
     if (d.alerts) renderAlerts(d.alerts);
     if (d.sector) renderHeatmap(d.sector);
     if (d.next_scan) nextScanISO = d.next_scan;
-    if (d.watchlist_detail) renderWatchlist(d.watchlist_detail, d.interests||[]);
+    if (d.watchlist_detail) renderWatchlist(d.watchlist_detail);
     if (d.portfolio) renderPortfolioTab(d.portfolio);
     if (d.macro) renderMacroStrip(d.macro);
     if (trendData.length) { renderTrending(trendData); renderUltraTrend(trendData); }
@@ -4796,8 +4794,8 @@ function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(t
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
 let volumeAnomalyCache={};
 async function loadWatchlist(){
-  const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[]);
-  fetch('/api/volume-anomalies').then(r=>r.json()).then(a=>{volumeAnomalyCache=a||{};renderWatchlist(d,[])}).catch(()=>{});
+  const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d);
+  fetch('/api/volume-anomalies').then(r=>r.json()).then(a=>{volumeAnomalyCache=a||{};renderWatchlist(d)}).catch(()=>{});
 }
 // FSI L5 job-listing hiring velocity (#228) -- only meaningful for a small
 // curated set of Greenhouse-listed tickers, lazily fetched per symbol (24h
@@ -4809,14 +4807,14 @@ const JOB_LISTINGS_TRACKED=['COIN','ABNB','DDOG','HOOD'];
 // symbol (24h server-side cache) and merged back in via a re-render rather
 // than blocking the initial watchlist paint.
 const OSS_TRACKED=['MDB','ESTC','GTLB','HCP','CFLT','NET'];
-let jobListingsCache={},ossVelocityCache={},darkPoolCache={},_wlLastItems=null,_wlLastInterests=null;
+let jobListingsCache={},ossVelocityCache={},darkPoolCache={},_wlLastItems=null;
 async function loadJobListings(sym){
   if(jobListingsCache[sym]!==undefined)return;
   jobListingsCache[sym]=null;
   try{
     const r=await fetch('/api/job-listings/'+sym);
     const d=await r.json();
-    if(d&&d.trend_20d){jobListingsCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+    if(d&&d.trend_20d){jobListingsCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems)}
   }catch(e){}
 }
 async function loadOssVelocity(sym){
@@ -4825,7 +4823,7 @@ async function loadOssVelocity(sym){
   try{
     const r=await fetch('/api/oss-velocity/'+sym);
     const d=await r.json();
-    if(d&&d.trend_52wk){ossVelocityCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+    if(d&&d.trend_52wk){ossVelocityCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems)}
   }catch(e){}
 }
 async function loadDarkPool(sym){
@@ -4834,12 +4832,11 @@ async function loadDarkPool(sym){
   try{
     const r=await fetch('/api/dark-pool/'+sym);
     const d=await r.json();
-    if(d&&d.trend){darkPoolCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+    if(d&&d.trend){darkPoolCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems)}
   }catch(e){}
 }
-function renderWatchlist(items,interests){
-  _wlLastItems=items;_wlLastInterests=interests;
-  const im={};(interests||[]).forEach(i=>im[i.symbol]=i.interest_score);
+function renderWatchlist(items){
+  _wlLastItems=items;
   const tbody=g('wl-body');
   if(!items.length){g('wl-empty').style.display='';tbody.innerHTML='';g('wl-cnt').textContent='0 symbols';return}
   g('wl-empty').style.display='none';
@@ -4857,8 +4854,11 @@ function renderWatchlist(items,interests){
     // data-attribute + addEventListener instead.
     const sym=w.symbol||w,q=quotesCache[sym]||{},pct=q.change_pct||0,pos=pct>=0;
     const currency=q.currency||(isAsx(sym)?'AUD':'USD');
-    const interest=im[sym]||1,pct_bar=Math.min(interest/20*100,100);
-    const sentCls=getSentClass(sym);
+    const sent=w.sentiment;
+    const sentCls=sent?sent.signal_type:'neutral';
+    const sentTip=sent?`${sent.signal_count} signal${sent.signal_count!==1?'s':''} (24h), avg sentiment ${sent.avg_sentiment}`:'no sentiment signals in 24h';
+    const conv=w.fred_conviction;
+    const convTag=conv?`<span class="sig-tag ${conv.label}" style="font-size:8px" title="${esc(conv.basis.join(' · '))}">${conv.label} ${conv.score>0?'+':''}${conv.score}</span>`:`<span style="font-size:9px;color:var(--t3)" title="Not enough signal data yet (needs 3+ sentiment signals, an insider cluster, or a short-volume trend)">--</span>`;
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
@@ -4906,7 +4906,7 @@ function renderWatchlist(items,interests){
         dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
       }
     }
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px" title="${esc(sentTip)}">${sentCls}</span></td><td>${convTag}</td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -4917,7 +4917,6 @@ function renderWatchlist(items,interests){
   }
   tbody.innerHTML=html;
 }
-function getSentClass(sym){const r=allSignals.filter(s=>s.asset===sym).slice(0,10);if(!r.length)return'neutral';const b=r.filter(s=>s.signal_type==='bullish').length;return b>r.length/2?'bullish':b<r.length/3?'bearish':'neutral'}
 async function addWatchlist(){const sym=g('wl-inp').value.trim().toUpperCase();if(!sym)return;await fetch('/api/watchlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});g('wl-inp').value='';loadWatchlist()}
 async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});loadWatchlist()}
 

@@ -628,6 +628,8 @@ html[data-tier="micro"] #ov-portfolio { min-height:160px }
 html[data-tier="micro"] #ov-chart { height:clamp(200px,55vw,280px) }
 html[data-tier="micro"] #ov-signals,
 html[data-tier="micro"] #ov-bottom { display:none }
+html[data-tier="compact"] #tab-portfolio-chart .pie-wrap { height:clamp(220px,50vw,300px) }
+html[data-tier="micro"] #tab-portfolio-chart .pie-wrap { height:clamp(180px,55vw,240px) }
 
 /* ══ PANEL BASE ═══════════════════════════════════════════════════════════ */
 .panel{
@@ -671,11 +673,15 @@ html[data-tier="micro"] #ov-bottom { display:none }
   display:grid;grid-template-columns:1fr auto;align-items:center;
   transition:all .15s ease-in-out;min-height:var(--touch);
 }
+.pos-row.has-remove{grid-template-columns:1fr auto auto;gap:8px}
 html[data-touch="1"] .pos-row { min-height:var(--touch) }
 .pos-row:hover{background:rgba(0, 210, 255, 0.05);padding-left:calc(var(--pad) + 3px)}
 .ps{font-weight:600;font-size:var(--font-base)}.pn{font-size:var(--font-xs);color:var(--t3);margin-top:1px}
 .pv{font-family:var(--mono);font-size:var(--font-sm);text-align:right}
 .pp{font-size:var(--font-sm);font-family:var(--mono);text-align:right}
+.pos-remove{background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--t3);font-size:10px;width:20px;height:20px;line-height:1;cursor:pointer;opacity:.5;transition:opacity .15s,color .15s,border-color .15s}
+.pos-row:hover .pos-remove{opacity:1}
+.pos-remove:hover{color:var(--red);border-color:var(--red)}
 .port-total{padding:var(--pad);border-bottom:1px solid var(--border);flex-shrink:0}
 .port-val{font-size:clamp(16px,2.5vw,20px);font-weight:700;font-family:var(--mono);color:var(--blue)}
 .port-pnl{font-size:var(--font-sm);margin-top:3px}
@@ -796,6 +802,14 @@ html[data-tier="micro"] .wl-table td:nth-child(6) { display:none }
 .pnl-total{font-size:clamp(20px,3vw,28px);font-weight:700;font-family:var(--mono);color:var(--blue)}
 .pnl-line{font-size:var(--font-sm);margin-top:5px}
 .pie-wrap{padding:var(--pad);flex:1;position:relative;min-height:0}
+.stress-grid{padding:var(--pad);display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;font-size:var(--font-sm);color:var(--t3)}
+.stress-card{border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.stress-card .sc-label{font-size:var(--font-xs);font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--t2);margin-bottom:2px}
+.stress-card .sc-dates{font-size:9px;color:var(--t3);margin-bottom:10px}
+.stress-card .sc-pct{font-size:clamp(20px,3vw,26px);font-weight:700;font-family:var(--mono)}
+.stress-card .sc-val{font-size:var(--font-sm);font-family:var(--mono);margin-top:2px}
+.stress-card .sc-row{display:flex;justify-content:space-between;font-size:var(--font-xs);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)}
+.stress-card .sc-coverage{font-size:8px;color:var(--t3);margin-top:6px}
 .port-form{padding:var(--pad);border-top:1px solid var(--border);flex-shrink:0}
 .port-form .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
 .port-form input{width:100%;padding:6px 9px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);color:var(--t1);font-size:var(--font-sm);outline:none;margin-bottom:4px;min-height:var(--touch)}
@@ -1911,6 +1925,10 @@ html[data-tier="micro"] #ov-globe-stage {
     <div class="panel" id="tab-portfolio-chart" style="display:none">
       <div class="ph">Allocation <span class="ptag">CHART</span></div>
       <div class="pie-wrap"><canvas id="port-pie"></canvas></div>
+    </div>
+    <div class="panel" id="tab-portfolio-stress" style="display:none;grid-column:1/-1">
+      <div class="ph">Historical Stress Test <span class="ptag">CRISIS REPLAY</span></div>
+      <div id="stress-test-body" class="stress-grid">Loading...</div>
     </div>
 
     <!-- ══ AI UNIVERSE TAB ══ -->
@@ -3096,7 +3114,7 @@ setInterval(tickClock, 1000); tickClock();
 // ── TABS ──────────────────────────────────────────────────────────────────
 const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record','ov-recall','calibration-panel','counterfactual-panel','divergence-panel','ov-theses','ov-scenario'];
 const WL=['tab-watchlist'];
-const PF=['tab-portfolio-left','tab-portfolio-chart'];
+const PF=['tab-portfolio-left','tab-portfolio-chart','tab-portfolio-stress'];
 const TR=['tab-trending-list','tab-trending-chart'];
 const AI=['tab-ai'];
 const GB=['tab-globe-panel'];
@@ -4294,7 +4312,9 @@ function renderPositions(positions, cid) {
     const siTag=(p.short_float_pct!=null)?`<span title="Short float / days-to-cover" style="font-size:7px;color:${p.short_float_pct>=10?'#ff3b5c':'var(--t3)'};margin-left:5px">SI ${p.short_float_pct.toFixed(1)}%${p.short_ratio!=null?` / ${p.short_ratio.toFixed(1)}d`:''}</span>`:'';
     const sv=p.short_volume;
     const svTag=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};margin-left:5px">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
-    return `<div class="pos-row" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
+    const hasRemove=cid==='port-positions-list';
+    const rmBtn=hasRemove?`<button class="pos-remove" title="Close position (removes from portfolio)" onclick="event.stopPropagation();removePortfolioPos('${esc(p.symbol)}')">✕</button>`:'';
+    return `<div class="pos-row${hasRemove?' has-remove':''}" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div>${rmBtn}</div>`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -4921,7 +4941,36 @@ async function addWatchlist(){const sym=g('wl-inp').value.trim().toUpperCase();i
 async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});loadWatchlist()}
 
 // ── PORTFOLIO ─────────────────────────────────────────────────────────────
-async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p)}
+async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p);loadStressTest(p)}
+
+async function loadStressTest(p){
+  const el=g('stress-test-body'); if(!el) return;
+  if(!(p.positions||[]).length){el.innerHTML='<div style="grid-column:1/-1;color:var(--t3);font-size:10px">Add positions to see how your portfolio would have fared in past crises.</div>';return}
+  try{
+    const r=await fetch('/api/portfolio/stress-test');const d=await r.json();
+    renderStressTest(d);
+  }catch(e){el.innerHTML='<div style="grid-column:1/-1;color:var(--t3);font-size:10px">Stress test unavailable — retries automatically.</div>'}
+}
+function renderStressTest(d){
+  const el=g('stress-test-body'); if(!el) return;
+  if(d.status!=='ok'){el.innerHTML='<div style="grid-column:1/-1;color:var(--t3);font-size:10px">Stress test unavailable.</div>';return}
+  const cards=Object.values(d.scenarios||{}).map(sc=>{
+    if(sc.status!=='ok'){
+      return `<div class="stress-card"><div class="sc-label">${esc(sc.label)}</div><div class="sc-dates">${sc.start_date} → ${sc.end_date}</div><div style="color:var(--t3);font-size:var(--font-xs)">Insufficient price history across enough of your current holdings to estimate this scenario.</div></div>`;
+    }
+    const pct=sc.portfolio_pct_change, cls=pct>=0?'pos':'neg';
+    return `<div class="stress-card">
+      <div class="sc-label">${esc(sc.label)}</div>
+      <div class="sc-dates">${sc.start_date} → ${sc.end_date}</div>
+      <div class="sc-pct ${cls}">${pct>=0?'+':''}${pct.toFixed(2)}%</div>
+      <div class="sc-val ${cls}">${pct>=0?'+':'-'}${fmtD(sc.portfolio_value_change)}</div>
+      <div class="sc-row"><span>Worst: ${esc(sc.worst_holding.symbol)}</span><span class="${sc.worst_holding.pct_change>=0?'pos':'neg'}">${sc.worst_holding.pct_change>=0?'+':''}${sc.worst_holding.pct_change.toFixed(1)}%</span></div>
+      <div class="sc-row"><span>Best: ${esc(sc.best_holding.symbol)}</span><span class="${sc.best_holding.pct_change>=0?'pos':'neg'}">${sc.best_holding.pct_change>=0?'+':''}${sc.best_holding.pct_change.toFixed(1)}%</span></div>
+      <div class="sc-coverage">${sc.coverage_pct}% of portfolio value covered (${sc.holdings_covered} holding${sc.holdings_covered===1?'':'s'}${sc.holdings_excluded.length?`, ${sc.holdings_excluded.length} excluded for insufficient history`:''})</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=cards||'<div style="grid-column:1/-1;color:var(--t3);font-size:10px">No scenario data available.</div>';
+}
 
 // Risk metrics load separately — first computation fetches ~1y history per
 // holding server-side, so it must never delay the positions render.
@@ -5012,6 +5061,11 @@ async function addPortfolioPos(){
   if(!sym||isNaN(shares)||isNaN(cost)) return;
   await fetch('/api/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym,shares,avg_cost:cost})});
   g('pf-sym').value='';g('pf-shares').value='';g('pf-cost').value='';
+  loadPortfolio();
+}
+async function removePortfolioPos(sym){
+  if(!confirm(`Close position: ${sym}? This removes it from your portfolio.`)) return;
+  await fetch('/api/portfolio',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});
   loadPortfolio();
 }
 

@@ -628,6 +628,8 @@ html[data-tier="micro"] #ov-portfolio { min-height:160px }
 html[data-tier="micro"] #ov-chart { height:clamp(200px,55vw,280px) }
 html[data-tier="micro"] #ov-signals,
 html[data-tier="micro"] #ov-bottom { display:none }
+html[data-tier="compact"] #tab-portfolio-chart .pie-wrap { height:clamp(220px,50vw,300px) }
+html[data-tier="micro"] #tab-portfolio-chart .pie-wrap { height:clamp(180px,55vw,240px) }
 
 /* ══ PANEL BASE ═══════════════════════════════════════════════════════════ */
 .panel{
@@ -671,11 +673,15 @@ html[data-tier="micro"] #ov-bottom { display:none }
   display:grid;grid-template-columns:1fr auto;align-items:center;
   transition:all .15s ease-in-out;min-height:var(--touch);
 }
+.pos-row.has-remove{grid-template-columns:1fr auto auto;gap:8px}
 html[data-touch="1"] .pos-row { min-height:var(--touch) }
 .pos-row:hover{background:rgba(0, 210, 255, 0.05);padding-left:calc(var(--pad) + 3px)}
 .ps{font-weight:600;font-size:var(--font-base)}.pn{font-size:var(--font-xs);color:var(--t3);margin-top:1px}
 .pv{font-family:var(--mono);font-size:var(--font-sm);text-align:right}
 .pp{font-size:var(--font-sm);font-family:var(--mono);text-align:right}
+.pos-remove{background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--t3);font-size:10px;width:20px;height:20px;line-height:1;cursor:pointer;opacity:.5;transition:opacity .15s,color .15s,border-color .15s}
+.pos-row:hover .pos-remove{opacity:1}
+.pos-remove:hover{color:var(--red);border-color:var(--red)}
 .port-total{padding:var(--pad);border-bottom:1px solid var(--border);flex-shrink:0}
 .port-val{font-size:clamp(16px,2.5vw,20px);font-weight:700;font-family:var(--mono);color:var(--blue)}
 .port-pnl{font-size:var(--font-sm);margin-top:3px}
@@ -776,8 +782,6 @@ html[data-tier="micro"] #heatmap { grid-template-columns:repeat(4,1fr) }
 .wl-row td:first-child{font-weight:600;color:var(--t1);font-family:var(--mono)}
 .wl-remove{background:none;border:none;color:var(--t3);cursor:pointer;font-size:16px;padding:0 4px;line-height:1;min-width:var(--touch);min-height:var(--touch);display:flex;align-items:center;justify-content:center}
 .wl-remove:hover{color:var(--red)}
-.interest-bar{width:100%;height:3px;background:var(--border);border-radius:2px;margin-top:3px}
-.interest-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .4s}
 .add-form{padding:var(--pad);border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0}
 .add-form input{flex:1;padding:6px 10px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);color:var(--t1);font-size:var(--font-base);outline:none;min-height:var(--touch)}
 .add-form input:focus{border-color:var(--blue)}
@@ -798,6 +802,14 @@ html[data-tier="micro"] .wl-table td:nth-child(6) { display:none }
 .pnl-total{font-size:clamp(20px,3vw,28px);font-weight:700;font-family:var(--mono);color:var(--blue)}
 .pnl-line{font-size:var(--font-sm);margin-top:5px}
 .pie-wrap{padding:var(--pad);flex:1;position:relative;min-height:0}
+.stress-grid{padding:var(--pad);display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;font-size:var(--font-sm);color:var(--t3)}
+.stress-card{border:1px solid var(--border);border-radius:var(--radius);padding:12px}
+.stress-card .sc-label{font-size:var(--font-xs);font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--t2);margin-bottom:2px}
+.stress-card .sc-dates{font-size:9px;color:var(--t3);margin-bottom:10px}
+.stress-card .sc-pct{font-size:clamp(20px,3vw,26px);font-weight:700;font-family:var(--mono)}
+.stress-card .sc-val{font-size:var(--font-sm);font-family:var(--mono);margin-top:2px}
+.stress-card .sc-row{display:flex;justify-content:space-between;font-size:var(--font-xs);margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.06)}
+.stress-card .sc-coverage{font-size:8px;color:var(--t3);margin-top:6px}
 .port-form{padding:var(--pad);border-top:1px solid var(--border);flex-shrink:0}
 .port-form .row2{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
 .port-form input{width:100%;padding:6px 9px;background:var(--bg1);border:1px solid var(--border);border-radius:var(--radius);color:var(--t1);font-size:var(--font-sm);outline:none;margin-bottom:4px;min-height:var(--touch)}
@@ -1886,7 +1898,7 @@ html[data-tier="micro"] #ov-globe-stage {
       <div class="ph">Your Watchlist <span class="ptag" id="wl-cnt">0 symbols</span></div>
       <div class="scroll">
         <table class="wl-table" id="wl-table">
-          <thead><tr><th>Symbol</th><th>Name</th><th>Price</th><th>Today</th><th>Sentiment</th><th>Fred Interest</th><th></th></tr></thead>
+          <thead><tr><th>Symbol</th><th>Name</th><th>Price</th><th>Today</th><th>Sentiment</th><th title="Deterministic composite of sentiment, insider trading clusters, and short-volume trend — not a personal browsing score">Fred Signal</th><th></th></tr></thead>
           <tbody id="wl-body"></tbody>
         </table>
         <div class="empty" id="wl-empty" style="display:none">No watchlist symbols yet.</div>
@@ -1913,6 +1925,10 @@ html[data-tier="micro"] #ov-globe-stage {
     <div class="panel" id="tab-portfolio-chart" style="display:none">
       <div class="ph">Allocation <span class="ptag">CHART</span></div>
       <div class="pie-wrap"><canvas id="port-pie"></canvas></div>
+    </div>
+    <div class="panel" id="tab-portfolio-stress" style="display:none;grid-column:1/-1">
+      <div class="ph">Historical Stress Test <span class="ptag">CRISIS REPLAY</span></div>
+      <div id="stress-test-body" class="stress-grid">Loading...</div>
     </div>
 
     <!-- ══ AI UNIVERSE TAB ══ -->
@@ -3041,7 +3057,7 @@ async function loadInitData() {
     if (d.alerts) renderAlerts(d.alerts);
     if (d.sector) renderHeatmap(d.sector);
     if (d.next_scan) nextScanISO = d.next_scan;
-    if (d.watchlist_detail) renderWatchlist(d.watchlist_detail, d.interests||[]);
+    if (d.watchlist_detail) renderWatchlist(d.watchlist_detail);
     if (d.portfolio) renderPortfolioTab(d.portfolio);
     if (d.macro) renderMacroStrip(d.macro);
     if (trendData.length) { renderTrending(trendData); renderUltraTrend(trendData); }
@@ -3098,7 +3114,7 @@ setInterval(tickClock, 1000); tickClock();
 // ── TABS ──────────────────────────────────────────────────────────────────
 const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record','ov-recall','calibration-panel','counterfactual-panel','divergence-panel','ov-theses','ov-scenario'];
 const WL=['tab-watchlist'];
-const PF=['tab-portfolio-left','tab-portfolio-chart'];
+const PF=['tab-portfolio-left','tab-portfolio-chart','tab-portfolio-stress'];
 const TR=['tab-trending-list','tab-trending-chart'];
 const AI=['tab-ai'];
 const GB=['tab-globe-panel'];
@@ -4328,7 +4344,9 @@ function renderPositions(positions, cid) {
     const siTag=(p.short_float_pct!=null)?`<span title="Short float / days-to-cover" style="font-size:7px;color:${p.short_float_pct>=10?'#ff3b5c':'var(--t3)'};margin-left:5px">SI ${p.short_float_pct.toFixed(1)}%${p.short_ratio!=null?` / ${p.short_ratio.toFixed(1)}d`:''}</span>`:'';
     const sv=p.short_volume;
     const svTag=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};margin-left:5px">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
-    return `<div class="pos-row" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div></div>`;
+    const hasRemove=cid==='port-positions-list';
+    const rmBtn=hasRemove?`<button class="pos-remove" title="Close position (removes from portfolio)" onclick="event.stopPropagation();removePortfolioPos('${esc(p.symbol)}')">✕</button>`:'';
+    return `<div class="pos-row${hasRemove?' has-remove':''}" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div>${rmBtn}</div>`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -4828,8 +4846,8 @@ function updateSentChart(tl){if(!sentChart)return;sentChart.data=buildSentData(t
 // ── WATCHLIST ─────────────────────────────────────────────────────────────
 let volumeAnomalyCache={};
 async function loadWatchlist(){
-  const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d,[]);
-  fetch('/api/volume-anomalies').then(r=>r.json()).then(a=>{volumeAnomalyCache=a||{};renderWatchlist(d,[])}).catch(()=>{});
+  const r=await fetch('/api/watchlist');const d=await r.json();window._watchlist=d.map(w=>w.symbol||w);renderWatchlist(d);
+  fetch('/api/volume-anomalies').then(r=>r.json()).then(a=>{volumeAnomalyCache=a||{};renderWatchlist(d)}).catch(()=>{});
 }
 // FSI L5 job-listing hiring velocity (#228) -- only meaningful for a small
 // curated set of Greenhouse-listed tickers, lazily fetched per symbol (24h
@@ -4841,14 +4859,14 @@ const JOB_LISTINGS_TRACKED=['COIN','ABNB','DDOG','HOOD'];
 // symbol (24h server-side cache) and merged back in via a re-render rather
 // than blocking the initial watchlist paint.
 const OSS_TRACKED=['MDB','ESTC','GTLB','HCP','CFLT','NET'];
-let jobListingsCache={},ossVelocityCache={},darkPoolCache={},_wlLastItems=null,_wlLastInterests=null;
+let jobListingsCache={},ossVelocityCache={},darkPoolCache={},_wlLastItems=null;
 async function loadJobListings(sym){
   if(jobListingsCache[sym]!==undefined)return;
   jobListingsCache[sym]=null;
   try{
     const r=await fetch('/api/job-listings/'+sym);
     const d=await r.json();
-    if(d&&d.trend_20d){jobListingsCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+    if(d&&d.trend_20d){jobListingsCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems)}
   }catch(e){}
 }
 async function loadOssVelocity(sym){
@@ -4857,7 +4875,7 @@ async function loadOssVelocity(sym){
   try{
     const r=await fetch('/api/oss-velocity/'+sym);
     const d=await r.json();
-    if(d&&d.trend_52wk){ossVelocityCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+    if(d&&d.trend_52wk){ossVelocityCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems)}
   }catch(e){}
 }
 async function loadDarkPool(sym){
@@ -4866,12 +4884,11 @@ async function loadDarkPool(sym){
   try{
     const r=await fetch('/api/dark-pool/'+sym);
     const d=await r.json();
-    if(d&&d.trend){darkPoolCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems,_wlLastInterests)}
+    if(d&&d.trend){darkPoolCache[sym]=d;if(_wlLastItems)renderWatchlist(_wlLastItems)}
   }catch(e){}
 }
-function renderWatchlist(items,interests){
-  _wlLastItems=items;_wlLastInterests=interests;
-  const im={};(interests||[]).forEach(i=>im[i.symbol]=i.interest_score);
+function renderWatchlist(items){
+  _wlLastItems=items;
   const tbody=g('wl-body');
   if(!items.length){g('wl-empty').style.display='';tbody.innerHTML='';g('wl-cnt').textContent='0 symbols';return}
   g('wl-empty').style.display='none';
@@ -4889,8 +4906,11 @@ function renderWatchlist(items,interests){
     // data-attribute + addEventListener instead.
     const sym=w.symbol||w,q=quotesCache[sym]||{},pct=q.change_pct||0,pos=pct>=0;
     const currency=q.currency||(isAsx(sym)?'AUD':'USD');
-    const interest=im[sym]||1,pct_bar=Math.min(interest/20*100,100);
-    const sentCls=getSentClass(sym);
+    const sent=w.sentiment;
+    const sentCls=sent?sent.signal_type:'neutral';
+    const sentTip=sent?`${sent.signal_count} signal${sent.signal_count!==1?'s':''} (24h), avg sentiment ${sent.avg_sentiment}`:'no sentiment signals in 24h';
+    const conv=w.fred_conviction;
+    const convTag=conv?`<span class="sig-tag ${conv.label}" style="font-size:8px" title="${esc(conv.basis.join(' · '))}">${conv.label} ${conv.score>0?'+':''}${conv.score}</span>`:`<span style="font-size:9px;color:var(--t3)" title="Not enough signal data yet (needs 3+ sentiment signals, an insider cluster, or a short-volume trend)">--</span>`;
     const cBadge=currency==='AUD'?`<span style="font-size:7px;background:#1a3a5c;color:#00b4ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle">AUD</span>`:'';
     const spread=w.cross_exchange_spread;
     const spreadBadge=spread?`<span title="${esc(Object.entries(spread.exchanges).map(([ex,p])=>ex+': $'+p).join(', '))}" style="font-size:7px;background:#2a1a3c;color:#9b59ff;border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">±${spread.spread_pct}%</span>`:'';
@@ -4938,7 +4958,7 @@ function renderWatchlist(items,interests){
         dpBadge=`<span title="${esc(tip)}" style="font-size:7px;background:rgba(155,89,255,.1);color:${dirColor};border-radius:2px;padding:0 3px;margin-left:3px;vertical-align:middle;cursor:help">DP ${arrow}</span>`;
       }
     }
-    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px">${sentCls}</span></td><td style="min-width:80px"><div style="font-size:8px;color:var(--t3)">${interest.toFixed(1)}</div><div class="interest-bar"><div class="interest-fill" style="width:${pct_bar}%"></div></div></td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
+    return `<tr class="wl-row"><td><span class="ticker-link" onclick="openAnalystReport('${sym}')">${esc(sym.replace('-USD','').replace('.AX',''))}</span><span style="font-size:7px;color:var(--t3);margin-left:2px">${isAsx(sym)?'.AX':''}</span>${clusterBadge}</td><td style="color:var(--t2)">${esc(q.name||sym)}</td><td style="font-family:var(--mono)">${q.price!=null?fmtPrice(q.price,currency):'--'}${cBadge}${spreadBadge}${svBadge}${dpBadge}${ossBadge}${anomalyBadge}${onchainBadge}${jobBadge}</td><td style="color:${pos?'var(--green)':'var(--red)'};font-family:var(--mono)">${q.change_pct!==undefined?(pct>=0?'+':'')+pct.toFixed(2)+'%':'--'}</td><td><span class="sig-tag ${sentCls}" style="font-size:8px" title="${esc(sentTip)}">${sentCls}</span></td><td>${convTag}</td><td><button class="wl-remove" onclick="removeWatchlist('${sym}')">×</button></td></tr>`;
   }
   let html='';
   if(usItems.length){html+=usItems.map(rowHtml).join('');}
@@ -4949,12 +4969,40 @@ function renderWatchlist(items,interests){
   }
   tbody.innerHTML=html;
 }
-function getSentClass(sym){const r=allSignals.filter(s=>s.asset===sym).slice(0,10);if(!r.length)return'neutral';const b=r.filter(s=>s.signal_type==='bullish').length;return b>r.length/2?'bullish':b<r.length/3?'bearish':'neutral'}
 async function addWatchlist(){const sym=g('wl-inp').value.trim().toUpperCase();if(!sym)return;await fetch('/api/watchlist',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});g('wl-inp').value='';loadWatchlist()}
 async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});loadWatchlist()}
 
 // ── PORTFOLIO ─────────────────────────────────────────────────────────────
-async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p)}
+async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p);loadStressTest(p)}
+
+async function loadStressTest(p){
+  const el=g('stress-test-body'); if(!el) return;
+  if(!(p.positions||[]).length){el.innerHTML='<div style="grid-column:1/-1;color:var(--t3);font-size:10px">Add positions to see how your portfolio would have fared in past crises.</div>';return}
+  try{
+    const r=await fetch('/api/portfolio/stress-test');const d=await r.json();
+    renderStressTest(d);
+  }catch(e){el.innerHTML='<div style="grid-column:1/-1;color:var(--t3);font-size:10px">Stress test unavailable — retries automatically.</div>'}
+}
+function renderStressTest(d){
+  const el=g('stress-test-body'); if(!el) return;
+  if(d.status!=='ok'){el.innerHTML='<div style="grid-column:1/-1;color:var(--t3);font-size:10px">Stress test unavailable.</div>';return}
+  const cards=Object.values(d.scenarios||{}).map(sc=>{
+    if(sc.status!=='ok'){
+      return `<div class="stress-card"><div class="sc-label">${esc(sc.label)}</div><div class="sc-dates">${sc.start_date} → ${sc.end_date}</div><div style="color:var(--t3);font-size:var(--font-xs)">Insufficient price history across enough of your current holdings to estimate this scenario.</div></div>`;
+    }
+    const pct=sc.portfolio_pct_change, cls=pct>=0?'pos':'neg';
+    return `<div class="stress-card">
+      <div class="sc-label">${esc(sc.label)}</div>
+      <div class="sc-dates">${sc.start_date} → ${sc.end_date}</div>
+      <div class="sc-pct ${cls}">${pct>=0?'+':''}${pct.toFixed(2)}%</div>
+      <div class="sc-val ${cls}">${pct>=0?'+':'-'}${fmtD(sc.portfolio_value_change)}</div>
+      <div class="sc-row"><span>Worst: ${esc(sc.worst_holding.symbol)}</span><span class="${sc.worst_holding.pct_change>=0?'pos':'neg'}">${sc.worst_holding.pct_change>=0?'+':''}${sc.worst_holding.pct_change.toFixed(1)}%</span></div>
+      <div class="sc-row"><span>Best: ${esc(sc.best_holding.symbol)}</span><span class="${sc.best_holding.pct_change>=0?'pos':'neg'}">${sc.best_holding.pct_change>=0?'+':''}${sc.best_holding.pct_change.toFixed(1)}%</span></div>
+      <div class="sc-coverage">${sc.coverage_pct}% of portfolio value covered (${sc.holdings_covered} holding${sc.holdings_covered===1?'':'s'}${sc.holdings_excluded.length?`, ${sc.holdings_excluded.length} excluded for insufficient history`:''})</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=cards||'<div style="grid-column:1/-1;color:var(--t3);font-size:10px">No scenario data available.</div>';
+}
 
 // Risk metrics load separately — first computation fetches ~1y history per
 // holding server-side, so it must never delay the positions render.
@@ -5045,6 +5093,11 @@ async function addPortfolioPos(){
   if(!sym||isNaN(shares)||isNaN(cost)) return;
   await fetch('/api/portfolio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym,shares,avg_cost:cost})});
   g('pf-sym').value='';g('pf-shares').value='';g('pf-cost').value='';
+  loadPortfolio();
+}
+async function removePortfolioPos(sym){
+  if(!confirm(`Close position: ${sym}? This removes it from your portfolio.`)) return;
+  await fetch('/api/portfolio',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});
   loadPortfolio();
 }
 

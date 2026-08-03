@@ -28,9 +28,11 @@ from config import (
     XAI_API_KEY, XAI_MODEL_SUMMARY, XAI_MODEL_CHAT, XAI_MODEL_RND,
     TAVILY_API_KEY,
     PRIVACY_MODE, STRIP_PORTFOLIO_FROM_AI,
+    WATCHLIST, DISPLAY_SYMBOLS,
 )
 from memory_store import get_signals, get_latest_summary, get_recent_alerts, get_trending_assets
 from backtesting_engine import get_accuracy_report
+import graph_engine
 
 
 # ── PROVIDER DETECTION ────────────────────────────────────────────────────────
@@ -942,14 +944,42 @@ def _format_alerts(alerts: list) -> str:
 # ── PUBLIC API ────────────────────────────────────────────────────────────────
 
 _ASSET_KEYWORDS = re.compile(
-    r'\$[A-Z]{1,5}|buy|sell|hold|invest|position|trade|portfolio|stock|crypto|market|signal',
+    r'\$[A-Z]{1,5}|buy|sell|hold|invest|position|trade|portfolio|stock|crypto|market|signal'
+    # Fuzz-testing (tests/test_disclaimer_gating.py) found these missing --
+    # real Fred responses routinely discuss assets via this vocabulary without
+    # ever hitting the original list (e.g. "shares climbing", "rallying",
+    # "adding exposure"), a real false-negative gap, not just theoretical.
+    r'|shares?|equit(?:y|ies)|earnings|dividends?|valuation|bullish|bearish|rall(?:y|ies)'
+    r'|sell-?off|outlook|guidance|exposure|overweight|underweight|entry point|s&p|nasdaq',
     re.IGNORECASE
 )
+
+# Same fuzz pass found the keyword list alone misses a ticker/company mentioned
+# by name with no generic trading verb nearby ("NVDA to the moon?", "Apple or
+# Microsoft?"). Reuses the same known-asset universe + bare-ticker convention
+# rag_retriever.py's parse_query() already established (WATCHLIST + AI Universe
+# sectors + display names, membership-gated bare-ticker match so common
+# all-caps words don't false-positive).
+_KNOWN_TICKERS = set(graph_engine.SECTORS.keys()) | set(WATCHLIST) | set(DISPLAY_SYMBOLS.keys())
+_BARE_TICKER_RE = re.compile(r'\b([A-Z]{1,6}(?:-USD)?)\b')
+_ASSET_NAME_RE = re.compile(
+    r'\b(' + '|'.join(sorted(
+        (re.escape(n) for n in {v.lower() for v in DISPLAY_SYMBOLS.values()}),
+        key=len, reverse=True)) + r')\b',
+    re.IGNORECASE
+)
+
+
+def _mentions_known_asset(combined: str) -> bool:
+    if any(m.group(1) in _KNOWN_TICKERS for m in _BARE_TICKER_RE.finditer(combined.upper())):
+        return True
+    return bool(_ASSET_NAME_RE.search(combined))
+
 
 def _needs_disclaimer(user_msg: str, response: str) -> bool:
     """Return True if the response discusses specific assets or market actions."""
     combined = user_msg + " " + response
-    return bool(_ASSET_KEYWORDS.search(combined))
+    return bool(_ASSET_KEYWORDS.search(combined)) or _mentions_known_asset(combined)
 
 
 def chat(user_message: str, history: list[dict], quotes: dict = None,

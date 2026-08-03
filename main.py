@@ -910,6 +910,45 @@ def api_trending():
 
 # ── WATCHLIST ROUTES ──────────────────────────────────────────────────────────
 
+def _compute_fred_conviction(entry: dict) -> dict | None:
+    """Deterministic composite of signals FredAI already computes for this
+    symbol (sentiment, insider cluster, short-volume trend) -- not an
+    opaque LLM guess and not fabricated. Returns None, not a fake neutral
+    score, when there isn't enough real signal to say anything (mirrors
+    the insufficient-history honesty convention used elsewhere, e.g.
+    portfolio_risk.py / stress_test.py)."""
+    components = []  # (weight, score in [-1,1], basis label)
+
+    sent = entry.get("sentiment")
+    if sent and sent.get("signal_count", 0) >= 3:
+        weight = min(sent["signal_count"], 20) / 20.0
+        score = max(-1.0, min(1.0, sent.get("avg_sentiment", 0)))
+        components.append((weight, score, f"{sent['signal_count']} sentiment signals (24h)"))
+
+    cluster = entry.get("insider_cluster")
+    if cluster and cluster.get("direction") in ("buy", "sell"):
+        score = 1.0 if cluster["direction"] == "buy" else -1.0
+        components.append((0.8, score, f"insider {cluster['direction']} cluster ({cluster.get('distinct_owners')} owners)"))
+
+    sv = entry.get("short_volume")
+    sv_dir = (sv or {}).get("trend", {}).get("direction")
+    if sv_dir in ("rising", "falling"):
+        score = -0.5 if sv_dir == "rising" else 0.5
+        components.append((0.4, score, f"short volume {sv_dir}"))
+
+    if not components:
+        return None
+
+    total_weight = sum(w for w, _, _ in components)
+    blended = sum(w * s for w, s, _ in components) / total_weight
+    label = "bullish" if blended > 0.15 else "bearish" if blended < -0.15 else "neutral"
+    return {
+        "score": round(blended, 2),
+        "label": label,
+        "basis": [c[2] for c in components],
+    }
+
+
 @app.route("/api/watchlist", methods=["GET", "POST", "DELETE"])
 @login_required
 def api_watchlist():
@@ -952,6 +991,9 @@ def api_watchlist():
         sv = _short_volume_cache.get(w["symbol"])
         if sv:
             entry["short_volume"] = sv
+        conviction = _compute_fred_conviction(entry)
+        if conviction:
+            entry["fred_conviction"] = conviction
         result.append(entry)
     return jsonify(result)
 

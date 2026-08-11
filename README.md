@@ -148,9 +148,9 @@ Open **http://localhost:8080**, create your account, and you're in.
 **To keep Fred running in the background after closing Terminal:**
 
 ```bash
-# Install as a launchd service (auto-starts on login)
-cp deploy/com.essentialbit.fredai.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.essentialbit.fredai.plist
+# deploy/install.sh generates a launchd plist tailored to your install path
+# and loads it for you (auto-starts on login)
+bash deploy/install.sh
 ```
 
 ---
@@ -227,14 +227,9 @@ On first launch, Fred creates:
 **Run as a systemd service (auto-start on boot):**
 
 ```bash
-# Copy the service file
-sudo cp deploy/fredai.service /etc/systemd/system/
-# Edit the path inside to match your install directory
-sudo nano /etc/systemd/system/fredai.service
-# Enable and start
-sudo systemctl daemon-reload
-sudo systemctl enable fredai
-sudo systemctl start fredai
+# deploy/install.sh generates a unit file for your install path and enables it
+bash deploy/install.sh
+
 # Check status
 sudo systemctl status fredai
 ```
@@ -284,9 +279,7 @@ hostname -I
 
 **Auto-start on Pi boot:**
 ```bash
-sudo cp deploy/fredai.service /etc/systemd/system/
-sudo nano /etc/systemd/system/fredai.service   # update WorkingDirectory
-sudo systemctl enable fredai && sudo systemctl start fredai
+bash deploy/install.sh   # generates the systemd unit for your install path and enables it
 ```
 
 ---
@@ -795,17 +788,21 @@ fredai/
 ├── memory_store.py      # SQLite: users, watchlist, portfolio, signals
 ├── improve.py           # Self-improvement R&D cycle (CI-driven)
 ├── templates/
-│   ├── dashboard.html   # Main single-page app
-│   ├── news.html        # News intelligence (feed + globe + video)
-│   └── graph.html       # Intelligence graph
+│   ├── dashboard.html    # Main single-page app
+│   ├── news.html         # News intelligence (feed + globe + video)
+│   ├── timeline.html     # Event timeline / cascade view
+│   └── video_popout.html # Floating video player window
 ├── static/
-│   ├── icons/           # PWA icons (16→1024px)
-│   └── manifest.json    # PWA manifest
+│   ├── css/tokens.css    # Shared design tokens
+│   ├── icons/            # PWA icons (16→1024px)
+│   └── manifest.json     # PWA manifest
 ├── assets/
-│   └── icons/           # Platform-specific icons (.icns, .ico, .png)
+│   └── icons/            # Platform-specific icons (.icns, .ico, .png)
 ├── deploy/
-│   ├── fredai.service   # systemd unit file
-│   └── nginx.conf       # Nginx reverse proxy config
+│   ├── install.sh        # Universal installer (Linux/macOS/Pi) — also
+│   │                     #   generates the systemd unit / launchd plist
+│   ├── install.ps1       # Windows installer
+│   └── nginx.conf        # Nginx reverse proxy config template
 ├── Dockerfile
 ├── docker-compose.yml
 └── requirements.txt
@@ -832,6 +829,7 @@ AUTO_UPDATE=notify            # notify | auto | off
 # ── Security (important — set before exposing to network) ────────────────────
 # Generate: python3 -c "import secrets; print(secrets.token_hex(32))"
 SECRET_KEY=                   # Flask session signing key — auto-generated if unset (sessions don't survive restarts)
+SESSION_COOKIE_SECURE=false   # Set true once you're behind HTTPS
 
 # Initial admin account password (only used on first run, when DB is empty)
 # If unset, a random password is printed to the console once.
@@ -844,12 +842,27 @@ FREDAI_ADMIN_PASSWORD=
 FREDAI_DEPLOY_SECRET=
 
 # ── AI (pick at least one, or install Ollama for a fully free/offline setup) ─
+AI_PROVIDER=auto              # auto | anthropic | gemini | grok | groq | ollama
 ANTHROPIC_API_KEY=...         # Best quality, pay-per-use
-ANTHROPIC_MODEL=claude-sonnet-4-6
-ANTHROPIC_FAST_MODEL=claude-haiku-4-5-20251001
 GEMINI_API_KEY=               # Free tier available
 XAI_API_KEY=                  # Grok, pay-per-use, frontier-quality
 GROQ_API_KEY=                 # Free, cloud-hosted, no cost
+OLLAMA_URL=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+# Optional per-tier overrides (defaults already tuned), e.g.:
+# ANTHROPIC_MODEL_SUMMARY / ANTHROPIC_MODEL_CHAT / ANTHROPIC_MODEL_RND
+
+# ── OAuth login (optional — "Sign in with Google / GitHub") ──────────────────
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+
+# ── Privacy & data retention ──────────────────────────────────────────────────
+PRIVACY_MODE=true             # Strip identifying context before it reaches the AI provider
+STRIP_PORTFOLIO_FROM_AI=true
+DATA_RETENTION_DAYS=90
+NEWS_RETENTION_HOURS=72
 
 # ── Market data ──────────────────────────────────────────────────────────────
 NASDAQ_API_KEY=               # Optional — Nasdaq Data Link
@@ -861,10 +874,16 @@ X_CONSUMER_SECRET=
 X_ACCESS_TOKEN=
 X_ACCESS_TOKEN_SECRET=
 
+# ── Community engagement (optional — separate from OAuth above) ──────────────
+GITHUB_TOKEN=                 # Fine-grained PAT: Fred's own Issues/Discussions/PR bot
+GITHUB_REPO=essentialbit/fredai
+
 # ── Scheduler ────────────────────────────────────────────────────────────────
 MARKET_REFRESH_SECONDS=60     # Live price refresh interval
 SCAN_INTERVAL_HOURS=4         # Full AI scan cycle
 ```
+
+See [`.env.example`](.env.example) for the full, actively-maintained template with setup links for every key.
 
 ---
 

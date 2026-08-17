@@ -22,21 +22,9 @@ from __future__ import annotations
 
 import re
 
-import requests
-
-from community import _gh_get, _gh_post, _gh_headers, _GH_API, GITHUB_REPO
+from community import _gh_get, _gh_post, _gh_delete, GITHUB_REPO
 from github_sync import get_open_proposal_issues, _ensure_label
 from debate import compute_consensus, _IMPACT_RE
-
-
-def _gh_delete_label(issue_number: int, label: str) -> None:
-    try:
-        requests.delete(
-            f"{_GH_API}/repos/{GITHUB_REPO}/issues/{issue_number}/labels/{label}",
-            headers=_gh_headers(), timeout=15,
-        )
-    except Exception as e:
-        print(f"  [GH] DELETE label error: {e}")
 
 _STANCE_RE = re.compile(
     r"\*\*Stance \((claude|gemini)\):\*\*\s*(agree|disagree|escalate)\s*\(confidence\s*([\d.]+)\)"
@@ -85,7 +73,7 @@ def main():
             f"repos/{GITHUB_REPO}/issues/{issue['number']}/labels",
             {"labels": [new_label]},
         )
-        _gh_delete_label(issue["number"], old_consensus_label)
+        _gh_delete(f"repos/{GITHUB_REPO}/issues/{issue['number']}/labels/{old_consensus_label}")
         note = (
             f"**Consensus recomputed:** {old_value} → {new_consensus} "
             f"(agent_track_record backfill corrected {proposed_by}'s accuracy from the "

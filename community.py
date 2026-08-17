@@ -117,33 +117,42 @@ def _gh_get(path: str, params: dict | None = None) -> list | dict | None:
 
 
 def _gh_post(path: str, body: dict) -> dict | None:
-    try:
-        r = requests.post(
-            f"{_GH_API}/{path.lstrip('/')}",
-            headers=_gh_headers(), json=body, timeout=_TIMEOUT
-        )
-        if r.status_code in (200, 201):
-            return r.json()
-        print(f"  [GH] POST {path} → {r.status_code}: {r.text[:120]}")
-    except Exception as e:
-        print(f"  [GH] POST error {path}: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.post(
+                f"{_GH_API}/{path.lstrip('/')}",
+                headers=_gh_headers(), json=body, timeout=_TIMEOUT
+            )
+            if r.status_code in (200, 201):
+                return r.json()
+            print(f"  [GH] POST {path} → {r.status_code}: {r.text[:120]}")
+        except Exception as e:
+            print(f"  [GH] POST error {path}: {e}")
+        if attempt == 0:
+            # A transient network error/5xx here otherwise silently drops the
+            # write (e.g. a debate stance comment) with no retry and no
+            # caller-visible error, same class of bug fixed for _gh_get in PR #584.
+            time.sleep(2)
     return None
 
 
 def _gh_delete(path: str) -> bool:
-    try:
-        r = requests.delete(
-            f"{_GH_API}/{path.lstrip('/')}",
-            headers=_gh_headers(), timeout=_TIMEOUT
-        )
-        if r.status_code in (200, 204):
-            return True
-        # 404 means the label was already gone — treat as success, not an error.
-        if r.status_code == 404:
-            return True
-        print(f"  [GH] DELETE {path} → {r.status_code}: {r.text[:120]}")
-    except Exception as e:
-        print(f"  [GH] DELETE error {path}: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.delete(
+                f"{_GH_API}/{path.lstrip('/')}",
+                headers=_gh_headers(), timeout=_TIMEOUT
+            )
+            if r.status_code in (200, 204):
+                return True
+            # 404 means the label was already gone — treat as success, not an error.
+            if r.status_code == 404:
+                return True
+            print(f"  [GH] DELETE {path} → {r.status_code}: {r.text[:120]}")
+        except Exception as e:
+            print(f"  [GH] DELETE error {path}: {e}")
+        if attempt == 0:
+            time.sleep(2)
     return False
 
 

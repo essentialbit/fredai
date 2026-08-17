@@ -234,13 +234,20 @@ def run_debate_cycle() -> dict:
             f"**Consensus score:** {consensus}",
             f"<!--fredai:stance:{reviewer}-->",
         ])
-        _gh_post(f"repos/{GITHUB_REPO}/issues/{issue['number']}/comments", {"body": comment_body})
+        comment_ok = _gh_post(
+            f"repos/{GITHUB_REPO}/issues/{issue['number']}/comments", {"body": comment_body}
+        ) is not None
 
         consensus_label = f"consensus:{consensus}"
         _ensure_label(consensus_label, "c5def5")
-        _gh_post(f"repos/{GITHUB_REPO}/issues/{issue['number']}/labels", {"labels": [consensus_label]})
+        label_ok = _gh_post(
+            f"repos/{GITHUB_REPO}/issues/{issue['number']}/labels", {"labels": [consensus_label]}
+        ) is not None
 
-        summary["stances_posted"] += 1
+        if comment_ok and label_ok:
+            summary["stances_posted"] += 1
+        else:
+            summary["errors"] += 1
 
     summary["consensus_rescored"] = rescore_stale_consensus()
     return summary

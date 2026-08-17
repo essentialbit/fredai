@@ -103,16 +103,22 @@ def _gh_headers() -> dict:
 
 
 def _gh_get(path: str, params: dict | None = None) -> list | dict | None:
-    try:
-        r = requests.get(
-            f"{_GH_API}/{path.lstrip('/')}",
-            headers=_gh_headers(), params=params, timeout=_TIMEOUT
-        )
-        if r.status_code == 200:
-            return r.json()
-        print(f"  [GH] GET {path} → {r.status_code}")
-    except Exception as e:
-        print(f"  [GH] GET error {path}: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.get(
+                f"{_GH_API}/{path.lstrip('/')}",
+                headers=_gh_headers(), params=params, timeout=_TIMEOUT
+            )
+            if r.status_code == 200:
+                return r.json()
+            print(f"  [GH] GET {path} → {r.status_code}")
+        except Exception as e:
+            print(f"  [GH] GET error {path}: {e}")
+        if attempt == 0:
+            # A transient network error/5xx here is otherwise indistinguishable from
+            # legitimate end-of-data to every paginating caller's `if not batch: break`
+            # loop — silently truncates results instead of erroring (hit once, PR #583).
+            time.sleep(2)
     return None
 
 

@@ -291,6 +291,15 @@ input:focus-visible,
 .disc-bar-link{color:var(--red);cursor:pointer;text-decoration:none;border:none;background:none;font-size:inherit;font-family:inherit;padding:0}
 .disc-bar-link:hover{text-decoration:underline}
 html[data-tier="nano"] #disc-footer-bar { display:none }
+/* MICRO (phone portrait, 200-430px): the bar was already at zero horizontal
+   slack before the delayed-quote sentence was added, so keep the full
+   disclosure text intact and let the bar wrap to multiple lines instead of
+   clipping it under nowrap+ellipsis (ellipsis doesn't reliably apply to
+   flex children anyway). Wider tiers keep the original single-line bar. */
+html[data-tier="micro"] #disc-footer-bar {
+  flex-wrap:wrap; white-space:normal; overflow:visible; text-overflow:clip;
+  row-gap:2px; line-height:1.4; text-align:center;
+}
 
 /* ══ APP SHELL ════════════════════════════════════════════════════════════ */
 #app-shell{display:none;flex-direction:column;height:100%;height:100dvh}
@@ -1603,7 +1612,7 @@ html[data-tier="micro"] #ov-globe-stage {
       <div class="nano-screen">
         <div><div class="nano-label">Portfolio</div><div class="nano-val b" id="n-port">$--</div><div class="nano-sub" id="n-pnl">--</div></div>
         <div style="width:100%">
-          <div class="nano-label" style="margin-bottom:4px">Market</div>
+          <div class="nano-label" style="margin-bottom:4px">Market &middot; 60s delay</div>
           <div id="n-quotes" style="font-size:10px;font-family:var(--mono);display:flex;flex-direction:column;gap:2px"></div>
         </div>
       </div>
@@ -2190,7 +2199,7 @@ html[data-tier="micro"] #ov-globe-stage {
   <!-- DISCLAIMER PERSISTENT FOOTER -->
   <div id="disc-footer-bar">
     <span class="disc-bar-icon">⚠</span>
-    <span>Not financial advice. Informational only. All investment risk is yours.</span>
+    <span>Not financial advice. Informational only. All investment risk is yours. Quotes may be delayed up to 60 seconds.</span>
     <button class="disc-bar-link" onclick="showFullDisclaimer()">Full disclaimer</button>
   </div>
 

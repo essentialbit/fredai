@@ -3450,7 +3450,13 @@ def api_timeline(symbol):
     from cascade_engine import _ADJ
     relationships = _ADJ.get(sym, [])
 
-    assessment = _ai_assessment_cache.get(sym, {}).get("data")
+    # Generate (or reuse the 30-min TTL cache from generate_assessment itself)
+    # rather than reading _ai_assessment_cache directly -- a symbol reached via
+    # timeline that was never opened through /api/assessment or the watchlist
+    # assessments loop had no writer for this cache entry, so the sidebar's
+    # "Fred's Assessment" card was stuck showing its "Assessment loading..."
+    # placeholder forever for any such symbol.
+    assessment = generate_assessment(sym, news, quote, technicals, position)
 
     events = []
     for n in news:

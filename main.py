@@ -913,18 +913,19 @@ def _compute_fred_conviction(entry: dict) -> dict | None:
     if sent and sent.get("signal_count", 0) >= 3:
         weight = min(sent["signal_count"], 20) / 20.0
         score = max(-1.0, min(1.0, sent.get("avg_sentiment", 0)))
-        components.append((weight, score, f"{sent['signal_count']} sentiment signals (24h)"))
+        components.append((weight, score, f"{sent['signal_count']} sentiment signals (24h) — weight {weight:.2f}"))
 
     cluster = entry.get("insider_cluster")
     if cluster and cluster.get("direction") in ("buy", "sell"):
         score = 1.0 if cluster["direction"] == "buy" else -1.0
-        components.append((0.8, score, f"insider {cluster['direction']} cluster ({cluster.get('distinct_owners')} owners)"))
+        components.append((0.8, score, f"insider {cluster['direction']} cluster ({cluster.get('distinct_owners')} owners) — weight 0.8"))
 
     sv = entry.get("short_volume")
     sv_dir = (sv or {}).get("trend", {}).get("direction")
     if sv_dir in ("rising", "falling"):
         score = -0.5 if sv_dir == "rising" else 0.5
-        components.append((0.4, score, f"short volume {sv_dir}"))
+        sv_signal = "bearish" if sv_dir == "rising" else "bullish"
+        components.append((0.4, score, f"short volume {sv_dir} ({sv_signal} signal — rising short volume signals bearish, not bullish) — weight 0.4"))
 
     if not components:
         return None

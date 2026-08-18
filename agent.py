@@ -946,10 +946,73 @@ _ASSET_KEYWORDS = re.compile(
     re.IGNORECASE
 )
 
+# Bare ticker mentions (e.g. "NVDA thoughts?") contain none of the keywords
+# above. Match 2-5 consecutive uppercase letters as a standalone word --
+# deliberately case-sensitive (not re.IGNORECASE) since a lowercase 2-5
+# letter word is just ordinary English and would blow this open. Common
+# all-caps acronyms that aren't tickers are excluded so this doesn't fire on
+# every "CEO", "ASAP", "FYI", etc.
+_TICKER_PATTERN = re.compile(r'\b[A-Z]{2,5}\b')
+_TICKER_EXCLUDE = frozenset({
+    "I", "A", "OK", "US", "UK", "EU", "AI", "ID", "TV", "PC", "DIY",
+    "ASAP", "ETA", "FYI", "CEO", "CFO", "CTO", "COO", "USD", "USA",
+    "LOL", "OMG", "BTW", "IMO", "IMHO", "FAQ", "API", "URL", "PDF",
+    "CSV", "JSON", "HTML", "HTTP", "GDP", "CPI", "FED", "SEC", "IRS",
+    "NO", "IT", "PS", "RE", "VS", "TBD", "TBH", "RIP", "PM", "AM",
+})
+
+# Sector/asset-class slang a keyword regex will never catch because it
+# contains no finance-specific word ("that chipmaker", "the EV maker").
+_SECTOR_SLANG = (
+    "chipmaker", "automaker", "carmaker", "homebuilder", "biotech",
+    "pharma giant", "big tech", "tech giant", "oil major", "ev maker",
+    "retailer", "blue chip", "meme stock", "bank stock", "airline stock",
+)
+
+# Casual lowercase mentions of specific assets ("nvda thoughts?", "thinking
+# about apple or google") -- _TICKER_PATTERN is deliberately case-sensitive
+# (see comment above) so it never sees these, and _ASSET_KEYWORDS contains no
+# finance-specific word either. Rather than making the ticker regex
+# case-insensitive (which would blow it open on ordinary short lowercase
+# English words, same problem _TICKER_EXCLUDE guards against), this is a
+# curated allowlist of tickers/company names commonly said in lowercase
+# casual chat -- the same tradeoff already made for _SECTOR_SLANG above.
+# Ambiguous common-English-word tickers/names (e.g. "spy", "meta") are
+# deliberately left out to avoid reopening false positives. Same reasoning
+# applies to "apple" (food), "google" (generic verb -- "google it"),
+# "amazon" (rainforest/geography), and "alphabet" (everyday word, "teaching
+# my kid the alphabet") -- all trimmed for the same collision risk. "tesla"
+# is kept despite colliding with the historical figure/physics unit ("tesla
+# coil"): unlike the words above it isn't a fixture of ordinary daily
+# speech, and there is no other in-scope signal (no finance-specific verb
+# like "overvalued" lives in this allowlist) that would catch a bare
+# "is tesla overvalued right now" if the name were removed -- so this
+# deliberately accepts a bounded, safe-direction false-positive risk (extra
+# disclaimer on rare non-financial "tesla" mentions) rather than reopening
+# the false-negative gap this allowlist exists to close.
+_CASUAL_TICKER_SLANG = frozenset({
+    "nvda", "aapl", "tsla", "amzn", "msft", "googl", "goog", "amd", "nflx",
+    "rivn",
+})
+_CASUAL_ASSET_NAMES = frozenset({
+    "tesla", "nvidia", "microsoft", "netflix",
+})
+_CASUAL_ASSET_PATTERN = re.compile(
+    r'\b(?:' + '|'.join(_CASUAL_TICKER_SLANG | _CASUAL_ASSET_NAMES) + r')\b',
+    re.IGNORECASE,
+)
+
 def _needs_disclaimer(user_msg: str, response: str) -> bool:
     """Return True if the response discusses specific assets or market actions."""
     combined = user_msg + " " + response
-    return bool(_ASSET_KEYWORDS.search(combined))
+    if _ASSET_KEYWORDS.search(combined):
+        return True
+    if any(slang in combined.lower() for slang in _SECTOR_SLANG):
+        return True
+    if _CASUAL_ASSET_PATTERN.search(combined):
+        return True
+    tickers = set(_TICKER_PATTERN.findall(combined)) - _TICKER_EXCLUDE
+    return bool(tickers)
 
 
 def chat(user_message: str, history: list[dict], quotes: dict = None,

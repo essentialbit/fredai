@@ -1226,6 +1226,19 @@ def api_portfolio_risk():
     return jsonify(risk)
 
 
+@app.route("/api/portfolio/benchmark")
+@login_required
+def api_portfolio_benchmark():
+    from portfolio_risk import compute_portfolio_benchmark
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    benchmark = compute_portfolio_benchmark(
+        portfolio.get("positions", []), portfolio.get("total_value")
+    )
+    return jsonify(benchmark)
+
+
 @app.route("/api/portfolio/stress-test")
 @login_required
 def api_portfolio_stress_test():

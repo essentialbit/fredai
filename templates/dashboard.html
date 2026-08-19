@@ -1943,6 +1943,14 @@ html[data-tier="micro"] #ov-globe-stage {
       <div class="ph">Historical Stress Test <span class="ptag">CRISIS REPLAY</span></div>
       <div id="stress-test-body" class="stress-grid">Loading...</div>
     </div>
+    <div class="panel" id="tab-portfolio-benchmark" style="display:none;grid-column:1/-1">
+      <div class="ph">Your Holdings vs. SPY / QQQ <span class="ptag">REAL PORTFOLIO</span></div>
+      <div style="padding:6px 16px 0;font-size:10px;color:var(--t3)" id="pb-headline">Loading...</div>
+      <div style="padding:10px 16px 12px;position:relative;height:200px">
+        <canvas id="portfolio-benchmark-chart"></canvas>
+      </div>
+      <div style="padding:0 16px 12px;font-size:9px;color:var(--t3);border-top:1px solid var(--border);padding-top:8px">Simplification: history is valued using your <b>current</b> share counts x each day's close, not the share count you actually held on that date — a trade you've made since then shifts the whole curve. This is your real holdings, not a simulation.</div>
+    </div>
 
     <!-- ══ AI UNIVERSE TAB ══ -->
     <div class="panel" id="tab-ai" style="display:none;grid-column:1/-1;padding:0;overflow:hidden">
@@ -3128,7 +3136,7 @@ setInterval(tickClock, 1000); tickClock();
 // ── TABS ──────────────────────────────────────────────────────────────────
 const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record','ov-recall','calibration-panel','counterfactual-panel','divergence-panel','ov-theses','ov-scenario'];
 const WL=['tab-watchlist'];
-const PF=['tab-portfolio-left','tab-portfolio-chart','tab-portfolio-stress'];
+const PF=['tab-portfolio-left','tab-portfolio-chart','tab-portfolio-stress','tab-portfolio-benchmark'];
 const TR=['tab-trending-list','tab-trending-chart'];
 const AI=['tab-ai'];
 const GB=['tab-globe-panel'];
@@ -4987,7 +4995,7 @@ async function addWatchlist(){const sym=g('wl-inp').value.trim().toUpperCase();i
 async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});loadWatchlist()}
 
 // ── PORTFOLIO ─────────────────────────────────────────────────────────────
-async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p);loadStressTest(p)}
+async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p);loadStressTest(p);loadPortfolioBenchmark(p)}
 
 async function loadStressTest(p){
   const el=g('stress-test-body'); if(!el) return;
@@ -5066,6 +5074,48 @@ async function loadPortfolioRisk(p){
       row.appendChild(el);
     });
   }catch(e){strip.style.display='none'}
+}
+let portfolioBenchmarkChart = null;
+const PB_COLORS = { SPY: '#7a9bbf', QQQ: '#c77dff' };
+async function loadPortfolioBenchmark(p){
+  const headline=g('pb-headline'), canvas=g('portfolio-benchmark-chart');
+  if(!headline||!canvas) return;
+  if(!(p.positions||[]).length){headline.textContent='Add positions to compare your holdings against SPY / QQQ.';return}
+  try{
+    const r=await fetch('/api/portfolio/benchmark');const d=await r.json();
+    if(d.status==='no_positions'){headline.textContent='Add positions to compare your holdings against SPY / QQQ.';return}
+    if(d.status==='insufficient_history'){headline.textContent=`Needs ${d.min_days}+ overlapping trading days of history across your holdings and SPY/QQQ (have ${d.days}).`;return}
+    if(d.status==='data_unavailable'){headline.textContent='Benchmark comparison unavailable — price history fetch is rate-limited or down. Retries automatically.';return}
+    if(d.status!=='ok'){headline.textContent='Benchmark comparison unavailable.';return}
+    const pct=d.portfolio_return_pct, cls=pct>=0?'var(--green)':'var(--red)';
+    const bLines=Object.keys(d.benchmarks||{}).map(sym=>{
+      const b=d.benchmarks[sym];
+      if(b.return_pct==null) return `${sym} --`;
+      return `${sym} ${b.return_pct>=0?'+':''}${b.return_pct.toFixed(2)}%`;
+    }).join(' · ');
+    headline.innerHTML=`<span style="font-size:14px;font-weight:600;color:${cls}">${pct>=0?'+':''}${(pct??0).toFixed(2)}%</span> your holdings (${d.days}d, ${d.start_date} → ${d.end_date}) &nbsp;·&nbsp; ${esc(bLines)}`;
+    const curve=d.portfolio_curve||[];
+    if(portfolioBenchmarkChart){portfolioBenchmarkChart.destroy();portfolioBenchmarkChart=null}
+    if(curve.length>1){
+      const datasets=[{label:'Your portfolio',data:curve.map(x=>x.value),borderColor:'#00ff88',backgroundColor:'rgba(0,255,136,.08)',fill:true,pointRadius:0,borderWidth:1.5,tension:0.1}];
+      Object.keys(d.benchmarks||{}).forEach(sym=>{
+        const bc=(d.benchmarks[sym]||{}).curve||[];
+        datasets.push({label:sym,data:bc.map(x=>x.value),borderColor:PB_COLORS[sym]||'#3d5a73',borderDash:[4,4],fill:false,pointRadius:0,borderWidth:1,tension:0.1});
+      });
+      portfolioBenchmarkChart=new Chart(canvas,{
+        type:'line',
+        data:{labels:curve.map(x=>x.date),datasets},
+        options:{
+          responsive:true,maintainAspectRatio:false,animation:{duration:300},
+          scales:{
+            x:{ticks:{color:'#3d5a73',font:{size:8},maxTicksLimit:8},grid:{color:'#162840'}},
+            y:{title:{display:true,text:'Portfolio value ($)',color:'#7a9bbf',font:{size:9}},ticks:{color:'#3d5a73',font:{size:9}},grid:{color:'#162840'}},
+          },
+          plugins:{legend:{display:true,labels:{color:'#7a9bbf',font:{size:9},boxWidth:10}}},
+        },
+      });
+    }
+  }catch(e){headline.textContent='Benchmark comparison unavailable — retries automatically.';console.warn('Portfolio benchmark failed:',e)}
 }
 function renderPortfolioTab(p){
   window._portfolio=(p.positions||[]).map(x=>x.symbol);

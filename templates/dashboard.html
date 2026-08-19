@@ -623,7 +623,9 @@ html[data-tier="compact"] #content {
 html[data-tier="compact"] .panel { height:auto;min-height:200px }
 html[data-tier="compact"] #ov-chart { height:clamp(240px,45vw,320px) }
 html[data-tier="compact"] #ov-signals,
-html[data-tier="compact"] #ov-bottom { display:none }
+html[data-tier="compact"] #ov-briefing,
+html[data-tier="compact"] #ov-heatmap,
+html[data-tier="compact"] #ov-alerts { display:none }
 
 /* Micro: single column, stacked */
 html[data-tier="micro"] #content {
@@ -636,7 +638,9 @@ html[data-tier="micro"] .panel { flex-shrink:0;height:auto }
 html[data-tier="micro"] #ov-portfolio { min-height:160px }
 html[data-tier="micro"] #ov-chart { height:clamp(200px,55vw,280px) }
 html[data-tier="micro"] #ov-signals,
-html[data-tier="micro"] #ov-bottom { display:none }
+html[data-tier="micro"] #ov-briefing,
+html[data-tier="micro"] #ov-heatmap,
+html[data-tier="micro"] #ov-alerts { display:none }
 html[data-tier="compact"] #tab-portfolio-chart .pie-wrap { height:clamp(220px,50vw,300px) }
 html[data-tier="micro"] #tab-portfolio-chart .pie-wrap { height:clamp(180px,55vw,240px) }
 
@@ -664,17 +668,24 @@ html[data-tier="micro"] #tab-portfolio-chart .pie-wrap { height:clamp(180px,55vw
 .ptag{font-size:var(--font-xs);padding:2px 6px;border-radius:3px;background:rgba(0,180,255,.1);color:var(--blue);border:1px solid rgba(0,180,255,.2)}
 .scroll{overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
 
-/* ══ OVERVIEW BOTTOM STRIP ════════════════════════════════════════════════ */
-#ov-bottom{
-  grid-column:1/-1;grid-row:2;
-  display:grid;gap:var(--gap);background:transparent;
-}
-html[data-tier="full"] #ov-bottom,
-html[data-tier="ultra"] #ov-bottom { grid-template-columns:1fr 1fr 1fr }
-html[data-tier="standard"] #ov-bottom { grid-template-columns:1fr 1fr }
-html[data-tier="standard"] #ov-bottom .panel:last-child { display:none }
-html[data-tier="compact"] #ov-bottom,
-html[data-tier="micro"] #ov-bottom { display:none }
+/* ══ OVERVIEW CUSTOMIZABLE-WIDGET SCOPE ══════════════════════════════════
+   display:contents so #ov-cw-container never becomes a grid item itself --
+   every panel inside it (including the former #ov-bottom/#ov-extra strip
+   panels, now individually flattened) still lays out directly against
+   #content's own CSS Grid, unchanged. See markup comment at the container's
+   opening tag for why this can't just be an attribute on #content itself. */
+#ov-cw-container{display:contents}
+
+/* ultra-trend-mini (flattened out of the old #ov-bottom 4th column) is only
+   ever shown on the ultra tier -- CSS-enforced here so a stale saved layout
+   preference from a different-tier session can never leak it onto a tier
+   that structurally never has it (see initCustomizableWidgets: a "visible"
+   preference just clears the inline style and defers back to this rule). */
+html[data-tier="full"] #ultra-trend-mini,
+html[data-tier="standard"] #ultra-trend-mini,
+html[data-tier="compact"] #ultra-trend-mini,
+html[data-tier="micro"] #ultra-trend-mini,
+html[data-tier="nano"] #ultra-trend-mini { display:none }
 
 /* ══ POSITION / PORTFOLIO ROWS ═══════════════════════════════════════════ */
 .pos-row{
@@ -916,7 +927,6 @@ html[data-tier="ultra"] .kpi { padding:16px 20px }
 html[data-tier="ultra"] .sig-card { padding:12px 20px }
 html[data-tier="ultra"] .pos-row { padding:10px 20px }
 html[data-tier="ultra"] .trend-row { padding:12px 20px }
-html[data-tier="ultra"] #ov-bottom { grid-template-columns:1fr 1fr 1fr 1fr }
 html[data-tier="ultra"] #heatmap { grid-template-columns:repeat(9,1fr) }
 /* On ultra, show more data */
 html[data-tier="ultra"] .ph { font-size:10px;letter-spacing:3px }
@@ -946,17 +956,6 @@ html[data-tier="nano"] #mobile-nav { display:none !important }
 .nano-ask:hover{background:rgba(155,89,255,.25)}
 .nano-resp{font-size:10px;color:var(--t2);line-height:1.6;margin-top:8px;text-align:left;max-height:80px;overflow-y:auto}
 
-/* ══ OV-EXTRA ROW (Calendar, News, TechAlerts) ══ */
-#ov-extra{
-  grid-column:1/-1;display:none;
-  display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--gap);
-}
-html[data-tier="nano"] #ov-extra{display:none}
-html[data-tier="micro"] #ov-extra,
-html[data-tier="compact"] #ov-extra{grid-template-columns:1fr;display:grid}
-html[data-tier="standard"] #ov-extra,
-html[data-tier="full"] #ov-extra,
-html[data-tier="ultra"] #ov-extra{display:grid}
 
 /* Calendar event items */
 .cal-event{
@@ -1640,8 +1639,18 @@ html[data-tier="micro"] #ov-globe-stage {
   <!-- ══ MAIN CONTENT AREA ══ -->
   <div id="content" class="tab-overview">
 
+    <!-- Customizable-widget scope for the Overview tab. display:contents so every
+         panel below still participates directly in #content's own CSS Grid --
+         this wrapper exists only to give the widget JS (cwMoveWidget/cwHideWidget)
+         a scoped [data-cw-page] ancestor without leaking into other tabs, which
+         all share this same #content element (see globe/landingzone, whose own
+         data-cw-page containers are nested one level inside THEIR OWN tab panel,
+         not #content directly -- #content itself must never carry data-cw-page,
+         or every tab's widgets would match a single flattened selector). -->
+    <div id="ov-cw-container" data-cw-page="overview">
+
     <!-- FRED'S INTELLIGENCE PANEL -->
-    <div id="fred-intelligence">
+    <div id="fred-intelligence" class="customizable-widget" data-widget-id="fred-intelligence">
       <div id="fi-scanner"></div>
       <div id="fi-header">
         <div class="fi-icon">◈</div>
@@ -1653,6 +1662,11 @@ html[data-tier="micro"] #ov-globe-stage {
           <span class="fi-risk MEDIUM" id="fi-risk-badge">MEDIUM</span>
           <button class="fi-refresh" onclick="loadRecommendations(true)" title="Refresh picks">↻ Refresh</button>
         </div>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div id="fi-body">
         <div id="fi-loading"><div class="fi-spin"></div>Asking Fred for today's picks...</div>
@@ -1662,12 +1676,17 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- OPERATIONAL PICTURE — Mission Control -->
-    <div id="ops-picture">
+    <div id="ops-picture" class="customizable-widget" data-widget-id="ops-picture">
       <div class="ops-hdr">
         <span style="font-size:14px">◉</span>
         <div class="ops-title">Mission Control — Operational Picture</div>
         <span id="ops-market-status">LOADING</span>
         <button id="ops-refresh" onclick="loadOpsPicture()">↻</button>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div id="ops-body">
         <!-- Col 1: Signal Density -->
@@ -1684,11 +1703,16 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- TRACK RECORD — signal-accuracy transparency -->
-    <div class="panel" id="track-record" style="grid-column:1/-1">
+    <div class="panel customizable-widget" id="track-record" data-widget-id="track-record" style="grid-column:1/-1">
       <div class="ops-hdr">
         <span style="font-size:14px">◎</span>
         <div class="ops-title">Fred's Track Record</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">How often has Fred's signal direction matched reality?</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div id="track-record-body" style="display:flex;gap:14px;padding:12px 16px">
         <div style="color:var(--t3);font-size:9px">Loading...</div>
@@ -1696,8 +1720,14 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- FRED'S MEMORY — search across Fred's own accumulated intelligence (Fred Recall) -->
-    <div class="panel" id="ov-recall" style="grid-column:1/-1">
-      <div class="ph">Ask Fred's Memory <span class="ptag">RECALL</span></div>
+    <div class="panel customizable-widget" id="ov-recall" data-widget-id="ov-recall" style="grid-column:1/-1">
+      <div class="ph">Ask Fred's Memory <span class="ptag">RECALL</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
       <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
         <input id="recall-input" placeholder="Search Fred's history... (e.g. NVDA insider buying, Fed pivot)" oninput="onRecallInput()" onkeydown="if(event.key==='Enter'){event.preventDefault();runRecallSearch();}" style="width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;font-family:inherit">
       </div>
@@ -1707,11 +1737,16 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- CALIBRATION — Brier-scored reliability weighting (FSI L4) -->
-    <div class="panel" id="calibration-panel" style="grid-column:1/-1">
+    <div class="panel customizable-widget" id="calibration-panel" data-widget-id="calibration-panel" style="grid-column:1/-1">
       <div class="ops-hdr">
         <span style="font-size:14px">◐</span>
         <div class="ops-title">Fred's Calibration</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">When Fred says he's confident, is he actually more often right?</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div style="display:flex;gap:16px;padding:12px 16px;flex-wrap:wrap">
         <div style="flex:1;min-width:220px;position:relative;height:180px">
@@ -1729,11 +1764,16 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- FRED'S ACCOUNTABILITY — honest counterfactual P&L simulation (FSI L3) -->
-    <div class="panel" id="counterfactual-panel" style="grid-column:1/-1">
+    <div class="panel customizable-widget" id="counterfactual-panel" data-widget-id="counterfactual-panel" style="grid-column:1/-1">
       <div class="ops-hdr">
         <span style="font-size:14px">◑</span>
         <div class="ops-title">Fred's Accountability</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">If you had traded Fred's signals — the honest equity curve, drawdowns included</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div style="padding:10px 16px;display:flex;gap:20px;flex-wrap:wrap" id="cf-headline">
         <div style="color:var(--t3);font-size:10px">Loading...</div>
@@ -1753,11 +1793,16 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- DIVERGENCE RADAR — cross-asset disagreement detection (FSI L2) -->
-    <div class="panel" id="divergence-panel" style="grid-column:1/-1">
+    <div class="panel customizable-widget" id="divergence-panel" data-widget-id="divergence-panel" style="grid-column:1/-1">
       <div class="ops-hdr">
         <span style="font-size:14px">◉</span>
         <div class="ops-title">Divergence Radar</div>
         <span style="font-size:9px;color:var(--t3);margin-left:auto">When markets that normally agree stop agreeing</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div id="dv-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;padding:12px 16px">
         <div style="color:var(--t3);font-size:10px">Loading...</div>
@@ -1765,9 +1810,14 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- THESIS TRACKER — living, evidence-fed investment theses (FSI L4) -->
-    <div class="panel" id="ov-theses" style="grid-column:1/-1">
+    <div class="panel customizable-widget" id="ov-theses" data-widget-id="ov-theses" style="grid-column:1/-1">
       <div class="ph">Investment Theses <span class="ptag">LIVING</span>
         <button class="btn btn-p" style="font-size:var(--font-xs);padding:3px 9px" onclick="toggleThesisComposer()">+ New Thesis</button>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div id="thesis-composer" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2)">
         <input id="tc-title" placeholder="Thesis title (e.g. Long semis capex supercycle)" style="width:100%;background:var(--bg1);border:1px solid var(--border);color:var(--t1);border-radius:4px;padding:6px 9px;font-size:11px;margin-bottom:6px">
@@ -1789,8 +1839,14 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- SCENARIO LAB — interactive what-if engine (FSI L3) -->
-    <div class="panel" id="ov-scenario" style="grid-column:1/-1">
-      <div class="ph">Scenario Lab <span class="ptag">WHAT-IF</span></div>
+    <div class="panel customizable-widget" id="ov-scenario" data-widget-id="ov-scenario" style="grid-column:1/-1">
+      <div class="ph">Scenario Lab <span class="ptag">WHAT-IF</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
       <div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="sc-factor" style="background:var(--bg2);border:1px solid var(--border);color:var(--t1);border-radius:4px;font-size:11px;padding:6px">
           <option value="">Loading factors...</option>
@@ -1806,14 +1862,20 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- OVERVIEW: Portfolio panel -->
-    <div class="panel" id="ov-portfolio">
-      <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span></div>
+    <div class="panel customizable-widget" id="ov-portfolio" data-widget-id="ov-portfolio">
+      <div class="ph">Portfolio <span class="ptag">LIVE P&amp;L</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
       <div class="port-total"><div class="port-val" id="ov-ptotal">$0.00</div><div class="port-pnl" id="ov-ppnl">--</div></div>
       <div class="scroll" id="ov-positions"></div>
     </div>
 
     <!-- OVERVIEW: Chart panel -->
-    <div class="panel" id="ov-chart">
+    <div class="panel customizable-widget" id="ov-chart" data-widget-id="ov-chart">
       <div id="chart-tabs">
         <button class="ctab active" onclick="switchChart('price',this)">Price</button>
         <button class="ctab" onclick="switchChart('sentiment',this)">Sentiment</button>
@@ -1824,6 +1886,11 @@ html[data-tier="micro"] #ov-globe-stage {
           <option value="TSLA">TSLA</option><option value="MSFT">MSFT</option>
           <option value="BTC-USD">BTC</option><option value="ETH-USD">ETH</option>
         </select>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
       <div id="cmp-legend"></div>
       <div id="price-chart-wrap"><div id="price-chart"></div></div>
@@ -1835,76 +1902,140 @@ html[data-tier="micro"] #ov-globe-stage {
     </div>
 
     <!-- OVERVIEW: Signal feed -->
-    <div class="panel" id="ov-signals">
-      <div class="ph">X Signals <span class="ptag" id="sig-badge">0</span></div>
+    <div class="panel customizable-widget" id="ov-signals" data-widget-id="ov-signals">
+      <div class="ph">X Signals <span class="ptag" id="sig-badge">0</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
       <div class="search-inp"><input placeholder="Filter..." oninput="filterSigs(this.value)"></div>
       <div class="scroll" id="sig-feed"></div>
     </div>
 
-    <!-- OVERVIEW: Bottom strip -->
-    <div id="ov-bottom">
-      <div class="panel"><div class="ph">Fred's 4h Briefing <span class="ptag" id="sum-ts">--</span></div><div class="b-summary" id="sum-text">Awaiting first cycle...</div></div>
-      <div class="panel"><div class="ph">Sector Heatmap <span class="ptag">TODAY</span></div><div id="heatmap"></div></div>
-      <div class="panel"><div class="ph">Alerts <span class="ptag" id="alert-cnt">0</span></div><div class="scroll" id="alerts-list"></div></div>
-      <!-- Ultra 4th column: trending mini -->
-      <div class="panel" id="ultra-trend-mini" style="display:none">
-        <div class="ph">Trending <span class="ptag">4h</span></div>
-        <div class="scroll" id="ultra-trend-list"></div>
+    <!-- OVERVIEW: Fred's 4h Briefing (flattened from the old #ov-bottom wrapper --
+         each former sub-panel is now its own top-level customizable widget, per
+         siblings alongside every other panel; tier-hide for compact/micro is
+         re-implemented per-id below since the old single #ov-bottom{display:none}
+         rule no longer has a wrapper element to hang off) -->
+    <div class="panel customizable-widget" id="ov-briefing" data-widget-id="ov-briefing" style="grid-column:1/-1">
+      <div class="ph">Fred's 4h Briefing <span class="ptag" id="sum-ts">--</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
+      <div class="b-summary" id="sum-text">Awaiting first cycle...</div>
+    </div>
+
+    <!-- OVERVIEW: Sector Heatmap (flattened from #ov-bottom) -->
+    <div class="panel customizable-widget" id="ov-heatmap" data-widget-id="ov-heatmap" style="grid-column:1/-1">
+      <div class="ph">Sector Heatmap <span class="ptag">TODAY</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
+      <div id="heatmap"></div>
+    </div>
+
+    <!-- OVERVIEW: Alerts (flattened from #ov-bottom) -->
+    <div class="panel customizable-widget" id="ov-alerts" data-widget-id="ov-alerts" style="grid-column:1/-1">
+      <div class="ph">Alerts <span class="ptag" id="alert-cnt">0</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
+      <div class="scroll" id="alerts-list"></div>
+    </div>
+
+    <!-- OVERVIEW: Trending mini, ultra tier only (flattened from #ov-bottom's
+         4th column). Tier-gating is CSS-driven (see html[data-tier=...] rules)
+         so a stale non-ultra-session "visible" preference can never leak this
+         onto a tier that structurally never shows it. -->
+    <div class="panel customizable-widget" id="ultra-trend-mini" data-widget-id="ultra-trend-mini" style="display:none;grid-column:1/-1">
+      <div class="ph">Trending <span class="ptag">4h</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
+      <div class="scroll" id="ultra-trend-list"></div>
+    </div>
+
+    <!-- OVERVIEW: Economic Calendar (flattened from the old #ov-extra wrapper) -->
+    <div class="panel customizable-widget" id="ov-calendar" data-widget-id="ov-calendar" style="grid-column:1/-1">
+      <div class="ph">Economic Calendar <span class="ptag">7 DAYS</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
+      <div class="scroll" id="cal-list">
+        <div style="color:var(--t3);font-size:var(--font-xs);padding:20px;text-align:center">Loading events...</div>
       </div>
     </div>
 
-    <!-- OVERVIEW: Economic Calendar + News + Tech Alerts row -->
-    <div id="ov-extra">
-
-      <!-- Economic Calendar -->
-      <div class="panel" id="ov-calendar">
-        <div class="ph">Economic Calendar <span class="ptag">7 DAYS</span></div>
-        <div class="scroll" id="cal-list">
-          <div style="color:var(--t3);font-size:var(--font-xs);padding:20px;text-align:center">Loading events...</div>
-        </div>
+    <!-- OVERVIEW: News Preview (flattened from #ov-extra) -->
+    <div class="panel customizable-widget" id="ov-news" data-widget-id="ov-news" style="grid-column:1/-1">
+      <div class="ph" style="display:flex;align-items:center;gap:8px">
+        News Feed
+        <span class="ptag" id="news-badge">0</span>
+        <a href="/news" style="margin-left:auto;font-size:9px;color:var(--blue);text-decoration:none;letter-spacing:.5px">VIEW ALL ↗</a>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
       </div>
-
-      <!-- News Preview -->
-      <div class="panel" id="ov-news">
-        <div class="ph" style="display:flex;align-items:center;gap:8px">
-          News Feed
-          <span class="ptag" id="news-badge">0</span>
-          <a href="/news" style="margin-left:auto;font-size:9px;color:var(--blue);text-decoration:none;letter-spacing:.5px">VIEW ALL ↗</a>
-        </div>
-        <div class="scroll" id="news-preview-list">
-          <div style="color:var(--t3);font-size:var(--font-xs);padding:20px;text-align:center">Fetching news...</div>
-        </div>
+      <div class="scroll" id="news-preview-list">
+        <div style="color:var(--t3);font-size:var(--font-xs);padding:20px;text-align:center">Fetching news...</div>
       </div>
-
-      <!-- Technical Alerts -->
-      <div class="panel" id="ov-tech-alerts">
-        <div class="ph">Technical Alerts <span class="ptag" id="ta-cnt">0</span></div>
-        <div class="scroll" id="ta-list">
-          <div style="color:var(--t3);font-size:var(--font-xs);padding:12px">No alerts configured.</div>
-        </div>
-        <div class="add-form" id="ta-form">
-          <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Add Alert</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-            <input id="ta-sym" placeholder="Symbol" style="flex:1;min-width:70px">
-            <select id="ta-type" style="flex:2;min-width:120px;background:var(--bg2);border:1px solid var(--border);color:var(--t1);padding:6px;border-radius:6px;font-size:var(--font-xs)">
-              <option value="price_above">Price above</option>
-              <option value="price_below">Price below</option>
-              <option value="ma_cross_above">MA cross above</option>
-              <option value="ma_cross_below">MA cross below</option>
-              <option value="rsi_above">RSI above (overbought)</option>
-              <option value="rsi_below">RSI below (oversold)</option>
-              <option value="volume_spike">Volume spike</option>
-            </select>
-          </div>
-          <div style="display:flex;gap:6px;margin-bottom:6px">
-            <input id="ta-threshold" placeholder="Threshold" style="flex:1">
-            <input id="ta-period" placeholder="Period (20)" style="flex:1">
-          </div>
-          <button class="btn btn-b" style="width:100%" onclick="addTechAlert()">+ Add Alert</button>
-        </div>
-      </div>
-
     </div>
+
+    <!-- OVERVIEW: Technical Alerts (flattened from #ov-extra) -->
+    <div class="panel customizable-widget" id="ov-tech-alerts" data-widget-id="ov-tech-alerts" style="grid-column:1/-1">
+      <div class="ph">Technical Alerts <span class="ptag" id="ta-cnt">0</span>
+        <span class="cw-actions" onclick="event.stopPropagation()">
+          <button onclick="cwMoveWidget('overview',this)" title="Move up">↑</button>
+          <button onclick="cwMoveWidget('overview',this,1)" title="Move down">↓</button>
+          <button class="cw-hide" onclick="cwHideWidget('overview',this)" title="Hide widget">×</button>
+        </span>
+      </div>
+      <div class="scroll" id="ta-list">
+        <div style="color:var(--t3);font-size:var(--font-xs);padding:12px">No alerts configured.</div>
+      </div>
+      <div class="add-form" id="ta-form">
+        <div style="font-size:9px;letter-spacing:1px;color:var(--t3);text-transform:uppercase;margin-bottom:8px">Add Alert</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          <input id="ta-sym" placeholder="Symbol" style="flex:1;min-width:70px">
+          <select id="ta-type" style="flex:2;min-width:120px;background:var(--bg2);border:1px solid var(--border);color:var(--t1);padding:6px;border-radius:6px;font-size:var(--font-xs)">
+            <option value="price_above">Price above</option>
+            <option value="price_below">Price below</option>
+            <option value="ma_cross_above">MA cross above</option>
+            <option value="ma_cross_below">MA cross below</option>
+            <option value="rsi_above">RSI above (overbought)</option>
+            <option value="rsi_below">RSI below (oversold)</option>
+            <option value="volume_spike">Volume spike</option>
+          </select>
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:6px">
+          <input id="ta-threshold" placeholder="Threshold" style="flex:1">
+          <input id="ta-period" placeholder="Period (20)" style="flex:1">
+        </div>
+        <button class="btn btn-b" style="width:100%" onclick="addTechAlert()">+ Add Alert</button>
+      </div>
+    </div>
+
+    <div class="cw-add-widget" id="overview-cw-add" style="display:none" onclick="cwShowAddMenu('overview')">+ <span id="overview-cw-hidden-count">0</span> hidden widget(s) — click to restore</div>
+    </div><!-- /ov-cw-container -->
 
     <!-- WATCHLIST TAB -->
     <div class="panel" id="tab-watchlist" style="display:none;grid-column:1/-1">
@@ -3126,7 +3257,14 @@ function tickClock() {
 setInterval(tickClock, 1000); tickClock();
 
 // ── TABS ──────────────────────────────────────────────────────────────────
-const OV=['ov-portfolio','ov-chart','ov-signals','ov-bottom','ov-extra','fred-intelligence','ops-picture','track-record','ov-recall','calibration-panel','counterfactual-panel','divergence-panel','ov-theses','ov-scenario'];
+const OV=['ov-portfolio','ov-chart','ov-signals','ov-briefing','ov-heatmap','ov-alerts','ultra-trend-mini','ov-calendar','ov-news','ov-tech-alerts','fred-intelligence','ops-picture','track-record','ov-recall','calibration-panel','counterfactual-panel','divergence-panel','ov-theses','ov-scenario'];
+// Overview's customizable-widget id list, in the SAME order the panels render
+// in the DOM -- initCustomizableWidgets falls back to array index as a
+// widget's order when there's no saved preference yet, so this order IS the
+// unconfigured default layout (top-to-bottom = fred-intelligence first, the
+// classic portfolio/chart/signals row mid-page, the old #ov-bottom/#ov-extra
+// strip panels last -- unchanged from before this array existed).
+const OVERVIEW_WIDGET_IDS=['fred-intelligence','ops-picture','track-record','ov-recall','calibration-panel','counterfactual-panel','divergence-panel','ov-theses','ov-scenario','ov-portfolio','ov-chart','ov-signals','ov-briefing','ov-heatmap','ov-alerts','ultra-trend-mini','ov-calendar','ov-news','ov-tech-alerts'];
 const WL=['tab-watchlist'];
 const PF=['tab-portfolio-left','tab-portfolio-chart','tab-portfolio-stress'];
 const TR=['tab-trending-list','tab-trending-chart'];
@@ -3153,6 +3291,12 @@ function switchTab(tab, btn) {
     content.className='tab-overview';
     OV.forEach(id=>{const el=g(id);if(el)el.style.display=''});
     if (IS_ULTRA) g('ultra-trend-mini').style.display='';
+    // Customizable layout (Rec #9): fires once per session, AFTER the show
+    // pass above -- same ordering as the globe tab's own initCustomizableWidgets
+    // call. Skipped on nano since #content itself is never shown there.
+    if (!IS_NANO && !_cwLayout['overview']) {
+      initCustomizableWidgets('overview', OVERVIEW_WIDGET_IDS);
+    }
     if (!IS_NANO && !_overviewPanelsLoaded) {
       _overviewPanelsLoaded = true;
       setTimeout(loadRecommendations, 800);
@@ -3718,9 +3862,25 @@ function cwShowAddMenu(page) {
   if (!hiddenIds.length) return;
   bar.innerHTML = hiddenIds.map(id => {
     const el = document.querySelector(`.customizable-widget[data-widget-id="${id}"]`);
-    const title = el ? el.querySelector('.customizable-widget-title').textContent : id;
+    const title = _cwWidgetTitle(el, id);
     return `<span onclick="cwRestoreWidget('${page}','${id}')" style="cursor:pointer;text-decoration:underline;margin-right:12px">+ ${esc(title)}</span>`;
   }).join('');
+}
+
+// globe/landingzone widgets use the .customizable-widget-title convention;
+// Overview's panels predate the widget system and use their own existing
+// header markup (.ph / .ops-title / .fi-title) instead of being rewritten
+// to match -- this reads whichever is present so the add-bar never throws,
+// falling back to the raw widget id if a panel has no title element at all
+// (e.g. ov-chart's header is a tab strip, not a title).
+function _cwWidgetTitle(el, id) {
+  if (!el) return id;
+  const t = el.querySelector('.customizable-widget-title, .ph, .ops-title, .fi-title');
+  if (!t) return id;
+  const clone = t.cloneNode(true);
+  clone.querySelectorAll('.cw-actions, .customizable-widget-control').forEach(n => n.remove());
+  const text = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  return text || id;
 }
 
 function cwRestoreWidget(page, id) {

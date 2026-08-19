@@ -3291,11 +3291,25 @@ function switchTab(tab, btn) {
     content.className='tab-overview';
     OV.forEach(id=>{const el=g(id);if(el)el.style.display=''});
     if (IS_ULTRA) g('ultra-trend-mini').style.display='';
-    // Customizable layout (Rec #9): fires once per session, AFTER the show
-    // pass above -- same ordering as the globe tab's own initCustomizableWidgets
-    // call. Skipped on nano since #content itself is never shown there.
+    // Customizable layout (Rec #9): the expensive part (fetch saved prefs,
+    // attach button/drag listeners, build DOM) fires once per session, AFTER
+    // the show pass above -- same ordering as the globe tab's own
+    // initCustomizableWidgets call. Skipped on nano since #content itself is
+    // never shown there.
     if (!IS_NANO && !_cwLayout['overview']) {
       initCustomizableWidgets('overview', OVERVIEW_WIDGET_IDS);
+    } else if (!IS_NANO && _cwLayout['overview']) {
+      // Repeat visit: the show pass above just reset every widget's display
+      // back to '' unconditionally, which would re-reveal anything the user
+      // previously hid via cwHideWidget (order is untouched -- that's plain
+      // .style.order, never reset). Re-apply the already-saved hidden set --
+      // same 'none' when hidden, mirrored from initCustomizableWidgets/
+      // cwRestoreWidget -- without re-fetching prefs or re-attaching listeners.
+      const hidden = _cwLayout['overview'].hidden;
+      OVERVIEW_WIDGET_IDS.forEach(id => {
+        if (hidden.includes(id)) { const el = g(id); if (el) el.style.display = 'none'; }
+      });
+      _cwUpdateAddBar('overview', OVERVIEW_WIDGET_IDS);
     }
     if (!IS_NANO && !_overviewPanelsLoaded) {
       _overviewPanelsLoaded = true;

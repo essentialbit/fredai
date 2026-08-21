@@ -53,6 +53,18 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
 
+        CREATE TABLE IF NOT EXISTS tax_lots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            shares REAL NOT NULL,
+            cost_basis REAL NOT NULL,
+            acquired_date TEXT NOT NULL,
+            backfilled INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
         CREATE TABLE IF NOT EXISTS user_interests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -593,6 +605,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
         CREATE INDEX IF NOT EXISTS idx_portfolio_user ON portfolio(user_id);
+        CREATE INDEX IF NOT EXISTS idx_tax_lots_user_symbol ON tax_lots(user_id, symbol);
         CREATE INDEX IF NOT EXISTS idx_backlog_status ON feature_backlog(status);
         CREATE INDEX IF NOT EXISTS idx_news_published ON news_items(published_at);
         CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
@@ -746,6 +759,11 @@ def init_db():
         CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_google ON users(oauth_google_sub) WHERE oauth_google_sub IS NOT NULL;
         """)
 
+        # tax_lots (Tax Lot CRUD unit 4.1) -- both portfolio and tax_lots exist
+        # by this point regardless of fresh-DB or existing-DB init, so this is
+        # safe to run unconditionally on every init_db() call.
+        _backfill_tax_lots(conn)
+
         # Seed a default admin user if none exist.
         # Password is randomised on first run — printed to console once.
         # Set FREDAI_ADMIN_PASSWORD in .env to pin a specific initial password.
@@ -767,6 +785,31 @@ def init_db():
                 print(f"[Security] SAVE THIS — it won't be shown again.")
                 print(f"[Security] Set FREDAI_ADMIN_PASSWORD in .env to control this.")
                 print(f"{'='*60}\n")
+
+
+def _backfill_tax_lots(conn):
+    # One synthetic lot per (user_id, symbol) portfolio position that doesn't
+    # already have at least one tax_lots row (real or synthetic). Runs on every
+    # init_db() call (self-healing schema convention used throughout this
+    # file), so a portfolio row added after the first migration is backfilled
+    # on its next startup too -- no position is ever left lot-less ahead of
+    # the future CRUD unit. cost_basis is stored as the lot's TOTAL dollar
+    # cost (shares * avg_cost), not a per-share figure -- the gain-calc unit
+    # depends on this convention.
+    rows = conn.execute("SELECT user_id, symbol, shares, avg_cost FROM portfolio").fetchall()
+    today = datetime.now().strftime("%Y-%m-%d")
+    for row in rows:
+        existing = conn.execute(
+            "SELECT 1 FROM tax_lots WHERE user_id = ? AND symbol = ? LIMIT 1",
+            (row["user_id"], row["symbol"])
+        ).fetchone()
+        if existing:
+            continue
+        conn.execute(
+            """INSERT INTO tax_lots (user_id, symbol, shares, cost_basis, acquired_date, backfilled)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (row["user_id"], row["symbol"], row["shares"], row["shares"] * row["avg_cost"], today)
+        )
 
 
 @contextmanager

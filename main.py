@@ -175,7 +175,7 @@ from news_client import fetch_all_news, fetch_ticker_info
 from calendar_client import refresh_calendar
 from central_bank_client import refresh_central_bank_deltas
 from technical_alerts import run_technical_alerts, get_technicals
-from graph_engine import generate_assessment, _ai_assessment_cache
+from graph_engine import generate_assessment, _ai_assessment_cache, _ASSESS_TTL
 from cascade_engine import cascade_for_event, run_cascade_check, detect_major_moves, get_ticker_network
 from causal_attribution import attribute_move
 from signal_density import compute_signal_density, invalidate as invalidate_density
@@ -1224,6 +1224,19 @@ def api_portfolio_risk():
         portfolio.get("positions", []), portfolio.get("total_value")
     )
     return jsonify(risk)
+
+
+@app.route("/api/portfolio/benchmark")
+@login_required
+def api_portfolio_benchmark():
+    from portfolio_risk import compute_portfolio_benchmark
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    benchmark = compute_portfolio_benchmark(
+        portfolio.get("positions", []), portfolio.get("total_value")
+    )
+    return jsonify(benchmark)
 
 
 @app.route("/api/portfolio/stress-test")
@@ -3450,7 +3463,17 @@ def api_timeline(symbol):
     from cascade_engine import _ADJ
     relationships = _ADJ.get(sym, [])
 
-    assessment = _ai_assessment_cache.get(sym, {}).get("data")
+    # Serve a fresh cached assessment if one exists (pre-warmed via /api/assessment
+    # or the watchlist assessments loop); otherwise return null and let the
+    # frontend fetch /api/assessment/<symbol> asynchronously after the rest of
+    # the page has rendered. Timeline page load must stay decoupled from the LLM
+    # provider fallback chain's latency -- generate_assessment() -> agent.py's
+    # multi-provider fallback only bounds the *first* attempt with timeout=2.0;
+    # every fallback attempt passes timeout=None (SDK default, can be very long),
+    # and calling it synchronously here used to block first paint of price,
+    # technicals, cascade, and position on that chain for any cold-cache symbol.
+    cached = _ai_assessment_cache.get(sym)
+    assessment = cached["data"] if cached and (_time.time() - cached["ts"]) < _ASSESS_TTL else None
 
     events = []
     for n in news:

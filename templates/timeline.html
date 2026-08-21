@@ -288,8 +288,28 @@ async function loadTimeline() {
     document.getElementById('tl-loading').style.display = 'none';
     document.getElementById('tl-track').style.display = '';
     loadCascade(d.quote);
+    // Assessment card: if the timeline response already had a fresh cached
+    // assessment (pre-warmed via /api/assessment or the watchlist), renderSidebar
+    // already painted it -- no extra round-trip. Otherwise fetch it async so a
+    // slow/degraded AI provider can't block the rest of this page's first paint.
+    if (!d.assessment) loadAssessment();
   } catch(e) {
     document.getElementById('tl-loading').textContent = 'Failed to load timeline.';
+  }
+}
+
+async function loadAssessment() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const r = await fetch('/api/assessment/' + SYM, { signal: controller.signal });
+    const a = await r.json();
+    renderAssessment(a);
+  } catch(e) {
+    document.getElementById('assess-card').innerHTML =
+      '<div style="color:var(--t3);font-size:10px">Assessment unavailable right now — try reloading.</div>';
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -304,19 +324,10 @@ function renderSidebar(d) {
   chgEl.style.background = chg >= 0 ? 'rgba(0,255,136,.12)' : 'rgba(255,59,92,.12)';
   chgEl.style.color = chg >= 0 ? 'var(--green)' : 'var(--red)';
 
-  // Assessment
-  const a = d.assessment || {};
-  const signal = a.signal || 'WATCH';
-  document.getElementById('assess-card').innerHTML = `
-    <span class="assess-sig ${signal}">${signal}</span>
-    <span style="font-size:9px;color:var(--t3);margin-left:6px">${a.conviction||''} · ${a.time_horizon||''}</span>
-    <div class="assess-rat">${esc(a.rationale||'Assessment loading...')}</div>
-    <div class="assess-cases">
-      <div class="bull">▲ ${esc(a.bull_case||'')}</div>
-      <div class="bear">▼ ${esc(a.bear_case||'')}</div>
-    </div>
-    <div style="font-size:8px;color:var(--t3);margin-top:6px">${esc(a.generated_at||'')}</div>
-  `;
+  // Assessment: only render inline if the timeline response already carried a
+  // fresh cached one -- otherwise leave the "Loading assessment..." placeholder
+  // in place until loadAssessment()'s async fetch resolves (see loadTimeline()).
+  if (d.assessment) renderAssessment(d.assessment);
 
   // Technicals
   const t = d.technicals || {};
@@ -362,6 +373,21 @@ function renderSidebar(d) {
         </div>`;
       }).join('')
     : '<div style="color:var(--t3);font-size:9px">No mapped relationships.</div>';
+}
+
+function renderAssessment(a) {
+  a = a || {};
+  const signal = a.signal || 'WATCH';
+  document.getElementById('assess-card').innerHTML = `
+    <span class="assess-sig ${signal}">${signal}</span>
+    <span style="font-size:9px;color:var(--t3);margin-left:6px">${a.conviction||''} · ${a.time_horizon||''}</span>
+    <div class="assess-rat">${esc(a.rationale||'Assessment loading...')}</div>
+    <div class="assess-cases">
+      <div class="bull">▲ ${esc(a.bull_case||'')}</div>
+      <div class="bear">▼ ${esc(a.bear_case||'')}</div>
+    </div>
+    <div style="font-size:8px;color:var(--t3);margin-top:6px">${esc(a.generated_at||'')}</div>
+  `;
 }
 
 function renderTimeline() {

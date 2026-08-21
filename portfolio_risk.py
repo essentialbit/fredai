@@ -258,6 +258,81 @@ def compute_portfolio_risk(positions: list[dict], total_value: float | None = No
     return result
 
 
+def compute_portfolio_benchmark(
+    positions: list[dict], total_value: float | None = None,
+    benchmarks: tuple[str, ...] = ("SPY", "QQQ"),
+) -> dict:
+    """Actual-holdings equity curve vs SPY/QQQ buy-and-hold, rebased to the
+    same start value (reasoning matches counterfactual_pnl._benchmark_curve,
+    reimplemented here because that module simulates a signal-follower with
+    its own capital pool, not the user's real (symbol, shares) positions).
+
+    SIMPLIFICATION (must stay visible in the UI, not just here): this app
+    has no historical position-change ledger, so every historical date is
+    valued at CURRENT share counts x that date's close, not the share count
+    actually held on that date. Honest for buy-and-hold-since-first-position
+    users, overstates history for anyone who has since traded size.
+
+    Same four-status contract as compute_portfolio_risk — never fakes a
+    number below MIN_DAYS or when a fetch fails outright.
+    """
+    positions = [p for p in positions if (p.get("value") or 0) > 0]
+    if not positions:
+        return {"status": "no_positions"}
+
+    shares = {p["symbol"]: float(p.get("shares") or 0) for p in positions}
+    histories = {sym: _daily_closes(sym) for sym in shares}
+    bench_closes = {b: _daily_closes(b) for b in benchmarks}
+
+    if all(not c for c in histories.values()) or all(not c for c in bench_closes.values()):
+        return {"status": "data_unavailable"}
+
+    common = None
+    for closes in histories.values():
+        common = set(closes) if common is None else (common & set(closes))
+    for closes in bench_closes.values():
+        common &= set(closes)
+    dates = sorted(common) if common else []
+    if len(dates) < MIN_DAYS:
+        return {
+            "status": "insufficient_history",
+            "days": len(dates),
+            "min_days": MIN_DAYS,
+        }
+
+    portfolio_curve = [
+        {"date": d, "value": round(sum(shares[sym] * histories[sym][d] for sym in shares), 2)}
+        for d in dates
+    ]
+    start_value = portfolio_curve[0]["value"]
+
+    result_benchmarks = {}
+    for b in benchmarks:
+        closes = bench_closes[b]
+        base = closes[dates[0]]
+        curve = [
+            {"date": d, "value": round(start_value * closes[d] / base, 2) if base else 0.0}
+            for d in dates
+        ]
+        end, start = closes[dates[-1]], closes[dates[0]]
+        return_pct = round((end / start - 1.0) * 100, 2) if start else None
+        result_benchmarks[b] = {"return_pct": return_pct, "curve": curve}
+
+    port_start, port_end = portfolio_curve[0]["value"], portfolio_curve[-1]["value"]
+    portfolio_return_pct = round((port_end / port_start - 1.0) * 100, 2) if port_start else None
+
+    return {
+        "status": "ok",
+        "as_of": datetime.utcnow().isoformat() + "Z",
+        "days": len(dates),
+        "start_date": dates[0],
+        "end_date": dates[-1],
+        "portfolio_return_pct": portfolio_return_pct,
+        "portfolio_curve": portfolio_curve,
+        "benchmarks": result_benchmarks,
+    }
+
+
 def get_cached_risk(positions: list[dict]) -> dict | None:
     """Serve the last computed risk for these holdings without any network
     I/O — chat context must never block on ~N history fetches. Returns None

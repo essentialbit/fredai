@@ -503,6 +503,26 @@ function switchPageTab(tab, btn) {
   document.getElementById('tab-video').style.display = tab === 'video' ? 'flex' : 'none';
   if (tab === 'globe' && !_globeInstance) initGlobe();
   if (tab === 'video' && Object.keys(_videoData).length === 0) loadVideoChannels();
+  if (tab === 'feed') startNewsAutoRefresh(); else stopNewsAutoRefresh();
+}
+
+// ── LIVE AUTO-REFRESH ──────────────────────────────────────────────────────
+// The top-bar "LIVE" badge previously described a page that only ever
+// fetched once on load (plus manual filter changes / the Refresh button) --
+// misleading given the pulsing dot. Poll while the feed tab is actually
+// visible, on a cadence close to the server's 30-min news-refresh job
+// without over-polling a single-process backend.
+const NEWS_AUTO_REFRESH_MS = 120000; // 2 min
+let _newsAutoTimer = null;
+function startNewsAutoRefresh() {
+  if (_newsAutoTimer) return;
+  _newsAutoTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') loadNews(_page);
+  }, NEWS_AUTO_REFRESH_MS);
+}
+function stopNewsAutoRefresh() {
+  clearInterval(_newsAutoTimer);
+  _newsAutoTimer = null;
 }
 
 // ── NEWS FEED ────────────────────────────────────────────────────────────────
@@ -542,9 +562,9 @@ async function loadNews(page = 1, forceRefresh = false) {
     const d = await r.json();
     const total = d.total || 0;
     document.getElementById('total-badge').textContent = total + ' articles';
-    document.getElementById('result-count').textContent = total + ' results';
     loading.style.display = 'none';
     let items = d.items || [];
+    const fetchedCount = items.length;
     if (_search) {
       const q = _search.toLowerCase();
       items = items.filter(i => (i.title || '').toLowerCase().includes(q) || (i.summary || '').toLowerCase().includes(q));
@@ -557,9 +577,19 @@ async function loadNews(page = 1, forceRefresh = false) {
         return s >= -0.1 && s <= 0.1;
       });
     }
+    // Search/sentiment filter client-side, over only this page's 30 fetched
+    // items -- so the count must say so explicitly instead of echoing the
+    // server's unfiltered `total`, and pagination must always be (re)rendered
+    // (previously skipped whenever a filter zeroed out the current page,
+    // leaving stale/absent controls with no way to page forward to a page
+    // that *does* have matches).
+    const clientFiltered = !!_search || _sentiment !== 'all';
+    document.getElementById('result-count').textContent = clientFiltered
+      ? `${items.length} of ${fetchedCount} on this page match (${total} total unfiltered — try another page)`
+      : total + ' results';
+    renderPagination(total, page, 30);
     if (!items.length) { empty.style.display = 'block'; return; }
     feed.innerHTML = items.map(renderCard).join('');
-    renderPagination(total, page, 30);
   } catch (e) {
     loading.innerHTML = '<span style="color:var(--t3)">Failed to load — retrying...</span>';
   }
@@ -652,9 +682,16 @@ async function initGlobe() {
         </div>`)
       .pointsMerge(false)
       .onPointClick(d => {
-        _cat = d.category !== 'all' ? d.category : 'all';
+        // Drop through to the feed filtered by this point's category -- must
+        // go through setCategory (not just set _cat + reload) so the sidebar's
+        // "Category" button actually reflects the filter that's now applied;
+        // previously it silently kept showing "All Global News" as active
+        // while the feed underneath was narrowed to one category.
+        const cat = d.category || 'all';
         switchPageTab('feed', document.querySelectorAll('.ptab')[0]);
-        loadNews(1);
+        const catBtn = document.querySelector(`.filter-btn[data-cat="${cat}"]`);
+        if (catBtn) setCategory(catBtn, cat);
+        else { _cat = cat; _page = 1; loadNews(1); }
       });
 
     renderGlobePoints();
@@ -783,6 +820,7 @@ function esc(s) {
 
 // ── INIT ─────────────────────────────────────────────────────────────────────
 loadNews(1);
+startNewsAutoRefresh(); // tab-feed is the default active tab
 </script>
 </body>
 </html>

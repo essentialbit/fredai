@@ -994,6 +994,126 @@ def get_portfolio(user_id: int) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+# ── TAX LOTS ──────────────────────────────────────────────────────────────────
+def get_aggregated_position(user_id: int, symbol: str) -> dict:
+    """Aggregate all of a user's lots for a symbol into a single shares/avg_cost
+    position -- the same shape as a `portfolio` row. Zero lots (or a zero total
+    shares count, e.g. every lot sold off) returns {"shares": 0, "avg_cost": 0}
+    rather than raising."""
+    symbol = symbol.upper()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT SUM(shares) AS total_shares, SUM(cost_basis) AS total_cost "
+            "FROM tax_lots WHERE user_id=? AND symbol=?",
+            (user_id, symbol)
+        ).fetchone()
+    total_shares = row["total_shares"] or 0
+    total_cost = row["total_cost"] or 0
+    if not total_shares:
+        return {"shares": 0, "avg_cost": 0}
+    return {"shares": total_shares, "avg_cost": total_cost / total_shares}
+
+
+def _sync_portfolio_from_lots(user_id: int, symbol: str):
+    agg = get_aggregated_position(user_id, symbol)
+    upsert_portfolio(user_id, symbol, agg["shares"], agg["avg_cost"])
+
+
+def add_lot(user_id: int, symbol: str, shares: float, cost_basis: float, acquired_date: str) -> int:
+    symbol = symbol.upper()
+    with get_conn() as conn:
+        cursor = conn.execute(
+            """INSERT INTO tax_lots (user_id, symbol, shares, cost_basis, acquired_date, backfilled)
+               VALUES (?, ?, ?, ?, ?, 0)""",
+            (user_id, symbol, shares, cost_basis, acquired_date)
+        )
+        lot_id = cursor.lastrowid
+    _sync_portfolio_from_lots(user_id, symbol)
+    return lot_id
+
+
+_LOT_UPDATE_WHITELIST = ("shares", "cost_basis", "acquired_date")
+
+
+def update_lot(lot_id: int, **fields) -> bool:
+    """Update only whitelisted columns on a tax_lots row. Unknown keys in
+    `fields` are silently ignored (never string-interpolated into SQL --
+    the SET clause is built from the fixed whitelist, not from fields.keys()).
+    Returns False if lot_id doesn't exist; never silently no-ops on success."""
+    updates = {k: v for k, v in fields.items() if k in _LOT_UPDATE_WHITELIST}
+    with get_conn() as conn:
+        existing = conn.execute("SELECT user_id, symbol FROM tax_lots WHERE id=?", (lot_id,)).fetchone()
+        if not existing:
+            return False
+        if updates:
+            set_clause = ", ".join(f"{col}=?" for col in updates)
+            conn.execute(
+                f"UPDATE tax_lots SET {set_clause} WHERE id=?",
+                (*updates.values(), lot_id)
+            )
+    _sync_portfolio_from_lots(existing["user_id"], existing["symbol"])
+    return True
+
+
+def remove_lot(lot_id: int) -> bool:
+    with get_conn() as conn:
+        existing = conn.execute("SELECT user_id, symbol FROM tax_lots WHERE id=?", (lot_id,)).fetchone()
+        if not existing:
+            return False
+        conn.execute("DELETE FROM tax_lots WHERE id=?", (lot_id,))
+    _sync_portfolio_from_lots(existing["user_id"], existing["symbol"])
+    return True
+
+
+def get_lots(user_id: int, symbol: str = None) -> list[dict]:
+    with get_conn() as conn:
+        if symbol:
+            rows = conn.execute(
+                "SELECT * FROM tax_lots WHERE user_id=? AND symbol=? ORDER BY acquired_date ASC, id ASC",
+                (user_id, symbol.upper())
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM tax_lots WHERE user_id=? ORDER BY acquired_date ASC, id ASC",
+                (user_id,)
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def select_lots_for_sale(user_id: int, symbol: str, shares_to_sell: float, method: str = "fifo", lot_ids: list[int] = None) -> list[dict]:
+    """Pure lot selection for a hypothetical sale -- no DB writes, no gain
+    math. "fifo" consumes the user's lots for `symbol` oldest-acquired-first
+    (acquired_date ASC, id ASC, matching get_lots' deterministic ordering);
+    "specific" consumes only `lot_ids`, in the order given. Either way, the
+    final lot needed may be partially consumed. Raises ValueError (rather
+    than silently returning a partial fill) if the eligible lots don't hold
+    enough shares to cover shares_to_sell."""
+    lots = get_lots(user_id, symbol)
+    if method == "specific":
+        lots_by_id = {lot["id"]: lot for lot in lots}
+        # dict.fromkeys dedupes while preserving first-occurrence order -- a
+        # duplicate id must never have its shares counted/consumed twice.
+        candidates = [lots_by_id[lid] for lid in dict.fromkeys(lot_ids or []) if lid in lots_by_id]
+    else:
+        candidates = lots
+
+    available = sum(lot["shares"] for lot in candidates)
+    if available < shares_to_sell:
+        raise ValueError(
+            f"requested {shares_to_sell} shares to sell but only {available} available"
+        )
+
+    result = []
+    remaining = shares_to_sell
+    for lot in candidates:
+        if remaining <= 0:
+            break
+        used = min(lot["shares"], remaining)
+        result.append({"lot_id": lot["id"], "shares_used": used})
+        remaining -= used
+    return result
+
+
 # ── SIGNALS ───────────────────────────────────────────────────────────────────
 def insert_signal(source, content, asset=None, author=None, sentiment_score=0.0, signal_type="neutral", sentiment_model="vader", metadata=None):
     with get_conn() as conn:

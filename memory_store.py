@@ -65,6 +65,28 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
 
+        CREATE TABLE IF NOT EXISTS disposals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            disposal_date TEXT NOT NULL,
+            shares REAL NOT NULL,
+            proceeds REAL NOT NULL,
+            method TEXT NOT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS disposal_lots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            disposal_id INTEGER NOT NULL,
+            lot_id INTEGER NOT NULL,
+            shares_used REAL NOT NULL,
+            cost_basis REAL NOT NULL,
+            acquired_date TEXT NOT NULL,
+            FOREIGN KEY(disposal_id) REFERENCES disposals(id)
+        );
+
         CREATE TABLE IF NOT EXISTS user_interests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -606,6 +628,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
         CREATE INDEX IF NOT EXISTS idx_portfolio_user ON portfolio(user_id);
         CREATE INDEX IF NOT EXISTS idx_tax_lots_user_symbol ON tax_lots(user_id, symbol);
+        CREATE INDEX IF NOT EXISTS idx_disposals_user_symbol ON disposals(user_id, symbol, disposal_date);
+        CREATE INDEX IF NOT EXISTS idx_disposal_lots_disposal ON disposal_lots(disposal_id);
         CREATE INDEX IF NOT EXISTS idx_backlog_status ON feature_backlog(status);
         CREATE INDEX IF NOT EXISTS idx_news_published ON news_items(published_at);
         CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
@@ -1112,6 +1136,129 @@ def select_lots_for_sale(user_id: int, symbol: str, shares_to_sell: float, metho
         result.append({"lot_id": lot["id"], "shares_used": used})
         remaining -= used
     return result
+
+
+def record_disposal(user_id: int, symbol: str, shares: float, proceeds: float, disposal_date: str, method: str = "fifo", lot_ids: list[int] = None) -> int:
+    """Records a disposal (sale) of `shares` of `symbol`, freezing one line
+    item per lot consumed. Consumption is determined by select_lots_for_sale
+    (fifo across all lots, or specific via lot_ids) -- same shortfall
+    contract: raises ValueError, never a partial fill, if the eligible lots
+    don't cover `shares`. Also raises ValueError if `disposal_date` predates
+    the acquired_date of any lot that would be consumed (can't dispose of
+    something before you owned it) -- checked before any write.
+
+    Each disposal_lots line item's `cost_basis` is the dollar cost basis
+    attributable to that line's `shares_used` specifically (a proportional
+    slice of the consumed lot's own total cost_basis, preserving tax_lots'
+    existing "cost_basis is total dollar cost, not per-share" convention),
+    NOT the full original lot's cost_basis when only part of it is consumed
+    -- this is the correct per-line input for a realized-gain calc, since
+    shares_used and cost_basis then describe the same slice of the lot.
+
+    Consumed lots are decremented (partial consumption) or deleted (full
+    consumption) using the same raw UPDATE/DELETE tax_lots statements
+    update_lot/remove_lot use, but inlined into this function's own
+    transaction rather than calling those functions directly -- they each
+    open their own get_conn() and resync the portfolio immediately, which
+    would split this operation across multiple transactions and resync
+    prematurely mid-disposal. The disposal row, its line items, and the lot
+    decrements/removals all happen inside one get_conn() transaction, so a
+    crash mid-operation can never leave a disposal recorded with its source
+    lot still showing as open, or a lot silently reduced with no audit
+    trail. Portfolio resync (_sync_portfolio_from_lots) happens once, after
+    that transaction commits -- matching add_lot/update_lot/remove_lot's own
+    convention of resyncing after their write, not inside it.
+    """
+    symbol = symbol.upper()
+    consumption = select_lots_for_sale(user_id, symbol, shares, method=method, lot_ids=lot_ids)
+    lots_by_id = {lot["id"]: lot for lot in get_lots(user_id, symbol)}
+
+    for entry in consumption:
+        lot = lots_by_id[entry["lot_id"]]
+        if disposal_date < lot["acquired_date"]:
+            raise ValueError(
+                f"disposal_date {disposal_date} predates lot {lot['id']}'s acquired_date {lot['acquired_date']}"
+            )
+
+    with get_conn() as conn:
+        cursor = conn.execute(
+            """INSERT INTO disposals (user_id, symbol, disposal_date, shares, proceeds, method)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (user_id, symbol, disposal_date, shares, proceeds, method)
+        )
+        disposal_id = cursor.lastrowid
+
+        for entry in consumption:
+            lot = lots_by_id[entry["lot_id"]]
+            shares_used = entry["shares_used"]
+            per_share_cost = lot["cost_basis"] / lot["shares"] if lot["shares"] else 0
+            cost_used = per_share_cost * shares_used
+
+            conn.execute(
+                """INSERT INTO disposal_lots (disposal_id, lot_id, shares_used, cost_basis, acquired_date)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (disposal_id, lot["id"], shares_used, cost_used, lot["acquired_date"])
+            )
+
+            remaining_shares = lot["shares"] - shares_used
+            if remaining_shares <= 0:
+                conn.execute("DELETE FROM tax_lots WHERE id=?", (lot["id"],))
+            else:
+                remaining_cost = lot["cost_basis"] - cost_used
+                conn.execute(
+                    "UPDATE tax_lots SET shares=?, cost_basis=? WHERE id=?",
+                    (remaining_shares, remaining_cost, lot["id"])
+                )
+
+    _sync_portfolio_from_lots(user_id, symbol)
+    return disposal_id
+
+
+def get_disposals(user_id: int, symbol: str = None) -> list[dict]:
+    """Returns recorded disposal events for a user (optionally filtered to
+    one symbol), ordered disposal_date ASC, id ASC (matching get_lots'
+    existing ordering convention). This is the sanctioned sole read path for
+    realized-gain math -- consumers should not reconstruct disposal history
+    from tax_lots (consumed lots may be fully deleted).
+
+    Return shape: a list of dicts, each a `disposals` row --
+        {"id", "user_id", "symbol", "disposal_date", "shares", "proceeds",
+         "method", "created_at"}
+    -- plus a nested "lots" key: a list of the line items consumed for that
+    disposal, each
+        {"lot_id", "shares_used", "cost_basis", "acquired_date"}
+    frozen at the moment of disposal (never a live join back to tax_lots,
+    since the source lot row may have been fully consumed and removed).
+    "cost_basis" on each line item is the dollar cost basis attributable to
+    that line's "shares_used" specifically (see record_disposal's
+    docstring) -- summing a disposal's line-item cost_basis values yields
+    the disposal's total cost basis. "lots" is ordered by insertion (id
+    ASC), i.e. the order lots were actually consumed in (fifo:
+    oldest-acquired-first; specific: the order lot_ids was given in).
+    """
+    with get_conn() as conn:
+        if symbol:
+            disposal_rows = conn.execute(
+                "SELECT * FROM disposals WHERE user_id=? AND symbol=? ORDER BY disposal_date ASC, id ASC",
+                (user_id, symbol.upper())
+            ).fetchall()
+        else:
+            disposal_rows = conn.execute(
+                "SELECT * FROM disposals WHERE user_id=? ORDER BY disposal_date ASC, id ASC",
+                (user_id,)
+            ).fetchall()
+
+        disposals = []
+        for drow in disposal_rows:
+            line_rows = conn.execute(
+                "SELECT lot_id, shares_used, cost_basis, acquired_date FROM disposal_lots "
+                "WHERE disposal_id=? ORDER BY id ASC",
+                (drow["id"],)
+            ).fetchall()
+            d = dict(drow)
+            d["lots"] = [dict(r) for r in line_rows]
+            disposals.append(d)
+    return disposals
 
 
 # ── SIGNALS ───────────────────────────────────────────────────────────────────

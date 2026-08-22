@@ -29,7 +29,7 @@ _ATOM_NS = {"a": "http://www.w3.org/2005/Atom"}
 # Item codes that reliably correspond to market-moving corporate events.
 # Everything else (routine exhibits, comp-plan filings, shareholder vote
 # results) is real signal but low-priority -- stored, not alerted.
-MATERIAL_ITEMS = {"1.01", "1.03", "2.01", "2.03", "4.01", "5.02", "7.01"}
+MATERIAL_ITEMS = {"1.01", "1.03", "1.05", "2.01", "2.03", "3.01", "4.01", "4.02", "5.02", "7.01"}
 
 
 def _cik_to_ticker() -> dict[str, str]:

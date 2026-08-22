@@ -34,11 +34,13 @@ ITEM_RE = re.compile(r"^\d+\.\s+(.*)$")
 BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
 PAREN_RE = re.compile(r"\(([^)]+)\)")
 BACKTICK_RE = re.compile(r"`([^`]+)`")
+STRIKETHROUGH_RE = re.compile(r"~~.+~~")
 
 
 def extract_section_items(text):
     lines = text.splitlines()
     items = []
+    raw_count = 0
     current_header = None
     capturing = False
     for line in lines:
@@ -49,8 +51,13 @@ def extract_section_items(text):
         if capturing:
             m = ITEM_RE.match(line.strip())
             if m:
-                items.append((current_header, m.group(1).strip()))
-    return items
+                raw_count += 1
+                item_text = m.group(1).strip()
+                if STRIKETHROUGH_RE.search(item_text):
+                    # Already marked done in the doc itself -- not real drift.
+                    continue
+                items.append((current_header, item_text))
+    return items, raw_count
 
 
 def keywords_for(item_text):
@@ -94,9 +101,12 @@ def codebase_signal(keywords):
 def main():
     mission = ROOT / "MISSION.md"
     text = mission.read_text(errors="ignore")
-    items = extract_section_items(text)
+    items, raw_count = extract_section_items(text)
 
     if not items:
+        if raw_count:
+            print(f"All {raw_count} numbered item(s) under tracked sections are already ~~struck through~~ -- no open drift to check.")
+            return 0
         print("No numbered items found under tracked sections -- check SECTION_HEADERS still match MISSION.md's headings.")
         return 1
 

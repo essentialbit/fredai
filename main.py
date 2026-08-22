@@ -1303,6 +1303,19 @@ def api_portfolio_stress_test():
     return jsonify(result)
 
 
+@app.route("/api/portfolio/xray")
+@login_required
+def api_portfolio_xray():
+    from portfolio_xray import compute_xray
+    uid = session["user_id"]
+    holdings = get_portfolio(uid)
+    portfolio = calculate_portfolio_value(holdings, _quotes_cache or {})
+    result = compute_xray(
+        portfolio.get("positions", []), portfolio.get("total_value")
+    )
+    return jsonify(result)
+
+
 @app.route("/api/scan", methods=["POST"])
 @login_required
 def api_manual_scan():

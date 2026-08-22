@@ -2069,6 +2069,8 @@ html[data-tier="micro"] #ov-globe-stage {
     <div class="panel" id="tab-portfolio-chart" style="display:none">
       <div class="ph">Allocation <span class="ptag">CHART</span></div>
       <div class="pie-wrap"><canvas id="port-pie"></canvas></div>
+      <div class="ph" style="border-top:1px solid var(--border)">X-Ray <span class="ptag" title="Factor-level risk decomposition: market, rates, dollar, oil, vol, momentum">FACTOR RISK</span></div>
+      <div id="port-xray-body" style="padding:0 var(--pad) var(--pad);font-size:10px;color:var(--t3)">Visit Portfolio to load.</div>
     </div>
     <div class="panel" id="tab-portfolio-stress" style="display:none;grid-column:1/-1">
       <div class="ph">Historical Stress Test <span class="ptag">CRISIS REPLAY</span></div>
@@ -5169,7 +5171,7 @@ async function addWatchlist(){const sym=g('wl-inp').value.trim().toUpperCase();i
 async function removeWatchlist(sym){await fetch('/api/watchlist',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});loadWatchlist()}
 
 // ── PORTFOLIO ─────────────────────────────────────────────────────────────
-async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p);loadStressTest(p);loadPortfolioBenchmark(p)}
+async function loadPortfolio(){const r=await fetch('/api/portfolio');const p=await r.json();renderPortfolioTab(p);loadPortfolioRisk(p);loadPortfolioXray(p);loadStressTest(p);loadPortfolioBenchmark(p)}
 
 async function loadStressTest(p){
   const el=g('stress-test-body'); if(!el) return;
@@ -5249,6 +5251,41 @@ async function loadPortfolioRisk(p){
     });
   }catch(e){strip.style.display='none'}
 }
+
+// X-Ray loads separately too, same reasoning as risk above — the factor
+// regression fetches its own set of tickers (market/rates/dollar/oil/vol
+// + a curated momentum universe) server-side and must never delay the
+// positions render. Cold-cache first load can take a while; that's
+// expected (see portfolio_xray.py's rate-limit-stagger note), not a bug.
+async function loadPortfolioXray(p){
+  const body=g('port-xray-body'); if(!body) return;
+  if(!(p.positions||[]).length){body.innerHTML='No positions yet.';return}
+  body.innerHTML='Computing factor exposures (first load can take ~30s)…';
+  try{
+    const r=await fetch('/api/portfolio/xray');const d=await r.json();
+    if(d.status==='insufficient_history'){body.innerHTML=`Needs ${d.min_days}+ overlapping trading days (have ${d.days}).`;return}
+    if(d.status==='data_unavailable'){body.innerHTML='Factor data unavailable right now (rate-limited or down) — retries on next visit.';return}
+    if(d.status!=='ok'){body.innerHTML='--';return}
+    const FACTOR_COLOR={MARKET:'var(--blue)',RATES:'var(--purple)',DOLLAR:'var(--yellow)',OIL:'#ff9500',VOL:'var(--red)',MOMENTUM:'var(--green)'};
+    const bars=Object.entries(d.variance_contribution_pct||{}).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).map(([f,pct])=>{
+      const w=Math.min(100,Math.abs(pct));
+      return `<div style="margin-bottom:5px"><div style="display:flex;justify-content:space-between;font-size:9px;color:var(--t2)"><span>${esc(f)}</span><span>${pct>=0?'+':''}${pct.toFixed(1)}%</span></div><div style="width:100%;height:4px;background:var(--border);border-radius:2px"><div style="height:100%;border-radius:2px;width:${w}%;background:${FACTOR_COLOR[f]||'var(--t3)'}"></div></div></div>`;
+    }).join('');
+    const warnings=[...(d.concentration_flags||[]).map(c=>`<div style="color:var(--red);font-size:9px;margin-bottom:2px">⚠ ${esc(c.symbol)} is ${c.factor_risk_share_pct.toFixed(0)}% of factor-explained risk — concentrated</div>`),
+      ...(d.crowding_flags||[]).map(c=>`<div style="color:var(--yellow);font-size:9px;margin-bottom:2px">⚠ ${esc(c.factor)} crowding: ${c.symbols.map(esc).join(', ')}</div>`)].join('');
+    const posRows=Object.entries(d.positions||{}).filter(([,v])=>v.status==='ok').map(([sym,v])=>
+      `<tr><td style="padding:2px 4px">${esc(sym)}</td><td style="padding:2px 4px;text-align:right;font-family:var(--mono)">${(v.r_squared*100).toFixed(0)}%</td><td style="padding:2px 4px;color:var(--t3)">${v.idiosyncratic?'idiosyncratic':esc(d.dominant_factor||'')}</td></tr>`
+    ).join('');
+    body.innerHTML=
+      `<div style="font-size:8px;color:var(--t3);margin-bottom:6px">${d.days}d window · ${d.coverage_pct}% of value covered${d.dominant_factor?` · dominant: ${esc(d.dominant_factor)}`:''}${d.effective_n?` · effective N ${d.effective_n}`:''}</div>`+
+      bars+
+      (warnings?`<div style="margin:8px 0">${warnings}</div>`:'')+
+      (posRows?`<table style="width:100%;margin-top:6px;font-size:9px"><thead><tr style="color:var(--t3)"><td style="padding:2px 4px">Position</td><td style="padding:2px 4px;text-align:right">R²</td><td style="padding:2px 4px">Note</td></tr></thead><tbody>${posRows}</tbody></table>`:'')+
+      (d.scenario_hook?`<div style="margin-top:8px"><button class="btn btn-b" style="font-size:8px;padding:3px 8px" onclick="openScenarioLab('${esc(d.scenario_hook)}')">Stress ${esc(d.dominant_factor)} in Scenario Lab →</button></div>`:'')+
+      `<div style="font-size:7px;color:var(--t3);margin-top:8px">Educational information, not hedge directives. Factor model explains what it explains — low R² positions are idiosyncratic.</div>`;
+  }catch(e){body.innerHTML='X-ray unavailable.'}
+}
+
 let portfolioBenchmarkChart = null;
 const PB_COLORS = { SPY: '#7a9bbf', QQQ: '#c77dff' };
 async function loadPortfolioBenchmark(p){
@@ -6452,6 +6489,14 @@ async function loadScenarioFactors() {
     sel.innerHTML = '<option value="">Scenario factors unavailable</option>';
     console.warn('Scenario factors failed:', e);
   }
+}
+
+async function openScenarioLab(factorKey){
+  switchTab('overview', document.querySelector('.nav-tab'));
+  await loadScenarioFactors();
+  const sel=g('sc-factor');
+  if(sel && factorKey){ sel.value=factorKey; g('sc-unit').textContent=scenarioFactorUnits[factorKey]||''; }
+  const panel=g('ov-scenario'); if(panel) panel.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 async function runScenario() {

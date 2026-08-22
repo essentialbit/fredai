@@ -807,6 +807,16 @@ def build_context_block(quotes: dict = None, user_interests: list = None,
         if confluence_line:
             port_block += f"\n{_strip_portfolio(confluence_line)}"
 
+        # Cache-only on purpose, same contract as get_cached_risk above:
+        # chat must never block on the factor-regression fetch. Populated
+        # whenever the Portfolio tab's X-Ray panel (or /api/portfolio/xray)
+        # runs. Only surfaces when there's a real concentration/crowding
+        # flag or dominant factor -- silent otherwise.
+        from portfolio_xray import get_cached_xray, format_xray_line
+        xray_line = format_xray_line(get_cached_xray(positions))
+        if xray_line:
+            port_block += f"\n{_strip_portfolio(xray_line)}"
+
     macro_block = ""
     try:
         from jobless_claims_client import get_jobless_claims

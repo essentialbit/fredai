@@ -24,22 +24,20 @@
 
 See the full list at [github.com/essentialbit/fredai/releases](https://github.com/essentialbit/fredai/releases).
 
-### FredAI v1.3.108
-- feat: Median Sales Price of Houses Sold macro badge (closes #464) (#465)
-- docs: sync README changelog to v1.3.107 (#467)
+### FredAI v1.3.255
+- Phase 4 Unit 4.2: lot-aware backend CRUD + aggregation (#615)
 
-### FredAI v1.3.107
-- fix: reuse single readme-sync branch/PR instead of one-per-release (#466)
-- docs: sync README changelog to v1.3.106 (#463)
+### FredAI v1.3.254
+- Add tax_lots schema, additive migration, and backfill (unit 4.1) (#614)
 
-### FredAI v1.3.106
-- feat: Durable Goods New Orders (FRED DGORDER) macro badge (#289)
+### FredAI v1.3.253
+- Overview tab: full customizable layout (reorder/hide all ~19 panels) (#613)
 
-### FredAI v1.3.105
-- feat: Moody's Baa/10Y credit spread (BAA10Y) macro badge (#286)
+### FredAI v1.3.252
+- feat: real-portfolio SPY/QQQ benchmark line (Phase 3 Unit 3.1, Rec #5) (#611)
 
-### FredAI v1.3.104
-- feat: Core PCE Price Index (PCEPILFE) macro badge (closes #275) (#276)
+### FredAI v1.3.251
+- docs: add repo-wide fake-live data sweep as standing page-audit check (#602)
 
 <!-- CHANGELOG_END -->
 

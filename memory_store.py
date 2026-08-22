@@ -812,8 +812,20 @@ def _backfill_tax_lots(conn):
         )
 
 
+_schema_ready = False
+
+
 @contextmanager
 def get_conn():
+    # Standalone scripts/sensor cycles that import this module without going
+    # through main.py's startup (which calls init_db() once) would otherwise
+    # crash on any table/column added by a migration since the live DB was
+    # last initialized. init_db() itself uses get_conn(), so the flag is set
+    # before calling it to avoid infinite recursion on this first call.
+    global _schema_ready
+    if not _schema_ready:
+        _schema_ready = True
+        init_db()
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     try:

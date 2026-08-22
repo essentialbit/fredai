@@ -18,6 +18,7 @@ from memory_store import (
     get_sentiment_timeline, get_recent_alerts, insert_summary,
     get_watchlist, add_to_watchlist, remove_from_watchlist,
     get_portfolio, upsert_portfolio,
+    add_lot, update_lot, remove_lot, get_lots,
     get_user_interests, bump_interest, decay_interests,
     get_trending_assets, get_signals_with_fallback, get_trending_assets_with_fallback, get_sentiment_snapshot,
     verify_user, create_user, get_user,
@@ -1211,6 +1212,56 @@ def api_portfolio():
         if s:
             pos["sentiment"] = s
     return jsonify(portfolio)
+
+
+@app.route("/api/portfolio/lots", methods=["GET", "POST"])
+@login_required
+def api_portfolio_lots():
+    uid = session["user_id"]
+    if request.method == "POST":
+        data = request.json or {}
+        sym = data.get("symbol", "").upper()
+        if not _valid_symbol(sym):
+            return jsonify({"error": "invalid symbol"}), 400
+        try:
+            shares = float(data.get("shares"))
+            cost_basis = float(data.get("cost_basis"))
+        except (TypeError, ValueError):
+            return jsonify({"error": "shares and cost_basis must be numeric"}), 400
+        acquired_date = data.get("acquired_date", "").strip()
+        if not acquired_date:
+            return jsonify({"error": "acquired_date required"}), 400
+        lot_id = add_lot(uid, sym, shares, cost_basis, acquired_date)
+        return jsonify({"status": "ok", "id": lot_id})
+    sym = request.args.get("symbol")
+    return jsonify({"lots": get_lots(uid, sym)})
+
+
+@app.route("/api/portfolio/lots/<int:lot_id>", methods=["PUT", "DELETE"])
+@login_required
+def api_portfolio_lot_detail(lot_id):
+    uid = session["user_id"]
+    lots = get_lots(uid)
+    lot = next((l for l in lots if l["id"] == lot_id), None)
+    if not lot or lot["user_id"] != uid:
+        return jsonify({"error": "not found"}), 404
+    if request.method == "DELETE":
+        remove_lot(lot_id)
+        return jsonify({"status": "ok"})
+    data = request.json or {}
+    fields = {}
+    if "shares" in data or "cost_basis" in data:
+        try:
+            if "shares" in data:
+                fields["shares"] = float(data["shares"])
+            if "cost_basis" in data:
+                fields["cost_basis"] = float(data["cost_basis"])
+        except (TypeError, ValueError):
+            return jsonify({"error": "shares and cost_basis must be numeric"}), 400
+    if "acquired_date" in data:
+        fields["acquired_date"] = data["acquired_date"]
+    update_lot(lot_id, **fields)
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/portfolio/risk")

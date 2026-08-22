@@ -53,6 +53,18 @@ def init_db():
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
 
+        CREATE TABLE IF NOT EXISTS tax_lots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            symbol TEXT NOT NULL,
+            shares REAL NOT NULL,
+            cost_basis REAL NOT NULL,
+            acquired_date TEXT NOT NULL,
+            backfilled INTEGER NOT NULL DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        );
+
         CREATE TABLE IF NOT EXISTS user_interests (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -593,6 +605,7 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_trends_asset ON trends(asset);
         CREATE INDEX IF NOT EXISTS idx_watchlist_user ON watchlist(user_id);
         CREATE INDEX IF NOT EXISTS idx_portfolio_user ON portfolio(user_id);
+        CREATE INDEX IF NOT EXISTS idx_tax_lots_user_symbol ON tax_lots(user_id, symbol);
         CREATE INDEX IF NOT EXISTS idx_backlog_status ON feature_backlog(status);
         CREATE INDEX IF NOT EXISTS idx_news_published ON news_items(published_at);
         CREATE INDEX IF NOT EXISTS idx_news_category ON news_items(category);
@@ -746,6 +759,11 @@ def init_db():
         CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oauth_google ON users(oauth_google_sub) WHERE oauth_google_sub IS NOT NULL;
         """)
 
+        # tax_lots (Tax Lot CRUD unit 4.1) -- both portfolio and tax_lots exist
+        # by this point regardless of fresh-DB or existing-DB init, so this is
+        # safe to run unconditionally on every init_db() call.
+        _backfill_tax_lots(conn)
+
         # Seed a default admin user if none exist.
         # Password is randomised on first run — printed to console once.
         # Set FREDAI_ADMIN_PASSWORD in .env to pin a specific initial password.
@@ -767,6 +785,31 @@ def init_db():
                 print(f"[Security] SAVE THIS — it won't be shown again.")
                 print(f"[Security] Set FREDAI_ADMIN_PASSWORD in .env to control this.")
                 print(f"{'='*60}\n")
+
+
+def _backfill_tax_lots(conn):
+    # One synthetic lot per (user_id, symbol) portfolio position that doesn't
+    # already have at least one tax_lots row (real or synthetic). Runs on every
+    # init_db() call (self-healing schema convention used throughout this
+    # file), so a portfolio row added after the first migration is backfilled
+    # on its next startup too -- no position is ever left lot-less ahead of
+    # the future CRUD unit. cost_basis is stored as the lot's TOTAL dollar
+    # cost (shares * avg_cost), not a per-share figure -- the gain-calc unit
+    # depends on this convention.
+    rows = conn.execute("SELECT user_id, symbol, shares, avg_cost FROM portfolio").fetchall()
+    today = datetime.now().strftime("%Y-%m-%d")
+    for row in rows:
+        existing = conn.execute(
+            "SELECT 1 FROM tax_lots WHERE user_id = ? AND symbol = ? LIMIT 1",
+            (row["user_id"], row["symbol"])
+        ).fetchone()
+        if existing:
+            continue
+        conn.execute(
+            """INSERT INTO tax_lots (user_id, symbol, shares, cost_basis, acquired_date, backfilled)
+               VALUES (?, ?, ?, ?, ?, 1)""",
+            (row["user_id"], row["symbol"], row["shares"], row["shares"] * row["avg_cost"], today)
+        )
 
 
 @contextmanager
@@ -949,6 +992,126 @@ def get_portfolio(user_id: int) -> list[dict]:
             "SELECT * FROM portfolio WHERE user_id=? AND shares > 0", (user_id,)
         ).fetchall()
     return [dict(r) for r in rows]
+
+
+# ── TAX LOTS ──────────────────────────────────────────────────────────────────
+def get_aggregated_position(user_id: int, symbol: str) -> dict:
+    """Aggregate all of a user's lots for a symbol into a single shares/avg_cost
+    position -- the same shape as a `portfolio` row. Zero lots (or a zero total
+    shares count, e.g. every lot sold off) returns {"shares": 0, "avg_cost": 0}
+    rather than raising."""
+    symbol = symbol.upper()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT SUM(shares) AS total_shares, SUM(cost_basis) AS total_cost "
+            "FROM tax_lots WHERE user_id=? AND symbol=?",
+            (user_id, symbol)
+        ).fetchone()
+    total_shares = row["total_shares"] or 0
+    total_cost = row["total_cost"] or 0
+    if not total_shares:
+        return {"shares": 0, "avg_cost": 0}
+    return {"shares": total_shares, "avg_cost": total_cost / total_shares}
+
+
+def _sync_portfolio_from_lots(user_id: int, symbol: str):
+    agg = get_aggregated_position(user_id, symbol)
+    upsert_portfolio(user_id, symbol, agg["shares"], agg["avg_cost"])
+
+
+def add_lot(user_id: int, symbol: str, shares: float, cost_basis: float, acquired_date: str) -> int:
+    symbol = symbol.upper()
+    with get_conn() as conn:
+        cursor = conn.execute(
+            """INSERT INTO tax_lots (user_id, symbol, shares, cost_basis, acquired_date, backfilled)
+               VALUES (?, ?, ?, ?, ?, 0)""",
+            (user_id, symbol, shares, cost_basis, acquired_date)
+        )
+        lot_id = cursor.lastrowid
+    _sync_portfolio_from_lots(user_id, symbol)
+    return lot_id
+
+
+_LOT_UPDATE_WHITELIST = ("shares", "cost_basis", "acquired_date")
+
+
+def update_lot(lot_id: int, **fields) -> bool:
+    """Update only whitelisted columns on a tax_lots row. Unknown keys in
+    `fields` are silently ignored (never string-interpolated into SQL --
+    the SET clause is built from the fixed whitelist, not from fields.keys()).
+    Returns False if lot_id doesn't exist; never silently no-ops on success."""
+    updates = {k: v for k, v in fields.items() if k in _LOT_UPDATE_WHITELIST}
+    with get_conn() as conn:
+        existing = conn.execute("SELECT user_id, symbol FROM tax_lots WHERE id=?", (lot_id,)).fetchone()
+        if not existing:
+            return False
+        if updates:
+            set_clause = ", ".join(f"{col}=?" for col in updates)
+            conn.execute(
+                f"UPDATE tax_lots SET {set_clause} WHERE id=?",
+                (*updates.values(), lot_id)
+            )
+    _sync_portfolio_from_lots(existing["user_id"], existing["symbol"])
+    return True
+
+
+def remove_lot(lot_id: int) -> bool:
+    with get_conn() as conn:
+        existing = conn.execute("SELECT user_id, symbol FROM tax_lots WHERE id=?", (lot_id,)).fetchone()
+        if not existing:
+            return False
+        conn.execute("DELETE FROM tax_lots WHERE id=?", (lot_id,))
+    _sync_portfolio_from_lots(existing["user_id"], existing["symbol"])
+    return True
+
+
+def get_lots(user_id: int, symbol: str = None) -> list[dict]:
+    with get_conn() as conn:
+        if symbol:
+            rows = conn.execute(
+                "SELECT * FROM tax_lots WHERE user_id=? AND symbol=? ORDER BY acquired_date ASC, id ASC",
+                (user_id, symbol.upper())
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM tax_lots WHERE user_id=? ORDER BY acquired_date ASC, id ASC",
+                (user_id,)
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def select_lots_for_sale(user_id: int, symbol: str, shares_to_sell: float, method: str = "fifo", lot_ids: list[int] = None) -> list[dict]:
+    """Pure lot selection for a hypothetical sale -- no DB writes, no gain
+    math. "fifo" consumes the user's lots for `symbol` oldest-acquired-first
+    (acquired_date ASC, id ASC, matching get_lots' deterministic ordering);
+    "specific" consumes only `lot_ids`, in the order given. Either way, the
+    final lot needed may be partially consumed. Raises ValueError (rather
+    than silently returning a partial fill) if the eligible lots don't hold
+    enough shares to cover shares_to_sell."""
+    lots = get_lots(user_id, symbol)
+    if method == "specific":
+        lots_by_id = {lot["id"]: lot for lot in lots}
+        # dict.fromkeys dedupes while preserving first-occurrence order -- a
+        # duplicate id must never have its shares counted/consumed twice.
+        candidates = [lots_by_id[lid] for lid in dict.fromkeys(lot_ids or []) if lid in lots_by_id]
+    else:
+        candidates = lots
+
+    available = sum(lot["shares"] for lot in candidates)
+    if available < shares_to_sell:
+        raise ValueError(
+            f"requested {shares_to_sell} shares to sell but only {available} available"
+        )
+
+    result = []
+    remaining = shares_to_sell
+    for lot in candidates:
+        if remaining <= 0:
+            break
+        used = min(lot["shares"], remaining)
+        result.append({"lot_id": lot["id"], "shares_used": used})
+        remaining -= used
+    return result
 
 
 # ── SIGNALS ───────────────────────────────────────────────────────────────────

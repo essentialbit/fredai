@@ -1660,10 +1660,18 @@ _DEDUP_STOPWORDS = {
     "gemini", "claude",  # provenance markers (e.g. the "[Gemini] " title prefix), not semantic content
 }
 
+# Matches the project's own recurring proposal idiom ("FRED series WEI",
+# "FRED's series `IPG3344S`") to pull out the actual data-source identifier.
+_FRED_SERIES_RE = re.compile(r"FRED(?:'s)?\s+series\s+[`\"']?([A-Z][A-Z0-9]{1,12})[`\"']?", re.IGNORECASE)
+
 
 def _tokenize(text: str) -> set[str]:
     words = re.findall(r"[a-z0-9]+", (text or "").lower())
     return {w for w in words if w not in _DEDUP_STOPWORDS and len(w) > 2}
+
+
+def _extract_series_ids(text: str) -> set[str]:
+    return {m.group(1).upper() for m in _FRED_SERIES_RE.finditer(text or "")}
 
 
 def _find_similar_proposal(conn, title: str, description: str, category: str, threshold: float = 0.3):
@@ -1671,16 +1679,49 @@ def _find_similar_proposal(conn, title: str, description: str, category: str, th
     '[Gemini] FinBERT integration' matching Claude's 'FinBERT sentiment
     upgrade' even though the titles don't match exactly. Deliberately a
     Jaccard word-overlap check rather than embeddings, so it stays safe to
-    run on constrained hardware (Raspberry Pi Zero, per MISSION.md)."""
+    run on constrained hardware (Raspberry Pi Zero, per MISSION.md).
+
+    Deliberately NOT filtered by category: the category taxonomy has drifted
+    over the project's life (free-text like "macro-signal" early on vs
+    structured "l2_pattern_intelligence"/"l4_..." slugs later), so two
+    proposals for the identical idea can legitimately carry different
+    category strings, and a hard category match silently excluded any
+    cross-era duplicate from ever being compared. `category` is still
+    accepted for API stability but no longer filters.
+
+    Also checks for a shared FRED series ID (e.g. both proposals naming
+    "FRED series WEI") as a same-idea signal independent of the Jaccard
+    threshold below. Caught 2026-08-01: issue #543 duplicated #484's NY Fed
+    WEI badge proposal ten days apart. Category drift alone wasn't the full
+    story — on the real stored `description` text (not the more verbose
+    GitHub-rendered issue body), the two proposals' word-overlap was only
+    0.274, just under the 0.3 threshold, while an unrelated semiconductor
+    industrial-production proposal scored 0.307 against the same target
+    purely from shared macro-badge-template boilerplate ("FRED series",
+    "already shipped", "distinct from the existing..."). Generic Jaccard
+    alone is too easily diluted by that shared template language in both
+    directions (false negative on the real duplicate, false positive on an
+    unrelated one) — an explicit shared series ID is a much stronger,
+    lower-noise signal for this codebase's specific proposal idiom.
+    Deliberately narrow (regex on "FRED series X", not a general ticker
+    extractor): bare short all-caps acronyms (CPI, GDP, FSI, API) recur
+    across nearly every proposal and would produce false positives if
+    treated as identifiers on their own."""
+    target_series = _extract_series_ids(title) | _extract_series_ids(description)
     target = _tokenize(title) | _tokenize(description)
-    if not target:
+    if not target and not target_series:
         return None
     candidates = conn.execute(
         "SELECT id, title, description FROM feature_backlog "
-        "WHERE status IN ('proposed','in_progress') AND category=?",
-        (category,)
+        "WHERE status IN ('proposed','in_progress')"
     ).fetchall()
     for row in candidates:
+        if target_series:
+            other_series = _extract_series_ids(row["title"]) | _extract_series_ids(row["description"])
+            if target_series & other_series:
+                return row["id"]
+        if not target:
+            continue
         other = _tokenize(row["title"]) | _tokenize(row["description"])
         if not other:
             continue

@@ -78,29 +78,37 @@ def _gh_headers() -> dict:
     }
 
 def _gh_get(path: str, params: dict | None = None) -> list | dict | None:
-    try:
-        r = requests.get(
-            f"{_GH_API}/{path.lstrip('/')}",
-            headers=_gh_headers(), params=params, timeout=_TIMEOUT
-        )
-        if r.status_code == 200:
-            return r.json()
-        print(f"  [GH] GET {path} → {r.status_code}")
-    except Exception as e:
-        print(f"  [GH] GET error {path}: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.get(
+                f"{_GH_API}/{path.lstrip('/')}",
+                headers=_gh_headers(), params=params, timeout=_TIMEOUT
+            )
+            if r.status_code == 200:
+                return r.json()
+            print(f"  [GH] GET {path} → {r.status_code}")
+        except Exception as e:
+            print(f"  [GH] GET error {path}: {e}")
+        if attempt == 0:
+            # Same transient-network/5xx class fixed for community.py's _gh_get
+            # (PR #584) — this sibling copy in Gemini's own runner was missed.
+            time.sleep(2)
     return None
 
 def _gh_post(path: str, body: dict) -> dict | None:
-    try:
-        r = requests.post(
-            f"{_GH_API}/{path.lstrip('/')}",
-            headers=_gh_headers(), json=body, timeout=_TIMEOUT
-        )
-        if r.status_code in (200, 201):
-            return r.json()
-        print(f"  [GH] POST {path} → {r.status_code}: {r.text[:120]}")
-    except Exception as e:
-        print(f"  [GH] POST error {path}: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.post(
+                f"{_GH_API}/{path.lstrip('/')}",
+                headers=_gh_headers(), json=body, timeout=_TIMEOUT
+            )
+            if r.status_code in (200, 201):
+                return r.json()
+            print(f"  [GH] POST {path} → {r.status_code}: {r.text[:120]}")
+        except Exception as e:
+            print(f"  [GH] POST error {path}: {e}")
+        if attempt == 0:
+            time.sleep(2)
     return None
 
 def _post_issue_comment(number: int, body: str) -> bool:
@@ -148,21 +156,28 @@ def _get_discussions() -> list[dict]:
       }
     }
     """
-    try:
-        r = requests.post(
-            _GH_GQL,
-            headers=_gh_headers(),
-            json={"query": query, "variables": {"owner": owner, "repo": repo, "first": 30}},
-            timeout=_TIMEOUT,
-        )
-        if r.status_code == 200:
-            data = r.json()
-            return (data.get("data", {})
-                        .get("repository", {})
-                        .get("discussions", {})
-                        .get("nodes", []))
-    except Exception as e:
-        print(f"  [GH] Discussions GraphQL error: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.post(
+                _GH_GQL,
+                headers=_gh_headers(),
+                json={"query": query, "variables": {"owner": owner, "repo": repo, "first": 30}},
+                timeout=_TIMEOUT,
+            )
+            if r.status_code == 200:
+                data = r.json()
+                return (data.get("data", {})
+                            .get("repository", {})
+                            .get("discussions", {})
+                            .get("nodes", []))
+            print(f"  [GH] Discussions GraphQL → {r.status_code}: {r.text[:120]}")
+        except Exception as e:
+            print(f"  [GH] Discussions GraphQL error: {e}")
+        if attempt == 0:
+            # Same transient-network/5xx class fixed for community.py's Discussions
+            # GraphQL calls (PR #592) — this sibling copy in Gemini's own runner
+            # bypasses _gh_get/_gh_post the same way and was missed by that fix.
+            time.sleep(2)
     return []
 
 def _post_discussion_comment(discussion_id: str, body: str) -> bool:
@@ -173,16 +188,21 @@ def _post_discussion_comment(discussion_id: str, body: str) -> bool:
       }
     }
     """
-    try:
-        r = requests.post(
-            _GH_GQL,
-            headers=_gh_headers(),
-            json={"query": mutation, "variables": {"discussionId": discussion_id, "body": body}},
-            timeout=_TIMEOUT,
-        )
-        return r.status_code == 200
-    except Exception as e:
-        print(f"  [GH] Discussion comment error: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.post(
+                _GH_GQL,
+                headers=_gh_headers(),
+                json={"query": mutation, "variables": {"discussionId": discussion_id, "body": body}},
+                timeout=_TIMEOUT,
+            )
+            if r.status_code == 200:
+                return True
+            print(f"  [GH] Discussion comment → {r.status_code}: {r.text[:120]}")
+        except Exception as e:
+            print(f"  [GH] Discussion comment error: {e}")
+        if attempt == 0:
+            time.sleep(2)
     return False
 
 # ── Gemini classification + response ─────────────────────────────────────────

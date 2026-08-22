@@ -16,7 +16,15 @@ subset avoids that.
 Also flags duplicate PR pairs that reference the same "closes #N" issue
 (checking both title and body). The regex excludes possessive prose like
 "closes #100's neighbor gap" (a real false positive hit on PR #251's
-body during this script's own testing) via a negative lookahead.
+body during this script's own testing) via a negative lookahead -- the
+digit quantifier is possessive (`\\d++`) so the engine can't backtrack the
+lookahead into truncating a real number (e.g. silently matching "#100's"
+as issue 10 instead of correctly excluding it). Markdown code spans/fenced
+blocks are stripped before matching -- a real PR body (#605) quoted a
+literal example `Closes #560, #562, #563.` inside backticks while
+*describing* an unrelated script's regex limitation, which this detector
+originally matched as if it were an actual directive, false-flagging a
+duplicate against PR #564 (the real closer of #560).
 
 Makes no git or GitHub write calls; merges nothing itself.
 
@@ -29,7 +37,12 @@ import re
 
 from community import _gh_get, GITHUB_REPO
 
-_ISSUE_REF_RE = re.compile(r"closes?\s+#(\d+)(?!['’]s)", re.IGNORECASE)
+_ISSUE_REF_RE = re.compile(r"closes?\s+#(\d++)(?!['’]s)", re.IGNORECASE)
+_CODE_SPAN_RE = re.compile(r"```.*?```|`[^`]*`", re.DOTALL)
+
+
+def _strip_code_spans(text: str) -> str:
+    return _CODE_SPAN_RE.sub(" ", text)
 
 
 def _get_open_prs() -> list[dict]:
@@ -69,7 +82,7 @@ def _get_pr_files(number: int) -> set[str]:
 
 
 def _closed_issue_numbers(pr: dict) -> set[int]:
-    text = (pr.get("title") or "") + " " + (pr.get("body") or "")
+    text = (pr.get("title") or "") + " " + _strip_code_spans(pr.get("body") or "")
     return {int(m.group(1)) for m in _ISSUE_REF_RE.finditer(text)}
 
 

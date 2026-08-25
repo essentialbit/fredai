@@ -359,3 +359,112 @@ def format_risk_line(risk: dict | None) -> str:
         f"beta {risk['beta_spy']}" if risk.get("beta_spy") is not None else None,
     ]
     return "PORTFOLIO RISK ({}d): {}".format(risk["days"], " | ".join(p for p in parts if p))
+
+
+def _is_long_term(acquired_date: str, as_of_date: str) -> bool:
+    """Shared term-classification rule for both realized and unrealized gain
+    math, so the two paths can never drift apart. Long-term when the holding
+    period exceeds 365 days -- (as_of_or_disposal_date - acquired_date).days
+    > 365, so exactly 365 days is still short-term. Real calendar-date
+    subtraction (both inputs are the YYYY-MM-DD strings tax_lots/disposals
+    already store), never a rounded 12-months/1-year approximation."""
+    acquired = datetime.strptime(acquired_date, "%Y-%m-%d").date()
+    as_of = datetime.strptime(as_of_date, "%Y-%m-%d").date()
+    return (as_of - acquired).days > 365
+
+
+def compute_unrealized_gain(lots: list[dict], prices: dict[str, float], as_of_date: str | None = None) -> dict:
+    """Pure function: lots is memory_store.get_lots()'s shape (open tax_lots
+    rows), prices is a pre-fetched {symbol: current price} map -- matching
+    this file's existing convention (compute_portfolio_risk etc.) of taking
+    already-fetched data rather than hitting the network/DB itself.
+
+    Per-lot gain = shares * price - cost_basis (cost_basis is the lot's
+    total dollar cost, not per-share, matching tax_lots' own convention). A
+    lot whose symbol has no entry in `prices` is skipped from both the
+    per-lot list and the totals -- no price to mark it against, so silently
+    inventing a zero would misstate the total more than omitting it.
+    `as_of_date` defaults to today (YYYY-MM-DD) but is overridable so the
+    365-day boundary is deterministically testable. An empty lot list
+    returns a zero/empty result, never an error.
+    """
+    as_of = as_of_date or datetime.utcnow().strftime("%Y-%m-%d")
+    per_lot = []
+    lt_gain = st_gain = 0.0
+    for lot in lots:
+        price = prices.get(lot["symbol"])
+        if price is None:
+            continue
+        gain = lot["shares"] * price - lot["cost_basis"]
+        term = "long_term" if _is_long_term(lot["acquired_date"], as_of) else "short_term"
+        per_lot.append({
+            "lot_id": lot["id"],
+            "symbol": lot["symbol"],
+            "shares": lot["shares"],
+            "cost_basis": lot["cost_basis"],
+            "market_value": round(lot["shares"] * price, 2),
+            "gain": round(gain, 2),
+            "term": term,
+            "acquired_date": lot["acquired_date"],
+        })
+        if term == "long_term":
+            lt_gain += gain
+        else:
+            st_gain += gain
+    return {
+        "as_of": as_of,
+        "lots": per_lot,
+        "long_term_gain": round(lt_gain, 2),
+        "short_term_gain": round(st_gain, 2),
+        "total_gain": round(lt_gain + st_gain, 2),
+    }
+
+
+def compute_realized_gain(disposals: list[dict]) -> dict:
+    """Pure function: disposals is memory_store.get_disposals()'s shape --
+    the sanctioned sole read path for realized-gain math. No code path here
+    derives, infers, or backfills a disposal from portfolio share-count
+    deltas, remove_lot history, or anything else.
+
+    Each line item's cost_basis is already the dollar cost basis
+    attributable to that line's shares_used (get_disposals' documented
+    allocation semantic). Proceeds are allocated across a disposal's lines
+    in proportion to shares_used, at that disposal's single per-share sale
+    price (proceeds / shares) -- the only economically sound allocation for
+    one sale event that consumed multiple lots. Gain per line = its
+    allocated proceeds minus its already-allocated cost_basis. Term
+    classification compares each line's acquired_date against its own
+    disposal's disposal_date via _is_long_term. An empty disposal list
+    returns zero totals, never an error.
+    """
+    per_line = []
+    lt_gain = st_gain = 0.0
+    for disposal in disposals:
+        total_shares = disposal["shares"]
+        per_share_proceeds = disposal["proceeds"] / total_shares if total_shares else 0.0
+        for line in disposal["lots"]:
+            allocated_proceeds = per_share_proceeds * line["shares_used"]
+            gain = allocated_proceeds - line["cost_basis"]
+            term = "long_term" if _is_long_term(line["acquired_date"], disposal["disposal_date"]) else "short_term"
+            per_line.append({
+                "disposal_id": disposal["id"],
+                "lot_id": line["lot_id"],
+                "symbol": disposal["symbol"],
+                "shares_used": line["shares_used"],
+                "cost_basis": line["cost_basis"],
+                "proceeds": round(allocated_proceeds, 2),
+                "gain": round(gain, 2),
+                "term": term,
+                "disposal_date": disposal["disposal_date"],
+                "acquired_date": line["acquired_date"],
+            })
+            if term == "long_term":
+                lt_gain += gain
+            else:
+                st_gain += gain
+    return {
+        "lines": per_line,
+        "long_term_gain": round(lt_gain, 2),
+        "short_term_gain": round(st_gain, 2),
+        "total_gain": round(lt_gain + st_gain, 2),
+    }

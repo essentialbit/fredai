@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -35,16 +36,19 @@ def _gh_get(path: str) -> list | dict | None:
     headers = {"Accept": "application/vnd.github+json"}
     if TOKEN:
         headers["Authorization"] = f"Bearer {TOKEN}"
-    try:
-        r = requests.get(
-            f"https://api.github.com/{path.lstrip('/')}",
-            headers=headers, timeout=20
-        )
-        if r.status_code == 200:
-            return r.json()
-        print(f"[readme] GH {path} → {r.status_code}")
-    except Exception as e:
-        print(f"[readme] GH error: {e}")
+    for attempt in range(2):
+        try:
+            r = requests.get(
+                f"https://api.github.com/{path.lstrip('/')}",
+                headers=headers, timeout=20
+            )
+            if r.status_code == 200:
+                return r.json()
+            print(f"[readme] GH {path} → {r.status_code}")
+        except Exception as e:
+            print(f"[readme] GH error: {e}")
+        if attempt == 0:
+            time.sleep(2)
     return None
 
 

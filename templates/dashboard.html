@@ -5447,9 +5447,9 @@ function editLot(lotId,sym){
   if(!lot) return;
   const form=document.createElement('div');
   form.className='lot-edit-form';
-  form.innerHTML=`<input type="number" step="any" value="${lot.shares}" id="le-shares-${lotId}" placeholder="Shares">
-    <input type="number" step="any" value="${lot.cost_basis}" id="le-cost-${lotId}" placeholder="Cost basis">
-    <input type="date" value="${esc(lot.acquired_date)}" id="le-date-${lotId}">
+  form.innerHTML=`<input type="number" step="any" value="${escAttr(lot.shares)}" id="le-shares-${lotId}" placeholder="Shares">
+    <input type="number" step="any" value="${escAttr(lot.cost_basis)}" id="le-cost-${lotId}" placeholder="Cost basis">
+    <input type="date" value="${escAttr(lot.acquired_date)}" id="le-date-${lotId}">
     <button class="lot-save" onclick="saveLot(${lotId},'${esc(sym)}')">Save</button>
     <button onclick="loadLotPanel('${esc(sym)}')">Cancel</button>`;
   row.appendChild(form);
@@ -5459,12 +5459,14 @@ async function saveLot(lotId,sym){
   const cost=parseFloat(g(`le-cost-${lotId}`).value);
   const date=g(`le-date-${lotId}`).value;
   if(isNaN(shares)||isNaN(cost)||!date) return;
-  await fetch(`/api/portfolio/lots/${lotId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({shares,cost_basis:cost,acquired_date:date})});
+  const r=await fetch(`/api/portfolio/lots/${lotId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({shares,cost_basis:cost,acquired_date:date})});
+  if(!r.ok){alert('Failed to save lot changes. It may have been deleted, or the values were invalid.');return}
   loadPortfolio();
 }
 async function deleteLot(lotId,sym){
   if(!confirm('Delete this lot? This cannot be undone.')) return;
-  await fetch(`/api/portfolio/lots/${lotId}`,{method:'DELETE'});
+  const r=await fetch(`/api/portfolio/lots/${lotId}`,{method:'DELETE'});
+  if(!r.ok){alert('Failed to delete lot. It may have already been removed.');return}
   loadPortfolio();
 }
 
@@ -6751,6 +6753,7 @@ function isAsxDelayed(items){
   });
 }
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+function escAttr(s){const d=document.createElement('div');d.textContent=(s===null||s===undefined)?'':String(s);return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 
 // ── AUTO TRANSLATION ──────────────────────────────────────────────────────

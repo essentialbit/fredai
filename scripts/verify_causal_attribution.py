@@ -4,7 +4,7 @@ on real or synthetic data and the no-catalyst fallback never fabricates."""
 import os
 import shutil
 import sys
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
@@ -92,6 +92,28 @@ quotes = {"CORRA": {"change_pct": 5.0}, "CORRB": {"change_pct": 4.5}}
 result = causal_attribution.attribute_move("CORRA", "price_move", 5.0, quotes)
 sources = [c["source"] for c in result["catalysts"]]
 assert "correlation" in sources, result
+print("PASS:", result["summary"])
+
+print("=== Test 8: central bank catalyst (synthetic FOMC sentiment delta) ===")
+memory_store.save_central_bank_statement(
+    "Fed", date.today().isoformat(), None,
+    "The Committee decided to keep rates unchanged.",
+    {"added": [], "removed": [], "changed": [
+        {"old_paragraph": "conditions have improved", "new_paragraph": "conditions have weakened",
+         "added_words": ["weakened"], "removed_words": ["improved"]},
+    ], "sentiment_delta": -0.4},
+)
+result = causal_attribution.attribute_move("ANYTICKER2", "price_move", -2.0, {})
+sources = [c["source"] for c in result["catalysts"]]
+assert "central_bank" in sources, result
+print("PASS:", result["summary"])
+
+print("=== Test 9: options positioning catalyst (synthetic IV jump + put/call shift) ===")
+memory_store.insert_options_data("OPTCO", "2026-08-15", 0.8, 0.9, 30.0)
+memory_store.insert_options_data("OPTCO", "2026-08-15", 1.5, 1.6, 42.0)
+result = causal_attribution.attribute_move("OPTCO", "price_move", -3.0, {})
+sources = [c["source"] for c in result["catalysts"]]
+assert "options_positioning" in sources, result
 print("PASS:", result["summary"])
 
 print("=== Test 7: ranking -- earnings (0.75) should outrank news (<=0.6) when both present ===")

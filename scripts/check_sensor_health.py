@@ -8,6 +8,15 @@ indistinguishable at a glance from "nothing needed reporting." Confirmed
 real: a 2026-07-22 -> 2026-07-24 outage (30+ consecutive rc=1 failures, all
 "You've hit your weekly limit") went undetected until manually diagnosed.
 
+A second, distinct failure mode was found 2026-08-23: 8 consecutive rc=0
+cycles (2026-08-22 22:23 -> 2026-08-23 05:26) each answered the interactive
+SessionStart "continue from where we left off?" resume question to no one
+and exited in ~30s, never running any sensor step. Every one of those looked
+healthy under the original logic, since signature classification only ran
+on cycles inside a non-zero-rc failure streak -- a "successful" no-op was
+invisible. `classify()` now runs on every rc=0 cycle in the tail window too,
+so a run of stub cycles surfaces as its own STUB_LOOP verdict.
+
 Usage: PYTHONPATH=. python3 scripts/check_sensor_health.py [--tail N]
 """
 import argparse
@@ -28,7 +37,10 @@ SIGNATURES = [
     ("weekly_limit", re.compile(r"weekly limit", re.IGNORECASE)),
     ("cert_error", re.compile(r"CERTIFICATE_VERIFICATION|certificate", re.IGNORECASE)),
     ("rate_limit", re.compile(r"rate.?limit", re.IGNORECASE)),
+    ("resume_question_stub", re.compile(r"continue from where we left off", re.IGNORECASE)),
 ]
+
+STUB_STREAK_THRESHOLD = 3  # consecutive rc=0 stub cycles before flagging STUB_LOOP
 
 
 def classify(log_path: Path) -> str:
@@ -90,7 +102,24 @@ def main():
     last_success = next((c for c in reversed(cycles) if c["rc"] == 0), None)
     gap_hours = (now - last_success["ts"]).total_seconds() / 3600 if last_success else None
 
-    if streak == 0:
+    def sig_for(c):
+        log_path = LOGS_DIR / f"{c['log_name']}.log" if c["log_name"] else None
+        return classify(log_path) if log_path else "no_log_captured"
+
+    # A cycle that exits rc=0 without ever running a sensor step (e.g. it
+    # only answered the SessionStart resume question to no one) is a silent
+    # no-op, not a healthy cycle -- count how many of the trailing rc=0 runs
+    # are stubs, independent of the failure streak above.
+    stub_streak = 0
+    for c in reversed(cycles):
+        if c["rc"] == 0 and sig_for(c) == "resume_question_stub":
+            stub_streak += 1
+        else:
+            break
+
+    if streak == 0 and stub_streak >= STUB_STREAK_THRESHOLD:
+        verdict = "STUB_LOOP"
+    elif streak == 0:
         verdict = "OK"
     elif streak <= 2:
         verdict = "DEGRADED"
@@ -104,14 +133,14 @@ def main():
         print(f"last successful (rc=0) cycle: {last_success['ts']} ({gap_hours:.1f}h ago)")
     else:
         print("no successful (rc=0) cycle found in tail window")
+    if stub_streak:
+        print(f"consecutive rc=0 resume-question-stub cycles: {stub_streak}")
 
     if streak:
         print("\nfailure signatures in current streak:")
         counts = {}
         for c in cycles[len(cycles) - streak:]:
-            log_path = LOGS_DIR / f"{c['log_name']}.log" if c["log_name"] else None
-            sig = classify(log_path) if log_path else "no_log_captured"
-            counts[sig] = counts.get(sig, 0) + 1
+            counts[sig_for(c)] = counts.get(sig_for(c), 0) + 1
         for sig, n in sorted(counts.items(), key=lambda kv: -kv[1]):
             print(f"  {n:3d}x  {sig}")
 

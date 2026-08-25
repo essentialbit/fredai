@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 from memory_store import (
     get_signals, get_sentiment_timeline, insert_trend, insert_alert,
@@ -5,16 +6,36 @@ from memory_store import (
 )
 
 
+def _signal_weight(signal: dict) -> float:
+    """High-follower-count X accounts carry more real market signal than an
+    anonymous/bot-like one -- twitter_client.py's search_recent() computes
+    this per-tweet and stores it in metadata; every other source (news,
+    reddit without a follower concept, etc.) has no opinion and defaults
+    to a neutral 1.0 so this never silently drops non-Twitter signals."""
+    raw = signal.get("metadata")
+    if not raw:
+        return 1.0
+    try:
+        meta = json.loads(raw) if isinstance(raw, str) else raw
+        return float(meta.get("influence_weight", 1.0))
+    except (ValueError, TypeError):
+        return 1.0
+
+
 def compute_sentiment_stats(signals: list[dict]) -> dict:
     if not signals:
         return {"avg": 0.0, "bullish_pct": 0.0, "bearish_pct": 0.0, "count": 0}
-    scores = [s["sentiment_score"] for s in signals if s.get("sentiment_score") is not None]
+    weighted = [
+        (s["sentiment_score"], _signal_weight(s))
+        for s in signals if s.get("sentiment_score") is not None
+    ]
     types = [s["signal_type"] for s in signals if s.get("signal_type")]
     total = len(types)
     bullish = types.count("bullish")
     bearish = types.count("bearish")
+    weight_sum = sum(w for _, w in weighted)
     return {
-        "avg": round(sum(scores) / len(scores), 4) if scores else 0.0,
+        "avg": round(sum(score * w for score, w in weighted) / weight_sum, 4) if weight_sum else 0.0,
         "bullish_pct": round(bullish / total * 100, 1) if total else 0.0,
         "bearish_pct": round(bearish / total * 100, 1) if total else 0.0,
         "count": total,

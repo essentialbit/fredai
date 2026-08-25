@@ -1,4 +1,5 @@
 """X API v2 client using requests directly (no tweepy — Python 3.13+ compatible)."""
+import math
 import re
 import time
 import requests
@@ -11,8 +12,27 @@ _analyzer = SentimentIntensityAnalyzer()
 CASHTAG_RE = re.compile(r'\$([A-Z]{1,5})(?:-USD)?', re.IGNORECASE)
 _TICKER_SET = set(WATCHLIST)
 _TICKER_SHORT = {t.replace("-USD", ""): t for t in WATCHLIST}
+_URL_RE = re.compile(r"https?://\S+")
+_WHITESPACE_RE = re.compile(r"\s+")
 
 BASE = "https://api.twitter.com/2"
+
+
+def _influence_weight(followers_count: int) -> float:
+    """Log-scale weight in [1.0, 3.0] so a single mega-follower account
+    can't swamp an aggregate average, but real reach still counts for
+    something over an anonymous/bot-like account. followers=0 -> 1.0,
+    followers=1000 -> ~2.0, followers>=1_000_000 -> capped at 3.0."""
+    followers_count = max(0, followers_count or 0)
+    return round(min(3.0, 1.0 + math.log10(followers_count + 1) / 3), 3)
+
+
+def _normalize_for_dedup(text: str) -> str:
+    """Collapse near-identical retweets/quote-tweets of the same viral
+    text (URLs stripped since tracking/shortener links vary per share)
+    down to one comparable signature."""
+    text = _URL_RE.sub("", text or "").lower()
+    return _WHITESPACE_RE.sub(" ", text).strip()
 
 
 def _headers():
@@ -68,7 +88,7 @@ def search_recent(query: str, max_results: int = 20) -> list[dict]:
         "query": query + " -is:retweet lang:en",
         "max_results": max_results,
         "tweet.fields": "created_at,author_id,public_metrics",
-        "user.fields": "username",
+        "user.fields": "username,public_metrics",
         "expansions": "author_id",
     }
     try:
@@ -82,13 +102,15 @@ def search_recent(query: str, max_results: int = 20) -> list[dict]:
             return []
         data = resp.json()
         tweets = data.get("data") or []
-        users = {u["id"]: u["username"] for u in (data.get("includes") or {}).get("users", [])}
+        users = {u["id"]: u for u in (data.get("includes") or {}).get("users", [])}
         results = []
         for t in tweets:
             text = t.get("text", "")
             score, stype, model = _score(text)
             asset = _extract_asset(text)
-            author = "@" + users.get(t.get("author_id", ""), "unknown")
+            user = users.get(t.get("author_id", ""), {})
+            author = "@" + user.get("username", "unknown")
+            followers = (user.get("public_metrics") or {}).get("followers_count", 0)
             metrics = t.get("public_metrics") or {}
             results.append({
                 "id": t["id"],
@@ -100,6 +122,8 @@ def search_recent(query: str, max_results: int = 20) -> list[dict]:
                 "asset": asset,
                 "likes": metrics.get("like_count", 0),
                 "retweets": metrics.get("retweet_count", 0),
+                "followers": followers,
+                "influence_weight": _influence_weight(followers),
                 "created_at": t.get("created_at"),
             })
         return results
@@ -118,10 +142,19 @@ def fetch_signals(max_results: int = SIGNAL_FETCH_LIMIT, user_watchlist: list = 
             queries.insert(0, " OR ".join(f"${t}" for t in tickers))
 
     collected = []
+    seen = set()  # normalized-text signatures already inserted this cycle --
+    # different search queries frequently surface the same viral tweet
+    # (or its near-identical retweets/quote-tweets), which would otherwise
+    # count as N independent bullish/bearish signals instead of one.
     per_query = max(10, max_results // len(queries))
     for query in queries:
         results = search_recent(query, max_results=per_query)
         for s in results:
+            sig = _normalize_for_dedup(s["text"])
+            if sig and sig in seen:
+                continue
+            seen.add(sig)
+
             signal_id = insert_signal(
                 source="twitter",
                 content=s["text"],
@@ -130,10 +163,14 @@ def fetch_signals(max_results: int = SIGNAL_FETCH_LIMIT, user_watchlist: list = 
                 sentiment_score=s["sentiment_score"],
                 signal_type=s["signal_type"],
                 sentiment_model=s.get("sentiment_model", "vader"),
-                metadata={"id": s["id"], "likes": s["likes"], "retweets": s["retweets"]},
+                metadata={
+                    "id": s["id"], "likes": s["likes"], "retweets": s["retweets"],
+                    "followers": s.get("followers", 0),
+                    "influence_weight": s.get("influence_weight", 1.0),
+                },
             )
             _index_signal_for_recall(signal_id, "twitter", s["author"], s["text"], s["asset"])
-        collected.extend(results)
+            collected.append(s)
         time.sleep(0.5)  # gentle rate limit buffer
 
     return collected

@@ -4,7 +4,8 @@ import sys
 from pathlib import Path
 from bs4 import BeautifulSoup
 
-HTML_FILE = Path("/Volumes/Iron 1TBSSD/Claude/FredAI/templates/dashboard.html")
+BASE_DIR = Path(__file__).resolve().parents[1]
+HTML_FILE = BASE_DIR / "templates" / "dashboard.html"
 
 print("=========================================================")
 print("          FredAI UI & HTML Infrastructure Audit          ")

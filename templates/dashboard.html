@@ -702,6 +702,26 @@ html[data-touch="1"] .pos-row { min-height:var(--touch) }
 .pos-remove{background:none;border:1px solid var(--border);border-radius:var(--radius);color:var(--t3);font-size:10px;width:20px;height:20px;line-height:1;cursor:pointer;opacity:.5;transition:opacity .15s,color .15s,border-color .15s}
 .pos-row:hover .pos-remove{opacity:1}
 .pos-remove:hover{color:var(--red);border-color:var(--red)}
+
+/* ── Lot expand panel (Portfolio tab only) ── */
+.lot-toggle{background:none;border:none;color:var(--t3);font-size:9px;cursor:pointer;padding:0 5px 0 0;transition:transform .15s,color .15s;display:inline-block;vertical-align:middle;min-height:auto}
+.lot-toggle.open{transform:rotate(90deg)}
+.lot-toggle:hover{color:var(--t1)}
+.lot-panel{padding:6px var(--pad) 10px;background:rgba(0,210,255,.03);border-bottom:1px solid rgba(255,255,255,.02)}
+.lot-panel .empty{padding:8px 0;font-size:var(--font-xs);text-align:left}
+.lot-row{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.03);font-size:var(--font-xs)}
+.lot-row:last-child{border-bottom:none}
+.lot-actions{display:flex;gap:4px}
+.lot-actions button{background:none;border:1px solid var(--border);border-radius:3px;color:var(--t3);font-size:9px;width:20px;height:20px;line-height:1;cursor:pointer}
+.lot-actions button:hover{color:var(--t1);border-color:var(--t3)}
+.lot-actions button.lot-del:hover{color:var(--red);border-color:var(--red)}
+.lot-edit-form{grid-column:1/-1;display:flex;gap:5px;flex-wrap:wrap;padding:4px 0 2px}
+.lot-edit-form input{flex:1;min-width:64px;background:var(--bg2);border:1px solid var(--border);color:var(--t1);padding:4px 6px;border-radius:4px;font-size:var(--font-xs)}
+.lot-edit-form button{background:none;border:1px solid var(--border);border-radius:4px;color:var(--t2);font-size:9px;padding:4px 9px;cursor:pointer}
+.lot-edit-form button.lot-save{color:var(--green);border-color:rgba(0,255,136,.3)}
+.lot-edit-form button.lot-save:hover{background:rgba(0,255,136,.08)}
+.lot-edit-form button:hover{color:var(--t1)}
+.lot-gain-summary{display:flex;gap:12px;flex-wrap:wrap;font-size:var(--font-xs);padding:6px 0 2px;border-top:1px solid var(--border);margin-top:4px}
 .port-total{padding:var(--pad);border-bottom:1px solid var(--border);flex-shrink:0}
 .port-val{font-size:clamp(16px,2.5vw,20px);font-weight:700;font-family:var(--mono);color:var(--blue)}
 .port-pnl{font-size:var(--font-sm);margin-top:3px}
@@ -2634,6 +2654,7 @@ const CHART_INTERVAL = IS_MOBILE ? '1h' : IS_ULTRA ? '15m' : '30m';
 
 let priceChart = null, sentChart = null, portPieChart = null, trendBarChart = null;
 let allSignals = [], quotesCache = {}, trendData = [], portData = {};
+let openLotSym = null;
 // Home (ex-Landing Zone) is only reachable from #nav-tabs, which is hidden
 // on 'nano'/'micro' tiers in favor of the simpler #mobile-nav bar (no Home
 // entry there) -- default to Home only where the nav actually offers it.
@@ -4544,7 +4565,9 @@ function renderPositions(positions, cid) {
     const svTag=sv?`<span title="FINRA daily short volume ratio (${sv.trade_date})" style="font-size:7px;color:${sv.trend&&sv.trend.direction==='rising'?'#ff3b5c':sv.trend&&sv.trend.direction==='falling'?'var(--green)':'var(--t3)'};margin-left:5px">SV ${sv.short_volume_pct.toFixed(1)}%</span>`:'';
     const hasRemove=cid==='port-positions-list';
     const rmBtn=hasRemove?`<button class="pos-remove" title="Close position (removes from portfolio)" onclick="event.stopPropagation();removePortfolioPos('${esc(p.symbol)}')">✕</button>`:'';
-    return `<div class="pos-row${hasRemove?' has-remove':''}" data-sym="${esc(p.symbol)}"><div><div class="ps"><span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div>${rmBtn}</div>`;
+    const lotToggle=hasRemove?`<button class="lot-toggle" type="button" aria-expanded="false" aria-label="Show lots for ${esc(p.symbol)}" title="Show/hide lots" onclick="event.stopPropagation();toggleLotPanel('${esc(p.symbol)}')">▸</button>`:'';
+    const lotPanel=hasRemove?`<div class="lot-panel" data-sym="${esc(p.symbol)}" style="display:none"></div>`:'';
+    return `<div class="pos-row${hasRemove?' has-remove':''}" data-sym="${esc(p.symbol)}"><div><div class="ps">${lotToggle}<span class="ticker-link" onclick="openAnalystReport('${p.symbol}')">${esc(p.symbol.replace('-USD','').replace('.AX',''))}</span>${isAsx(p.symbol)?'<span style="font-size:7px;color:var(--t3)">.AX</span>':''}${cTag}${siTag}${svTag}</div><div class="pn">${esc(p.name||p.symbol)}</div></div><div><div class="pv">${fmtPrice(p.value,currency)}</div><div class="pp ${p.pnl>=0?'pos':'neg'}">${p.pnl>=0?'+':''}${fmtPrice(p.pnl,currency)} ${p.change_pct>=0?'▲':'▼'}${Math.abs(p.change_pct).toFixed(2)}%</div></div>${rmBtn}</div>${lotPanel}`;
   }
   let html='';
   if(usPos.length) html+=usPos.map(posRow).join('');
@@ -4553,6 +4576,17 @@ function renderPositions(positions, cid) {
     html+=asxPos.map(posRow).join('');
   }
   g(cid).innerHTML=html;
+  if(cid==='port-positions-list'&&openLotSym){
+    const panel=document.querySelector(`#port-positions-list .lot-panel[data-sym="${openLotSym}"]`);
+    const btn=document.querySelector(`#port-positions-list .pos-row[data-sym="${openLotSym}"] .lot-toggle`);
+    if(panel){
+      panel.style.display='block';
+      if(btn){btn.classList.add('open');btn.setAttribute('aria-expanded','true')}
+      loadLotPanel(openLotSym);
+    } else {
+      openLotSym=null;
+    }
+  }
 }
 function updateIdxBar(q) {
   g('idx-bar').innerHTML=['SPY','QQQ','BTC-USD'].map(s=>{
@@ -5373,6 +5407,103 @@ async function addPortfolioPos(){
 async function removePortfolioPos(sym){
   if(!confirm(`Close position: ${sym}? This removes it from your portfolio.`)) return;
   await fetch('/api/portfolio',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({symbol:sym})});
+  loadPortfolio();
+}
+
+// ── PORTFOLIO: per-symbol lot expand panel (Portfolio tab only) ────────────
+function toggleLotPanel(sym){
+  const panel=document.querySelector(`#port-positions-list .lot-panel[data-sym="${sym}"]`);
+  const btn=document.querySelector(`#port-positions-list .pos-row[data-sym="${sym}"] .lot-toggle`);
+  if(!panel) return;
+  const isOpen=panel.style.display==='block';
+  if(isOpen){
+    panel.style.display='none';
+    if(btn){btn.classList.remove('open');btn.setAttribute('aria-expanded','false')}
+    openLotSym=null;
+    return;
+  }
+  if(openLotSym&&openLotSym!==sym){
+    const prevPanel=document.querySelector(`#port-positions-list .lot-panel[data-sym="${openLotSym}"]`);
+    const prevBtn=document.querySelector(`#port-positions-list .pos-row[data-sym="${openLotSym}"] .lot-toggle`);
+    if(prevPanel) prevPanel.style.display='none';
+    if(prevBtn){prevBtn.classList.remove('open');prevBtn.setAttribute('aria-expanded','false')}
+  }
+  openLotSym=sym;
+  panel.style.display='block';
+  if(btn){btn.classList.add('open');btn.setAttribute('aria-expanded','true')}
+  loadLotPanel(sym);
+}
+async function loadLotPanel(sym){
+  const panel=document.querySelector(`#port-positions-list .lot-panel[data-sym="${sym}"]`);
+  if(!panel) return;
+  panel.innerHTML='<div class="empty">Loading lots...</div>';
+  try{
+    const [lotsR,gainsR]=await Promise.all([
+      fetch(`/api/portfolio/lots?symbol=${encodeURIComponent(sym)}`),
+      fetch(`/api/portfolio/gains?symbol=${encodeURIComponent(sym)}`)
+    ]);
+    if(!lotsR.ok||!gainsR.ok) throw new Error('lot fetch failed');
+    const lotsD=await lotsR.json();
+    const gainsD=await gainsR.json();
+    renderLotPanel(panel,sym,lotsD.lots||[],gainsD);
+  }catch(e){
+    panel.innerHTML='<div class="empty" style="color:var(--t3)">Failed to load lots — try again.</div>';
+  }
+}
+function renderLotPanel(panel,sym,lots,gains){
+  panel._lots=lots;
+  if(!lots.length){
+    panel.innerHTML='<div class="empty">No individual lots recorded for this position.</div>';
+    return;
+  }
+  const gainByLotId={};
+  ((gains.unrealized||{}).lots||[]).forEach(l=>{gainByLotId[l.lot_id]=l});
+  const u=gains.unrealized||{};
+  const rows=lots.map(lot=>lotRowHtml(lot,gainByLotId[lot.id],sym)).join('');
+  const hasAnyGain=Object.keys(gainByLotId).length>0;
+  const summary=hasAnyGain?`<div class="lot-gain-summary"><span>Unrealized <span class="${u.total_gain>=0?'pos':'neg'}">${u.total_gain>=0?'+':''}${fmtD(u.total_gain)}</span></span><span style="color:var(--t3)">LT ${u.long_term_gain>=0?'+':''}${fmtD(u.long_term_gain)} · ST ${u.short_term_gain>=0?'+':''}${fmtD(u.short_term_gain)}</span><span style="color:var(--t3);font-size:9px;margin-left:auto">as of ${esc(u.as_of||'')}</span></div>`:'';
+  panel.innerHTML=`<div class="lot-rows">${rows}</div>${summary}`;
+}
+function lotRowHtml(lot,gainInfo,sym){
+  const estTag=lot.backfilled?`<span title="Estimated lot — backfilled from your prior avg-cost position, not entered by you" style="font-size:7px;color:var(--gold);margin-left:4px;border:1px solid rgba(255,183,3,.3);border-radius:2px;padding:0 3px">est.</span>`:'';
+  const mv=gainInfo?fmtD(gainInfo.market_value):'<span style="color:var(--t3)">--</span>';
+  const gainVal=gainInfo?`<span class="${gainInfo.gain>=0?'pos':'neg'}">${gainInfo.gain>=0?'+':''}${fmtD(gainInfo.gain)}</span> <span style="font-size:8px;color:var(--t3)">${gainInfo.term==='long_term'?'LT':'ST'}</span>`:'<span style="color:var(--t3)" title="No current price available for this symbol">--</span>';
+  return `<div class="lot-row" data-lot-id="${lot.id}">
+    <div><div>${lot.shares} sh${estTag}</div><div style="font-size:9px;color:var(--t3)">acquired ${esc(lot.acquired_date)}</div></div>
+    <div style="text-align:right"><div>${fmtD(lot.cost_basis)}</div><div style="font-size:9px;color:var(--t3)">${mv}</div></div>
+    <div style="text-align:right">${gainVal}</div>
+    <div class="lot-actions"><button onclick="editLot(${lot.id},'${esc(sym)}')" title="Edit lot">✎</button><button class="lot-del" onclick="deleteLot(${lot.id},'${esc(sym)}')" title="Delete lot">✕</button></div>
+  </div>`;
+}
+function editLot(lotId,sym){
+  const panel=document.querySelector(`#port-positions-list .lot-panel[data-sym="${sym}"]`);
+  if(!panel) return;
+  const row=panel.querySelector(`.lot-row[data-lot-id="${lotId}"]`);
+  if(!row||row.querySelector('.lot-edit-form')) return;
+  const lot=(panel._lots||[]).find(l=>l.id===lotId);
+  if(!lot) return;
+  const form=document.createElement('div');
+  form.className='lot-edit-form';
+  form.innerHTML=`<input type="number" step="any" value="${escAttr(lot.shares)}" id="le-shares-${lotId}" placeholder="Shares">
+    <input type="number" step="any" value="${escAttr(lot.cost_basis)}" id="le-cost-${lotId}" placeholder="Cost basis">
+    <input type="date" value="${escAttr(lot.acquired_date)}" id="le-date-${lotId}">
+    <button class="lot-save" onclick="saveLot(${lotId},'${esc(sym)}')">Save</button>
+    <button onclick="loadLotPanel('${esc(sym)}')">Cancel</button>`;
+  row.appendChild(form);
+}
+async function saveLot(lotId,sym){
+  const shares=parseFloat(g(`le-shares-${lotId}`).value);
+  const cost=parseFloat(g(`le-cost-${lotId}`).value);
+  const date=g(`le-date-${lotId}`).value;
+  if(isNaN(shares)||isNaN(cost)||!date) return;
+  const r=await fetch(`/api/portfolio/lots/${lotId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({shares,cost_basis:cost,acquired_date:date})});
+  if(!r.ok){alert('Failed to save lot changes. It may have been deleted, or the values were invalid.');return}
+  loadPortfolio();
+}
+async function deleteLot(lotId,sym){
+  if(!confirm('Delete this lot? This cannot be undone.')) return;
+  const r=await fetch(`/api/portfolio/lots/${lotId}`,{method:'DELETE'});
+  if(!r.ok){alert('Failed to delete lot. It may have already been removed.');return}
   loadPortfolio();
 }
 
@@ -6667,6 +6798,7 @@ function isAsxDelayed(items){
   });
 }
 function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+function escAttr(s){const d=document.createElement('div');d.textContent=(s===null||s===undefined)?'':String(s);return d.innerHTML.replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
 
 
 // ── AUTO TRANSLATION ──────────────────────────────────────────────────────

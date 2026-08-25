@@ -18,7 +18,7 @@ from memory_store import (
     get_sentiment_timeline, get_recent_alerts, insert_summary,
     get_watchlist, add_to_watchlist, remove_from_watchlist,
     get_portfolio, upsert_portfolio,
-    add_lot, update_lot, remove_lot, get_lots,
+    add_lot, update_lot, remove_lot, get_lots, get_disposals,
     get_user_interests, bump_interest, decay_interests,
     get_trending_assets, get_signals_with_fallback, get_trending_assets_with_fallback, get_sentiment_snapshot,
     verify_user, create_user, get_user,
@@ -1262,6 +1262,29 @@ def api_portfolio_lot_detail(lot_id):
         fields["acquired_date"] = data["acquired_date"]
     update_lot(lot_id, **fields)
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/portfolio/gains")
+@login_required
+def api_portfolio_gains():
+    from portfolio_risk import compute_unrealized_gain, compute_realized_gain
+    uid = session["user_id"]
+    sym = request.args.get("symbol")
+    if sym:
+        sym = sym.upper()
+        if not _valid_symbol(sym):
+            return jsonify({"error": "invalid symbol"}), 400
+
+    lots = get_lots(uid, sym)
+    backfilled_by_lot_id = {lot["id"]: lot.get("backfilled", 0) for lot in lots}
+    prices = {s: q["price"] for s, q in (_quotes_cache or {}).items() if q.get("price") is not None}
+    unrealized = compute_unrealized_gain(lots, prices)
+    for entry in unrealized["lots"]:
+        entry["backfilled"] = backfilled_by_lot_id.get(entry["lot_id"], 0)
+
+    realized = compute_realized_gain(get_disposals(uid, sym))
+
+    return jsonify({"unrealized": unrealized, "realized": realized})
 
 
 @app.route("/api/portfolio/risk")

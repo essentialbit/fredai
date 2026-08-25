@@ -56,22 +56,37 @@ def _referenced_issue_numbers(prs: list[dict]) -> set[int]:
     return referenced
 
 
-def compute_eligible_backlog(threshold: float = 0.55) -> list[dict]:
+def compute_eligible_backlog(threshold: float = 0.55, stats: dict | None = None) -> list[dict]:
     issues = _get_open_proposals()
     referenced = _referenced_issue_numbers(_get_all_prs())
+
+    if stats is not None:
+        stats["total_open_proposals"] = len(issues)
+        stats["excluded_risk_high"] = 0
+        stats["excluded_below_threshold"] = 0
+        stats["excluded_already_referenced"] = 0
+        stats["max_consensus_seen"] = 0.0
 
     eligible = []
     for issue in issues:
         labels = [l["name"] for l in issue.get("labels", [])]
         if "risk:high" in labels:
+            if stats is not None:
+                stats["excluded_risk_high"] += 1
             continue
         consensus_vals = [
             float(l.split(":", 1)[1]) for l in labels if l.startswith("consensus:")
         ]
         max_consensus = max(consensus_vals) if consensus_vals else 0.0
+        if stats is not None:
+            stats["max_consensus_seen"] = max(stats["max_consensus_seen"], max_consensus)
         if max_consensus < threshold:
+            if stats is not None:
+                stats["excluded_below_threshold"] += 1
             continue
         if issue["number"] in referenced:
+            if stats is not None:
+                stats["excluded_already_referenced"] += 1
             continue
         eligible.append({
             "number": issue["number"],
@@ -83,7 +98,18 @@ def compute_eligible_backlog(threshold: float = 0.55) -> list[dict]:
 
 
 if __name__ == "__main__":
+    import sys
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--threshold", type=float, default=0.55)
+    parser.add_argument(
+        "--stats", action="store_true",
+        help="Print an exclusion-reason breakdown to stderr (stdout JSON unchanged) "
+             "so an empty result is distinguishable from a silent query failure.",
+    )
     args = parser.parse_args()
-    print(json.dumps(compute_eligible_backlog(args.threshold), indent=2))
+    stats_dict: dict = {} if args.stats else None
+    result = compute_eligible_backlog(args.threshold, stats=stats_dict)
+    if args.stats:
+        print(json.dumps(stats_dict, indent=2), file=sys.stderr)
+    print(json.dumps(result, indent=2))

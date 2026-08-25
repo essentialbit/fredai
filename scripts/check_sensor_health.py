@@ -23,6 +23,17 @@ CYCLE_RE = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) sensor cycle finished rc=(?P<rc>\d+) \((?P<dur>\d+)s\)$"
 )
 START_RE = re.compile(r"-> .*/logs/(?P<name>\d{8}-\d{6})\.log$")
+LINE_TS_RE = re.compile(r"^(?P<ts>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})")
+
+# launchd's StartInterval is 3600s (hourly). Every firing -- whether it runs
+# a full cycle or short-circuits via the heartbeat/lock skip guards --
+# writes a timestamped line to watchdog.log. So under a healthy launchd job,
+# consecutive lines should never be more than ~1-2x that interval apart. A
+# bigger gap means launchd itself didn't fire (job unloaded, machine asleep
+# past its wake window, etc.) -- a distinct failure mode from "fired but the
+# cycle errored" (rc!=0), and the existing streak/verdict logic can't see it
+# at all if the gap sits *before* the tail window or ends in a success.
+SILENT_GAP_THRESHOLD_HOURS = 2.0
 
 SIGNATURES = [
     ("weekly_limit", re.compile(r"weekly limit", re.IGNORECASE)),
@@ -41,6 +52,28 @@ def classify(log_path: Path) -> str:
         if pattern.search(text):
             return name
     return f"other: {text[:80]!r}"
+
+
+def find_silent_gaps(path: Path, threshold_hours: float = SILENT_GAP_THRESHOLD_HOURS):
+    """Find gaps between consecutive watchdog.log lines wider than expected.
+
+    Scans every line's leading timestamp (start-cycle, skip, and finish
+    lines all qualify), not just successful/failed cycle markers, so a
+    launchd job that stopped firing entirely shows up even when it isn't
+    adjacent to a run failure.
+    """
+    timestamps = []
+    for line in path.read_text(errors="replace").splitlines():
+        m = LINE_TS_RE.match(line)
+        if m:
+            timestamps.append(datetime.strptime(m.group("ts"), "%Y-%m-%d %H:%M:%S"))
+
+    gaps = []
+    for prev, cur in zip(timestamps, timestamps[1:]):
+        delta_hours = (cur - prev).total_seconds() / 3600
+        if delta_hours >= threshold_hours:
+            gaps.append((prev, cur, delta_hours))
+    return gaps
 
 
 def parse_watchdog(path: Path):
@@ -66,6 +99,13 @@ def parse_watchdog(path: Path):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--tail", type=int, default=200, help="only consider the last N logged cycles")
+    parser.add_argument(
+        "--gap-threshold-hours", type=float, default=SILENT_GAP_THRESHOLD_HOURS,
+        help="flag a silent gap (launchd never fired) wider than this many hours",
+    )
+    parser.add_argument(
+        "--max-gaps", type=int, default=5, help="max number of silent gaps to print, largest first",
+    )
     args = parser.parse_args()
 
     if not WATCHDOG_LOG.exists():
@@ -114,6 +154,16 @@ def main():
             counts[sig] = counts.get(sig, 0) + 1
         for sig, n in sorted(counts.items(), key=lambda kv: -kv[1]):
             print(f"  {n:3d}x  {sig}")
+
+    gaps = find_silent_gaps(WATCHDOG_LOG, args.gap_threshold_hours)
+    if gaps:
+        gaps.sort(key=lambda g: -g[2])
+        print(f"\nSILENT_GAP: launchd appears to have not fired for >= {args.gap_threshold_hours:g}h "
+              f"({len(gaps)} such gap(s) in the full log, distinct from any rc!=0 streak above):")
+        for prev, cur, hours in gaps[: args.max_gaps]:
+            print(f"  {prev} -> {cur}  ({hours:.1f}h, no watchdog.log activity)")
+    else:
+        print(f"\nSILENT_GAP: none (no watchdog.log gap >= {args.gap_threshold_hours:g}h found)")
 
 
 if __name__ == "__main__":

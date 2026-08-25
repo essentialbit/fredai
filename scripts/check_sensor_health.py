@@ -7,6 +7,9 @@ limit) leaves no trace anywhere else -- reports/YYYY-MM.md simply has a gap,
 indistinguishable at a glance from "nothing needed reporting." Confirmed
 real: a 2026-07-22 -> 2026-07-24 outage (30+ consecutive rc=1 failures, all
 "You've hit your weekly limit") went undetected until manually diagnosed.
+Distinct from the shorter "session limit" outage (resets same-day at a
+fixed hour, not weekly) confirmed 2026-08-01 13:50-15:51 -- both need
+their own signature since they imply different expected recovery windows.
 
 Usage: PYTHONPATH=. python3 scripts/check_sensor_health.py [--tail N]
 """
@@ -26,6 +29,7 @@ START_RE = re.compile(r"-> .*/logs/(?P<name>\d{8}-\d{6})\.log$")
 
 SIGNATURES = [
     ("weekly_limit", re.compile(r"weekly limit", re.IGNORECASE)),
+    ("session_limit", re.compile(r"session limit", re.IGNORECASE)),
     ("cert_error", re.compile(r"CERTIFICATE_VERIFICATION|certificate", re.IGNORECASE)),
     ("rate_limit", re.compile(r"rate.?limit", re.IGNORECASE)),
 ]

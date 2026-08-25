@@ -41,22 +41,35 @@ def fetch_options_snapshot(ticker: str, underlying_price: float | None = None) -
     price lookup makes a separate network call per symbol that's both wasteful
     (the app already has a fresh quote) and, observed live in this environment,
     unreliable enough to abort the whole process. ATM IV is simply omitted
-    (still None) when no price is supplied, rather than fetched a second way."""
+    (still None) when no price is supplied, rather than fetched a second way.
+
+    Deliberately uses yfinance's private Ticker._download_options() (raw JSON
+    dicts) instead of the public Ticker.option_chain() -- the latter builds a
+    pandas DataFrame via _options2df(), which calls pd.to_datetime() on
+    lastTradeDate and reliably segfaults (exit 139) under this environment's
+    numpy/pandas ABI mismatch, same root-cause class already worked around in
+    correlation_engine.py (PR #474). This crashes the whole process (SIGSEGV
+    is not catchable), not just this one job -- confirmed live 2026-07-31 via
+    a bare 3-line option_chain() repro. _download_options() is yfinance's own
+    already-tested fetch/auth path (crumb/cookie handshake via Ticker._data),
+    just skipping its DataFrame-construction step; only the response shape
+    (list[dict] instead of DataFrame) changes here."""
     try:
         t = yf.Ticker(ticker)
         exp = _nearest_expiration(t.options)
-        if not exp:
+        if not exp or exp not in t._expirations:
             return None
 
-        chain = t.option_chain(exp)
-        calls, puts = chain.calls, chain.puts
-        if calls.empty and puts.empty:
+        raw = t._download_options(t._expirations[exp])
+        calls = raw.get("calls") or []
+        puts = raw.get("puts") or []
+        if not calls and not puts:
             return None
 
-        call_vol = float(calls["volume"].fillna(0).sum())
-        put_vol = float(puts["volume"].fillna(0).sum())
-        call_oi = float(calls["openInterest"].fillna(0).sum())
-        put_oi = float(puts["openInterest"].fillna(0).sum())
+        call_vol = float(sum((c.get("volume") or 0) for c in calls))
+        put_vol = float(sum((p.get("volume") or 0) for p in puts))
+        call_oi = float(sum((c.get("openInterest") or 0) for c in calls))
+        put_oi = float(sum((p.get("openInterest") or 0) for p in puts))
 
         pc_volume_ratio = round(put_vol / call_vol, 3) if call_vol > 0 else None
         pc_oi_ratio = round(put_oi / call_oi, 3) if call_oi > 0 else None
@@ -75,20 +88,21 @@ def fetch_options_snapshot(ticker: str, underlying_price: float | None = None) -
         return None
 
 
-def _atm_iv_pct(price: float | None, calls, puts) -> float | None:
+def _atm_iv_pct(price: float | None, calls: list, puts: list) -> float | None:
     """ATM IV = average of the call's and put's implied vol at the strike
-    closest to the current price -- either side alone is noisier due to skew."""
-    if not price or calls.empty:
+    closest to the current price -- either side alone is noisier due to skew.
+    calls/puts are raw list[dict] (see fetch_options_snapshot's docstring for
+    why this isn't a DataFrame)."""
+    if not price or not calls:
         return None
 
-    calls = calls.copy()
-    calls["dist"] = (calls["strike"] - price).abs()
-    ivs = [calls.loc[calls["dist"].idxmin(), "impliedVolatility"]]
+    def _closest_iv(contracts: list) -> float | None:
+        nearest = min(contracts, key=lambda c: abs((c.get("strike") or 0) - price))
+        return nearest.get("impliedVolatility")
 
-    if not puts.empty:
-        puts = puts.copy()
-        puts["dist"] = (puts["strike"] - price).abs()
-        ivs.append(puts.loc[puts["dist"].idxmin(), "impliedVolatility"])
+    ivs = [_closest_iv(calls)]
+    if puts:
+        ivs.append(_closest_iv(puts))
 
     ivs = [v for v in ivs if v and v > 0]
     return round(sum(ivs) / len(ivs) * 100, 2) if ivs else None
